@@ -32,8 +32,13 @@ class ThumbnailProvider: QLThumbnailProvider {
             return
         }
         
+        // デバッグ情報を出力
+        NSLog("DEBUG: request.maximumSize = \(request.maximumSize)")
+        NSLog("DEBUG: image.size = \(image.size)")
+        
         // 縦横比を維持したサムネイルを生成
         let thumbnailSize = calculateThumbnailSize(for: image.size, maxSize: request.maximumSize)
+        NSLog("DEBUG: calculated thumbnailSize = \(thumbnailSize)")
         
         let reply = QLThumbnailReply(contextSize: thumbnailSize, currentContextDrawing: { () -> Bool in
             // 背景を白で塗りつぶす
@@ -61,7 +66,7 @@ class ThumbnailProvider: QLThumbnailProvider {
             let data = try Data(contentsOf: url)
             return parseZipAndFindFirstImage(data: data)
         } catch {
-            print("Error reading ZIP file: \(error)")
+            NSLog("Error reading ZIP file: \(error)")
             return nil
         }
     }
@@ -259,28 +264,27 @@ class ThumbnailProvider: QLThumbnailProvider {
     
     /**
      * 画像の縦横比を維持したサムネイルサイズを計算する
-     * 最大サイズの制限内で、元画像の縦横比を保持する
+     * 最大サイズの制限内で、元画像の縦横比を保持し、クロップされないよう適切にスケーリングする
      * 
      * @param imageSize 元画像のサイズ
      * @param maxSize 最大許容サイズ
      * @return 計算されたサムネイルサイズ
      */
     private func calculateThumbnailSize(for imageSize: NSSize, maxSize: CGSize) -> CGSize {
-        let aspectRatio = imageSize.width / imageSize.height
-        let maxWidth = maxSize.width
-        let maxHeight = maxSize.height
+        let imageAspectRatio = imageSize.width / imageSize.height
+        let maxAspectRatio = maxSize.width / maxSize.height
         
         var thumbnailWidth: CGFloat
         var thumbnailHeight: CGFloat
         
-        if aspectRatio > 1 {
-            // 横長の画像
-            thumbnailWidth = min(maxWidth, maxHeight * aspectRatio)
-            thumbnailHeight = thumbnailWidth / aspectRatio
+        if imageAspectRatio > maxAspectRatio {
+            // 画像が最大サイズより横長の場合、幅を基準にスケーリング
+            thumbnailWidth = maxSize.width
+            thumbnailHeight = thumbnailWidth / imageAspectRatio
         } else {
-            // 縦長または正方形の画像
-            thumbnailHeight = min(maxHeight, maxWidth / aspectRatio)
-            thumbnailWidth = thumbnailHeight * aspectRatio
+            // 画像が最大サイズより縦長または同じ縦横比の場合、高さを基準にスケーリング
+            thumbnailHeight = maxSize.height
+            thumbnailWidth = thumbnailHeight * imageAspectRatio
         }
         
         return CGSize(width: thumbnailWidth, height: thumbnailHeight)
