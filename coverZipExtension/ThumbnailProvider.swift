@@ -34,6 +34,7 @@ class ThumbnailProvider: QLThumbnailProvider {
         
         // デバッグ情報を出力
         NSLog("DEBUG: request.maximumSize = \(request.maximumSize)")
+        NSLog("DEBUG: request.scale = \(request.scale)")
         NSLog("DEBUG: image.size = \(image.size)")
         
         // 縦横比を維持したサムネイルを生成
