@@ -40,8 +40,8 @@ class ThumbnailProvider: QLThumbnailProvider {
             NSColor.white.setFill()
             NSBezierPath(rect: NSRect(origin: .zero, size: thumbnailSize)).fill()
             
-            // 画像を中央に配置して描画
-            let imageRect = self.centerImageRect(imageSize: image.size, canvasSize: thumbnailSize)
+            // 画像を適切にスケーリングして中央に配置して描画
+            let imageRect = self.calculateScaledImageRect(imageSize: image.size, canvasSize: thumbnailSize)
             image.draw(in: imageRect)
             
             return true
@@ -287,15 +287,35 @@ class ThumbnailProvider: QLThumbnailProvider {
     }
     
     /**
-     * 画像をキャンバスの中央に配置するための矩形を計算する
+     * 画像を適切にスケーリングしてキャンバスの中央に配置するための矩形を計算する
+     * 画像の縦横比を維持しながら、キャンバスサイズ内に収まるように縮小する
      * 
-     * @param imageSize 画像のサイズ
+     * @param imageSize 元画像のサイズ
      * @param canvasSize キャンバスのサイズ
-     * @return 中央配置された画像の矩形
+     * @return スケーリングされ中央配置された画像の矩形
      */
-    private func centerImageRect(imageSize: NSSize, canvasSize: CGSize) -> NSRect {
-        let x = (canvasSize.width - imageSize.width) / 2
-        let y = (canvasSize.height - imageSize.height) / 2
-        return NSRect(x: x, y: y, width: imageSize.width, height: imageSize.height)
+    private func calculateScaledImageRect(imageSize: NSSize, canvasSize: CGSize) -> NSRect {
+        // 画像の縦横比を計算
+        let imageAspectRatio = imageSize.width / imageSize.height
+        let canvasAspectRatio = canvasSize.width / canvasSize.height
+        
+        var scaledWidth: CGFloat
+        var scaledHeight: CGFloat
+        
+        if imageAspectRatio > canvasAspectRatio {
+            // 画像が横長の場合、幅を基準にスケーリング
+            scaledWidth = canvasSize.width
+            scaledHeight = scaledWidth / imageAspectRatio
+        } else {
+            // 画像が縦長または正方形の場合、高さを基準にスケーリング
+            scaledHeight = canvasSize.height
+            scaledWidth = scaledHeight * imageAspectRatio
+        }
+        
+        // 中央配置のための座標を計算
+        let x = (canvasSize.width - scaledWidth) / 2
+        let y = (canvasSize.height - scaledHeight) / 2
+        
+        return NSRect(x: x, y: y, width: scaledWidth, height: scaledHeight)
     }
 }
