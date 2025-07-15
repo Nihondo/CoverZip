@@ -7,7 +7,9 @@
 		<key>NSExtensionAttributes</key>
 		<dict>
 			<key>QLSupportedContentTypes</key>
-			<array/>
+			<array>
+				<string>public.zip-archive</string>
+			</array>
 			<key>QLThumbnailMinimumDimension</key>
 			<integer>0</integer>
 		</dict>

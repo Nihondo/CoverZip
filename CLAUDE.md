@@ -31,8 +31,11 @@ CoverZipは、ZIPファイルのサムネイルを表示するmacOS QuickLook Ex
 # Xcodeでプロジェクトを開く
 open CoverZip.xcodeproj
 
-# コマンドラインでビルド
-xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build
+# コマンドラインでビルド（コードサイン無効）
+xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+
+# Extension単体のビルド
+xcodebuild -project CoverZip.xcodeproj -target coverZipExtension build -configuration Debug CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 ```
 
 ### Extension のテスト
@@ -77,7 +80,26 @@ qlmanage -t path/to/test.zip
 - ファイル名のエンコーディング処理（UTF-8, Shift-JIS）
 - 画像ファイルの検出（.jpg, .png, .icns など）
 
-## 今後の実装予定
-- ZIPファイル内の先頭画像からサムネイル生成
-- 画像ファイル形式の判定と処理
-- エラーハンドリングとフォールバック処理
+## 実装内容
+
+### 完了した機能
+- **ZIPファイル解析**: 純SwiftでZIPファイルのCentral DirectoryとLocal File Headerを解析
+- **画像ファイル検出**: .jpg, .jpeg, .png, .gif, .bmp, .tiff, .ico, .icns 形式の画像を検出
+- **DEFLATE展開**: Compression frameworkを使用したZIPファイル内の圧縮データ展開
+- **縦横比維持**: 画像の縦横比を保持したサムネイル生成
+- **AppKit統合**: NSImageとNSBezierPathを使用した描画
+
+### 実装の特徴
+- **外部ライブラリ不要**: 標準のFoundationとCompressionフレームワークのみ使用
+- **サンドボックス対応**: App Extensionの制限に準拠
+- **軽量実装**: minizipライブラリを使用せず、純Swift実装
+
+### 既知の制限事項
+- **暗号化ZIP**: パスワード付きZIPファイルは未対応
+- **圧縮方式**: DEFLATE（方式8）と非圧縮（方式0）のみ対応
+- **ファイルサイズ**: 大きなZIPファイルでのメモリ制限
+
+## 今後の改善予定
+- エラーハンドリングの強化
+- 圧縮方式の追加対応
+- パフォーマンスの最適化
