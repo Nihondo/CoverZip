@@ -134,18 +134,3 @@ struct KeywordSettings: Codable {
     }
 }
 
-/**
- * 旧形式との互換性を保つためのマネージャークラス（簡素化版）
- */
-class KeywordSettingsManager: ObservableObject {
-    @Published var settings: KeywordSettings
-    
-    init() {
-        self.settings = KeywordSettings.load()
-    }
-    
-    func setDefaultApplication(_ application: String) {
-        settings.default = application
-        settings.save()
-    }
-}

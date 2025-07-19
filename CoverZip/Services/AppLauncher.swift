@@ -126,32 +126,4 @@ class AppLauncher {
         return nil
     }
     
-    /**
-     * アプリケーションが存在するかチェック
-     * 
-     * @param applicationName アプリケーション名
-     * @return 存在する場合はtrue
-     */
-    static func isApplicationAvailable(applicationName: String) -> Bool {
-        return findApplicationURL(applicationName: applicationName) != nil
-    }
-    
-    /**
-     * 起動結果を説明文に変換
-     * 
-     * @param result 起動結果
-     * @return 説明文
-     */
-    static func resultDescription(_ result: AppLaunchResult) -> String {
-        switch result {
-        case .success:
-            return "アプリケーションの起動に成功しました"
-        case .applicationNotFound:
-            return "指定されたアプリケーションが見つかりません"
-        case .fileNotFound:
-            return "ZIPファイルが見つかりません"
-        case .launchFailed(let error):
-            return "アプリケーションの起動に失敗しました: \(error.localizedDescription)"
-        }
-    }
 }

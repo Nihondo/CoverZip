@@ -17,23 +17,19 @@ extension UTType {
 struct CoverZipDocument: FileDocument {
     var zipFileURL: URL?
     var originalFileName: String?
-    var fileInfos: [ZipFileInfo] = []
     var matchResult: KeywordMatchResult?
     var launchResult: AppLaunchResult?
 
     init(zipFileURL: URL? = nil, originalFileName: String? = nil) {
         self.zipFileURL = zipFileURL
         self.originalFileName = originalFileName
-        self.fileInfos = []
         self.matchResult = nil
         self.launchResult = nil
         
         if let url = zipFileURL {
-            let fileInfos = ZipAnalyzer.analyzeZipContents(at: url)
             let settings = KeywordSettings.load()
             let matchResult = KeywordMatcher.findMatchingApplication(for: url, originalFileName: originalFileName, using: settings)
             
-            self.fileInfos = fileInfos
             self.matchResult = matchResult
             
             if let application = matchResult.matchedApplication {
@@ -53,7 +49,6 @@ struct CoverZipDocument: FileDocument {
         // プロパティを初期化
         self.zipFileURL = nil
         self.originalFileName = originalFileName
-        self.fileInfos = []  // ファイル内容の解析は不要
         
         // ファイル名とパス名のみでキーワードマッチングを実行
         let settings = KeywordSettings.load()
