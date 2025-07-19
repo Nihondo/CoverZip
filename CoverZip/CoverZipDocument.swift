@@ -47,27 +47,37 @@ struct CoverZipDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.zipArchive] }
 
     init(configuration: ReadConfiguration) throws {
-        guard let data = configuration.file.regularFileContents,
-              let fileURL = data.dataToTemporaryFile() else {
+        // FileWrapperから一時的にデータを取得してファイルURLを作成
+        guard let data = configuration.file.regularFileContents else {
+            self.zipFileURL = nil
+            self.originalFileName = configuration.file.filename ?? "unknown.zip"
+            self.fileInfos = []
+            self.matchResult = nil
+            self.launchResult = nil
             throw CocoaError(.fileReadCorruptFile)
         }
         
         // 元のファイル名を取得
         let originalFileName = configuration.file.filename ?? "unknown.zip"
         
-        self.zipFileURL = fileURL
+        // 一時ファイルを作成してZIP解析を実行
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("zip")
+        try data.write(to: tempURL)
+        
+        self.zipFileURL = tempURL
         self.originalFileName = originalFileName
-        let fileInfos = ZipAnalyzer.analyzeZipContents(at: fileURL)
+        
+        let fileInfos = ZipAnalyzer.analyzeZipContents(at: tempURL)
         let settings = KeywordSettings.load()
-        let matchResult = KeywordMatcher.findMatchingApplication(for: fileURL, originalFileName: originalFileName, using: settings)
+        let matchResult = KeywordMatcher.findMatchingApplication(for: tempURL, originalFileName: originalFileName, using: settings)
         
         self.fileInfos = fileInfos
         self.matchResult = matchResult
         
         if let application = matchResult.matchedApplication {
-            self.launchResult = AppLauncher.launchApplication(with: fileURL, applicationName: application)
+            self.launchResult = AppLauncher.launchApplication(with: tempURL, applicationName: application)
         } else {
-            self.launchResult = AppLauncher.launchWithDefaultApplication(zipFileURL: fileURL)
+            self.launchResult = AppLauncher.launchWithDefaultApplication(zipFileURL: tempURL)
         }
     }
     
@@ -82,20 +92,3 @@ struct CoverZipDocument: FileDocument {
     
 }
 
-/**
- * Data を一時ファイルに保存するための拡張
- */
-extension Data {
-    func dataToTemporaryFile() -> URL? {
-        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("zip")
-        
-        do {
-            try self.write(to: tempURL)
-            return tempURL
-        } catch {
-            return nil
-        }
-    }
-}
