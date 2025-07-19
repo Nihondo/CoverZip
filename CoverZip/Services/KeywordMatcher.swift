@@ -85,17 +85,20 @@ class KeywordMatcher {
             var isMatch = false
             var matchType: KeywordMatchResult.MatchType = .none
             
+            let targetString: String
             switch keywordItem.type {
             case .filename:
-                isMatch = fileName.lowercased().contains(keyword.lowercased())
+                targetString = fileName
                 matchType = .filename
-                NSLog("ファイル名マッチング: '\(fileName)' vs '\(keyword)' -> \(isMatch)")
                 
             case .pathname:
-                isMatch = fullPath.lowercased().contains(keyword.lowercased())
+                targetString = fullPath
                 matchType = .pathname
-                NSLog("パス名マッチング: '\(fullPath)' vs '\(keyword)' -> \(isMatch)")
             }
+            
+            // マッチング方式に応じて処理
+            isMatch = performMatch(targetString, keyword: keyword, mode: keywordItem.matchMode)
+            NSLog("\(keywordItem.type == .filename ? "ファイル名" : "パス名")マッチング (\(keywordItem.matchMode)): '\(targetString)' vs '\(keyword)' -> \(isMatch)")
             
             if isMatch {
                 NSLog("マッチ成功: '\(keyword)' -> '\(keywordItem.application)' (タイプ: \(matchType))")
@@ -114,6 +117,55 @@ class KeywordMatcher {
             matchedKeywords: [],
             matchType: .none
         )
+    }
+    
+    // MARK: - マッチング機能
+    
+    /**
+     * 統合マッチング関数 - マッチング方式に応じて適切な処理を実行
+     */
+    private static func performMatch(_ text: String, keyword: String, mode: MatchMode) -> Bool {
+        switch mode {
+        case .contains:
+            return text.lowercased().contains(keyword.lowercased())
+            
+        case .wildcard:
+            return matchesWildcard(text, pattern: keyword)
+            
+        case .regex:
+            return matchesRegex(text, pattern: keyword)
+        }
+    }
+    
+    /**
+     * ワイルドカードマッチング (*,? をサポート)
+     */
+    private static func matchesWildcard(_ text: String, pattern: String) -> Bool {
+        // ワイルドカードを正規表現に変換
+        let regexPattern = pattern
+            .replacingOccurrences(of: "\\", with: "\\\\")  // バックスラッシュをエスケープ
+            .replacingOccurrences(of: ".", with: "\\.")    // ドットをエスケープ
+            .replacingOccurrences(of: "^", with: "\\^")    // ハットをエスケープ
+            .replacingOccurrences(of: "$", with: "\\$")    // ドルをエスケープ
+            .replacingOccurrences(of: "*", with: ".*")     // * を .* に変換
+            .replacingOccurrences(of: "?", with: ".")      // ? を . に変換
+        
+        return text.range(of: "^" + regexPattern + "$", options: [.regularExpression, .caseInsensitive]) != nil
+    }
+    
+    /**
+     * 正規表現マッチング
+     */
+    private static func matchesRegex(_ text: String, pattern: String) -> Bool {
+        do {
+            let regex = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            return regex.firstMatch(in: text, options: [], range: range) != nil
+        } catch {
+            NSLog("正規表現エラー: '\(pattern)' - \(error.localizedDescription)")
+            // 正規表現が無効な場合は通常の部分一致にフォールバック
+            return text.lowercased().contains(pattern.lowercased())
+        }
     }
     
 }
