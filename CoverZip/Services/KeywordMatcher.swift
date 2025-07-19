@@ -57,32 +57,53 @@ class KeywordMatcher {
     }
     
     /**
-     * ファイル名に対してキーワードマッチングを実行（簡素化版）
+     * ファイル名とパス名に対してキーワードマッチングを実行
      * 
      * @param fileName チェック対象のファイル名（拡張子除去済み）
      * @param settings JSON設定ファイルのキーワード設定
      * @return マッチング結果
      */
     static func checkKeyword(for fileName: String, using settings: KeywordSettings) -> KeywordMatchResult {
-        NSLog("ZIPファイル名マッチング開始: ファイル名='\(fileName)'")
+        return checkKeyword(for: fileName, fullPath: fileName, using: settings)
+    }
+    
+    /**
+     * ファイル名とパス名に対してキーワードマッチングを実行（完全版）
+     * 
+     * @param fileName チェック対象のファイル名（拡張子除去済み）
+     * @param fullPath チェック対象のフルパス
+     * @param settings JSON設定ファイルのキーワード設定
+     * @return マッチング結果
+     */
+    static func checkKeyword(for fileName: String, fullPath: String, using settings: KeywordSettings) -> KeywordMatchResult {
+        NSLog("ZIPファイルマッチング開始: ファイル名='\(fileName)', フルパス='\(fullPath)'")
         
         // 各キーワードをチェック
         for (keyword, keywordItem) in settings.keywords {
             NSLog("キーワードチェック: '\(keyword)' (タイプ: \(keywordItem.type))")
             
-            // ファイル名のみのマッチングをサポート（pathのマッチングは無効）
-            if keywordItem.type == .filename {
-                let isMatch = fileName.lowercased().contains(keyword.lowercased())
+            var isMatch = false
+            var matchType: KeywordMatchResult.MatchType = .none
+            
+            switch keywordItem.type {
+            case .filename:
+                isMatch = fileName.lowercased().contains(keyword.lowercased())
+                matchType = .filename
                 NSLog("ファイル名マッチング: '\(fileName)' vs '\(keyword)' -> \(isMatch)")
                 
-                if isMatch {
-                    NSLog("マッチ成功: '\(keyword)' -> '\(keywordItem.application)'")
-                    return KeywordMatchResult(
-                        matchedApplication: keywordItem.application,
-                        matchedKeywords: [keyword],
-                        matchType: .filename
-                    )
-                }
+            case .pathname:
+                isMatch = fullPath.lowercased().contains(keyword.lowercased())
+                matchType = .pathname
+                NSLog("パス名マッチング: '\(fullPath)' vs '\(keyword)' -> \(isMatch)")
+            }
+            
+            if isMatch {
+                NSLog("マッチ成功: '\(keyword)' -> '\(keywordItem.application)' (タイプ: \(matchType))")
+                return KeywordMatchResult(
+                    matchedApplication: keywordItem.application,
+                    matchedKeywords: [keyword],
+                    matchType: matchType
+                )
             }
         }
         

@@ -35,10 +35,6 @@ struct KeywordSettings: Codable {
         default: ""
     )
     
-    /**
-     * 設定のキャッシュを無効化して強制再読み込みするためのフラグ
-     */
-    private static var forceReloadFlag = false
     
     /**
      * アプリケーションバンドル内のsettings.jsonファイルから設定を読み込む
@@ -82,18 +78,6 @@ struct KeywordSettings: Codable {
         return appURL
     }
     
-    /**
-     * 設定をアプリケーションサポートディレクトリに保存
-     */
-    func save() {
-        guard let appSupportURL = Self.getApplicationSupportDirectory() else { return }
-        
-        let settingsURL = appSupportURL.appendingPathComponent("settings.json")
-        
-        if let data = try? JSONEncoder().encode(self) {
-            try? data.write(to: settingsURL)
-        }
-    }
     
     /**
      * デフォルト設定ファイルを作成（開発用）
@@ -124,13 +108,5 @@ struct KeywordSettings: Codable {
         }
     }
     
-    /**
-     * 設定の強制再読み込みを実行
-     * 外部エディタで変更された設定を反映するために使用
-     */
-    static func forceReload() {
-        forceReloadFlag = true
-        NSLog("設定の強制再読み込みフラグを設定しました")
-    }
 }
 
