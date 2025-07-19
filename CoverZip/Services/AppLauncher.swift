@@ -68,7 +68,7 @@ class AppLauncher {
     
     /**
      * デフォルトアプリケーションでZIPファイルを開く
-     * 
+     *
      * @param zipFileURL 開くZIPファイルのURL
      * @return 起動結果
      */
@@ -77,10 +77,15 @@ class AppLauncher {
             return .fileNotFound
         }
         
-        do {
-            try NSWorkspace.shared.open(zipFileURL)
+        let success = NSWorkspace.shared.open(zipFileURL)
+        if success {
             return .success
-        } catch {
+        } else {
+            let error = NSError(
+                domain: "AppLauncher",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "ファイルを開けませんでした"]
+            )
             return .launchFailed(error)
         }
     }

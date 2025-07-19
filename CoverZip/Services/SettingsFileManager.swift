@@ -40,16 +40,15 @@ class SettingsFileManager {
             NSLog("設定ファイルが存在しないため、デフォルト設定ファイルを作成しました")
         }
         
-        do {
-            // デフォルトアプリケーションで開く
-            try NSWorkspace.shared.open(settingsURL)
+        // デフォルトアプリケーションで開く
+        let success = NSWorkspace.shared.open(settingsURL)
+        if success {
             NSLog("設定ファイルを外部エディタで開きました: \(settingsURL.path)")
             return true
-        } catch {
-            NSLog("設定ファイルを開くのに失敗しました: \(error.localizedDescription)")
+        } else {
+            NSLog("設定ファイルを開くのに失敗しました")
             return false
         }
     }
-    
     
 }
