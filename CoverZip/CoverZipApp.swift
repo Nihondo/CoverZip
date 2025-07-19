@@ -96,10 +96,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 _ = AppLauncher.launchWithDefaultApplication(zipFileURL: tempURL)
             }
             
-            // 遅延削除
+            // 一時ファイル削除を遅延実行し、即座にアプリを終了
             DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
                 try? FileManager.default.removeItem(at: tempURL)
             }
+            
+            NSLog("外部アプリケーション起動、CoverZipを終了します")
+            NSApplication.shared.terminate(nil)
             
             return true
         } catch {
@@ -126,9 +129,14 @@ struct CoverZipApp: App {
                 Text("ZIPファイルルーティングアプリケーション")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                
+                Button("設定ファイルを編集") {
+                    let _ = SettingsFileManager.openSettingsFileInExternalEditor()
+                }
+                .padding(.top)
             }
             .padding()
-            .frame(width: 300, height: 100)
+            .frame(width: 300, height: 150)
         }
         .commands {
             CommandGroup(replacing: .newItem) { }
