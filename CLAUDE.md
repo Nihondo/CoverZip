@@ -8,17 +8,32 @@ CoverZipは、ZIPファイルのサムネイルを表示するmacOS QuickLook Ex
 
 ## アーキテクチャ
 
-### コアコンポーネント分離設計
-1. **ThumbnailProvider.swift** - QuickLook拡張機能のエントリーポイント
-   - `QLThumbnailProvider`を継承したメインクラス
-   - 画像の縦横比維持とスケーリング処理
-   - `ZipProcessor`を呼び出してZIPファイル処理を委譲
+### 二つの独立したコンポーネント
 
-2. **ZipProcessor.swift** - ZIP処理専用クラス（純Swift実装）
-   - ZIPファイルの解析（Central Directory + Local File Header）
-   - DEFLATE圧縮データの展開（8MBバッファ）
-   - 画像ファイルの検出と抽出
-   - 外部ライブラリ不要、標準フレームワークのみ使用
+#### 1. QuickLook Thumbnail Extension
+- **ThumbnailProvider.swift** - QuickLook拡張機能のエントリーポイント
+  - `QLThumbnailProvider`を継承したメインクラス
+  - 画像の縦横比維持とスケーリング処理
+  - `ZipProcessor`を呼び出してZIPファイル処理を委譲
+
+- **ZipProcessor.swift** - ZIP処理専用クラス（純Swift実装）
+  - ZIPファイルの解析（Central Directory + Local File Header）
+  - DEFLATE圧縮データの展開（8MBバッファ）
+  - 画像ファイルの検出と抽出
+  - 外部ライブラリ不要、標準フレームワークのみ使用
+
+#### 2. ZIPファイルルーティングアプリケーション
+- **AppDelegate** - NSApplicationDelegateによるファイル開く処理
+  - `application(_:openFile:)` でZIPファイルを直接処理
+  - キーワードマッチングと外部アプリケーション起動を実行
+  - ウィンドウ生成なしのバックグラウンド処理
+
+- **KeywordMatcher** - ファイル名ベースのキーワードマッチング
+  - ZIPファイル名からキーワードを抽出
+  - settings.jsonの設定に基づいたアプリケーション決定
+
+- **AppLauncher** - 外部アプリケーション起動処理
+  - 一時ファイル作成とNSWorkspace経由での起動
 
 ### App Extension制約への対応
 - サンドボックス環境での動作保証
