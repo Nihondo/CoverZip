@@ -138,20 +138,6 @@ struct CoverZipApp: App {
             .padding()
             .frame(width: 300, height: 150)
         }
-        .commands {
-            CommandGroup(replacing: .newItem) { }
-            CommandMenu("設定") {
-                Button("設定ファイルを編集...") {
-                    let _ = SettingsFileManager.openSettingsFileInExternalEditor()
-                }
-                .keyboardShortcut(",", modifiers: .command)
-                
-                Button("設定を再読み込み") {
-                    SettingsFileManager.reloadSettings()
-                }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-            }
-        }
     }
     
     /**

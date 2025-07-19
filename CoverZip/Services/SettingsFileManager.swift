@@ -51,54 +51,5 @@ class SettingsFileManager {
         }
     }
     
-    /**
-     * 設定ファイルの場所をFinderで表示
-     * 
-     * @return 表示に成功した場合はtrue
-     */
-    static func showSettingsFileInFinder() -> Bool {
-        guard let settingsURL = getSettingsFileURL() else {
-            NSLog("設定ファイルのURLを取得できませんでした")
-            return false
-        }
-        
-        // ファイルが存在しない場合は作成
-        if !FileManager.default.fileExists(atPath: settingsURL.path) {
-            KeywordSettings.createDefaultSettingsFile()
-        }
-        
-        NSWorkspace.shared.activateFileViewerSelecting([settingsURL])
-        NSLog("設定ファイルをFinderで表示しました: \(settingsURL.path)")
-        return true
-    }
     
-    /**
-     * 設定ファイルの存在チェック
-     * 
-     * @return ファイルが存在する場合はtrue
-     */
-    static func settingsFileExists() -> Bool {
-        guard let settingsURL = getSettingsFileURL() else {
-            return false
-        }
-        return FileManager.default.fileExists(atPath: settingsURL.path)
-    }
-    
-    /**
-     * 設定ファイルのパスを取得（文字列）
-     * 
-     * @return 設定ファイルのパス（存在しない場合はnil）
-     */
-    static func getSettingsFilePath() -> String? {
-        return getSettingsFileURL()?.path
-    }
-    
-    /**
-     * アプリケーション内の設定を再読み込み
-     * 外部エディタで変更された設定を反映するために使用
-     */
-    static func reloadSettings() {
-        NSLog("設定ファイルを再読み込みします")
-        KeywordSettings.forceReload()
-    }
 }
