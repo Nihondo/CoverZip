@@ -16,11 +16,40 @@ enum KeywordType: String, Codable {
 }
 
 /**
+ * マッチング方式を表す列挙型
+ */
+enum MatchMode: String, Codable {
+    case contains = "contains"     // 部分一致（デフォルト）
+    case wildcard = "wildcard"     // ワイルドカード (*,?)
+    case regex = "regex"           // 正規表現
+}
+
+/**
  * 個別キーワード設定を表す構造体
  */
 struct KeywordItem: Codable {
     let type: KeywordType
     let application: String
+    let matchMode: MatchMode
+    
+    // デフォルト値を提供するイニシャライザ
+    init(type: KeywordType, application: String, matchMode: MatchMode = .contains) {
+        self.type = type
+        self.application = application
+        self.matchMode = matchMode
+    }
+    
+    // 後方互換性のためのDecoding
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        type = try container.decode(KeywordType.self, forKey: .type)
+        application = try container.decode(String.self, forKey: .application)
+        matchMode = try container.decodeIfPresent(MatchMode.self, forKey: .matchMode) ?? .contains
+    }
+    
+    private enum CodingKeys: String, CodingKey {
+        case type, application, matchMode
+    }
 }
 
 /**
@@ -84,11 +113,13 @@ struct KeywordSettings: Codable {
      */
     static func createDefaultSettingsFile() {
         let defaultKeywords: [String: KeywordItem] = [
-            "コミック": KeywordItem(type: .filename, application: "SimpleComicViewer.app"),
-            "manga": KeywordItem(type: .filename, application: "SimpleComicViewer.app"),
-            "comic": KeywordItem(type: .pathname, application: "SimpleComicViewer.app"),
-            "写真": KeywordItem(type: .filename, application: "Photos.app"),
-            "photo": KeywordItem(type: .pathname, application: "Photos.app")
+            "コミック": KeywordItem(type: .filename, application: "SimpleComicViewer.app", matchMode: .contains),
+            "manga": KeywordItem(type: .filename, application: "SimpleComicViewer.app", matchMode: .contains),
+            "comic": KeywordItem(type: .pathname, application: "SimpleComicViewer.app", matchMode: .contains),
+            "vol*": KeywordItem(type: .filename, application: "SimpleComicViewer.app", matchMode: .wildcard),
+            "^backup_\\d+$": KeywordItem(type: .pathname, application: "Archive Utility.app", matchMode: .regex),
+            "写真": KeywordItem(type: .filename, application: "Photos.app", matchMode: .contains),
+            "photo": KeywordItem(type: .pathname, application: "Photos.app", matchMode: .contains)
         ]
         
         let settings = KeywordSettings(
