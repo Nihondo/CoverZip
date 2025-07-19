@@ -47,47 +47,62 @@ struct CoverZipDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.zipArchive] }
 
     init(configuration: ReadConfiguration) throws {
-        // FileWrapperから一時的にデータを取得してファイルURLを作成
-        guard let data = configuration.file.regularFileContents else {
-            self.zipFileURL = nil
-            self.originalFileName = configuration.file.filename ?? "unknown.zip"
-            self.fileInfos = []
-            self.matchResult = nil
-            self.launchResult = nil
-            throw CocoaError(.fileReadCorruptFile)
-        }
-        
         // 元のファイル名を取得
         let originalFileName = configuration.file.filename ?? "unknown.zip"
         
-        // 一時ファイルを作成してZIP解析を実行
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("zip")
-        try data.write(to: tempURL)
-        
-        self.zipFileURL = tempURL
+        // プロパティを初期化
+        self.zipFileURL = nil
         self.originalFileName = originalFileName
+        self.fileInfos = []  // ファイル内容の解析は不要
         
-        let fileInfos = ZipAnalyzer.analyzeZipContents(at: tempURL)
+        // ファイル名とパス名のみでキーワードマッチングを実行
         let settings = KeywordSettings.load()
-        let matchResult = KeywordMatcher.findMatchingApplication(for: tempURL, originalFileName: originalFileName, using: settings)
+        let matchResult = KeywordMatcher.findMatchingApplication(
+            for: URL(fileURLWithPath: originalFileName),
+            originalFileName: originalFileName,
+            using: settings
+        )
         
-        self.fileInfos = fileInfos
         self.matchResult = matchResult
         
-        if let application = matchResult.matchedApplication {
-            self.launchResult = AppLauncher.launchApplication(with: tempURL, applicationName: application)
-        } else {
-            self.launchResult = AppLauncher.launchWithDefaultApplication(zipFileURL: tempURL)
+        // 外部アプリケーション起動を即座に実行
+        do {
+            guard let data = configuration.file.regularFileContents else {
+                NSLog("ファイルデータが読み取れませんでした")
+                self.launchResult = .fileNotFound
+                return
+            }
+            
+            // 一時ファイルを作成
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension("zip")
+            
+            try data.write(to: tempURL)
+            
+            // 外部アプリケーションで開く
+            if let application = matchResult.matchedApplication {
+                NSLog("外部アプリケーション起動: \(application)")
+                self.launchResult = AppLauncher.launchApplication(with: tempURL, applicationName: application)
+            } else {
+                NSLog("デフォルトアプリケーション起動")
+                self.launchResult = AppLauncher.launchWithDefaultApplication(zipFileURL: tempURL)
+            }
+            
+            // 遅延削除
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                try? FileManager.default.removeItem(at: tempURL)
+            }
+            
+        } catch {
+            NSLog("外部アプリケーション起動に失敗: \(error)")
+            self.launchResult = .launchFailed(error)
         }
     }
     
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        // ZIP ファイルは読み取り専用として扱う
-        if let url = zipFileURL,
-           let data = try? Data(contentsOf: url) {
-            return .init(regularFileWithContents: data)
-        }
-        throw CocoaError(.fileWriteUnknown)
+        // ZIP ファイルは読み取り専用として扱う（データの保存は不要）
+        return .init(regularFileWithContents: Data())
     }
     
 }

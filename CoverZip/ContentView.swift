@@ -18,14 +18,19 @@ struct ContentView: View {
                 .fontWeight(.bold)
                 .padding()
             
-            if let zipURL = document.zipFileURL {
+            if let fileName = document.originalFileName {
                 VStack(spacing: 10) {
-                    Text("処理完了: \(zipURL.lastPathComponent)")
+                    Text("処理完了: \(fileName)")
                         .font(.headline)
                     
-                    if let launchResult = document.launchResult {
-                        Text(AppLauncher.resultDescription(launchResult))
-                            .foregroundColor(isSuccessResult(launchResult) ? .green : .orange)
+                    if let matchResult = document.matchResult {
+                        if let application = matchResult.matchedApplication {
+                            Text("マッチしたアプリケーション: \(application)")
+                                .foregroundColor(.green)
+                        } else {
+                            Text("デフォルトアプリケーションで開きます")
+                                .foregroundColor(.orange)
+                        }
                     }
                 }
                 .padding()
@@ -53,12 +58,6 @@ struct ContentView: View {
         .frame(minWidth: 300, minHeight: 200)
     }
     
-    private func isSuccessResult(_ result: AppLaunchResult) -> Bool {
-        if case .success = result {
-            return true
-        }
-        return false
-    }
 }
 
 #Preview {
