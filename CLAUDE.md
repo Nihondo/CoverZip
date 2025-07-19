@@ -140,6 +140,12 @@ processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
 - **メモリ効率**: 8MBバッファによる制御されたメモリ使用
 - **ファイル名エンコーディング**: UTF-8対応、__MACOSX隠しファイル除外
 
+## システム要件
+
+- **macOS**: 11.0 (Big Sur) 以降
+- **アーキテクチャ**: Universal Binary (Intel x86_64 + Apple Silicon arm64)
+- **開発環境**: Xcode 14.0 以降
+
 ## 実装制約
 
 ### 制限事項

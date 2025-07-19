@@ -36,7 +36,8 @@ CoverZipは、二つの独立した機能を持つmacOSアプリケーション�
 
 ## システム要件
 
-- macOS 10.15 (Catalina) 以降
+- macOS 11.0 (Big Sur) 以降
+- Intel Mac (x86_64) および Apple Silicon Mac (arm64) 対応
 - Xcode 14.0 以降（開発時）
 
 ## インストール
