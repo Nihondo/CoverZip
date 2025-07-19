@@ -69,46 +69,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let originalFileName = url.lastPathComponent
         let settings = KeywordSettings.load()
         
-        do {
-            // ファイルデータを読み込み
-            let data = try Data(contentsOf: url)
-            
-            // 一時ファイルを作成
-            let tempURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent(UUID().uuidString)
-                .appendingPathExtension("zip")
-            
-            try data.write(to: tempURL)
-            
-            // キーワードマッチングを実行
-            let matchResult = KeywordMatcher.findMatchingApplication(
-                for: tempURL,
-                originalFileName: originalFileName,
-                using: settings
-            )
-            
-            // 外部アプリケーションで開く
-            if let application = matchResult.matchedApplication {
-                NSLog("外部アプリケーション起動: \(application)")
-                _ = AppLauncher.launchApplication(with: tempURL, applicationName: application)
-            } else {
-                NSLog("デフォルトアプリケーション起動")
-                _ = AppLauncher.launchWithDefaultApplication(zipFileURL: tempURL)
-            }
-            
-            // 一時ファイル削除を遅延実行し、即座にアプリを終了
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
-                try? FileManager.default.removeItem(at: tempURL)
-            }
-            
-            NSLog("外部アプリケーション起動、CoverZipを終了します")
-            NSApplication.shared.terminate(nil)
-            
-            return true
-        } catch {
-            NSLog("ファイル処理に失敗: \(error)")
-            return false
+        // キーワードマッチングを実行（ファイル名のみ使用）
+        let matchResult = KeywordMatcher.findMatchingApplication(
+            for: url,
+            originalFileName: originalFileName,
+            using: settings
+        )
+        
+        // 外部アプリケーションで開く（元のファイルURLを直接使用）
+        if let application = matchResult.matchedApplication {
+            NSLog("外部アプリケーション起動: \(application)")
+            _ = AppLauncher.launchApplication(with: url, applicationName: application)
+        } else {
+            NSLog("デフォルトアプリケーション起動")
+            _ = AppLauncher.launchWithDefaultApplication(zipFileURL: url)
         }
+        
+        NSLog("外部アプリケーション起動、CoverZipを終了します")
+        NSApplication.shared.terminate(nil)
+        
+        return true
     }
 }
 

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-CoverZipは、ZIPファイルのサムネイルを表示するmacOS QuickLook Extensionです。ZIPファイル内の先頭の画像ファイルを使用してサムネイルを生成し、Finderでの視覚的な識別を可能にします。
+CoverZipは、二つの独立した機能を持つmacOSアプリケーションです：
+1. **QuickLook Thumbnail Extension** - ZIPファイル内の先頭画像を使用したサムネイル生成
+2. **ZIPファイルルーティングアプリケーション** - ファイル名キーワードマッチングによる外部アプリケーション自動起動
 
 ## アーキテクチャ
 
@@ -23,17 +25,28 @@ CoverZipは、ZIPファイルのサムネイルを表示するmacOS QuickLook Ex
   - 外部ライブラリ不要、標準フレームワークのみ使用
 
 #### 2. ZIPファイルルーティングアプリケーション
-- **AppDelegate** - NSApplicationDelegateによるファイル開く処理
-  - `application(_:openFile:)` でZIPファイルを直接処理
-  - キーワードマッチングと外部アプリケーション起動を実行
-  - ウィンドウ生成なしのバックグラウンド処理
+- **CoverZipApp.swift (AppDelegate)** - ファイル処理とアプリケーション制御
+  - 複数のファイル開くメソッド実装（`application:openFile:`, `application:open:urls:`等）
+  - ZIPファイル名でのキーワードマッチング実行
+  - 外部アプリケーション起動後の自動終了機能
+  - Settings sceneによるバックグラウンド動作
 
-- **KeywordMatcher** - ファイル名ベースのキーワードマッチング
-  - ZIPファイル名からキーワードを抽出
-  - settings.jsonの設定に基づいたアプリケーション決定
+- **Services/KeywordMatcher.swift** - ファイル名ベースのマッチング
+  - ZIPファイル名（拡張子除去）からキーワード抽出
+  - `KeywordSettings`（JSON設定）に基づくアプリケーション決定
+  - NSLog出力によるデバッグ情報提供
 
-- **AppLauncher** - 外部アプリケーション起動処理
+- **Services/AppLauncher.swift** - 外部アプリケーション起動
   - 一時ファイル作成とNSWorkspace経由での起動
+  - デフォルトアプリケーション起動機能
+
+- **Services/SettingsFileManager.swift** - JSON設定管理
+  - 外部エディタでのsettings.json編集機能
+  - Application Supportディレクトリでの設定ファイル管理
+
+- **Models/KeywordSettings.swift** - 設定データモデル
+  - JSON設定ファイルの読み込み・書き込み
+  - キーワード→アプリケーション名のマッピング管理
 
 ### App Extension制約への対応
 - サンドボックス環境での動作保証
@@ -41,14 +54,19 @@ CoverZipは、ZIPファイルのサムネイルを表示するmacOS QuickLook Ex
 - App Extensionプロセス分離への適合
 
 ### プロジェクト構造
-- `CoverZip/` - SwiftUIベースのメインアプリケーション（Document-based App）
+- `CoverZip/` - SwiftUIベースのメインアプリケーション（Settings scene使用）
+  - `CoverZipApp.swift` - AppDelegateによるファイル処理制御
+  - `Services/` - ビジネスロジック層
+    - `KeywordMatcher.swift` - ファイル名マッチング
+    - `AppLauncher.swift` - 外部アプリ起動
+    - `SettingsFileManager.swift` - 設定ファイル管理
+  - `Models/KeywordSettings.swift` - JSON設定データモデル
 - `coverZipExtension/` - QuickLook Thumbnail Extension
   - `ThumbnailProvider.swift` - QuickLookエントリーポイント
-  - `ZipProcessor.swift` - ZIP処理ロジック
+  - `ZipProcessor.swift` - ZIP処理ロジック（純Swift実装）
   - `Info.plist` - Extension設定
 - `CoverZipTests/` - Swift Testingベースのユニットテスト
 - `CoverZipUITests/` - UI自動化テスト
-- `HetimaZip-qlgenerator-master/` - 旧実装（参考用）
 
 ## ビルドと開発
 
@@ -78,16 +96,30 @@ qlmanage -m | grep -i coverzip
 
 ## 技術的詳細
 
-### Extension の設定
+### 主要な設計パターン
+
+#### 1. アプリケーション起動フロー
+```
+ZIPファイルドロップ → AppDelegate:application:open:urls: → 
+processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
+```
+
+#### 2. Extension設定
 - **NSExtensionPointIdentifier**: `com.apple.quicklook.thumbnail`
 - **NSExtensionPrincipalClass**: `ThumbnailProvider`
 - **サポートファイル形式**: ZIPファイル（`public.zip-archive`）
 
+#### 3. Settings Scene アーキテクチャ
+- WindowGroupの代替としてSettings sceneを使用
+- 不要なウィンドウ生成を回避しバックグラウンド処理に最適化
+- Cmd+,でアクセス可能な設定ファイル編集ボタン提供
+
 ### 実装のポイント
-1. **責任分離**: `ThumbnailProvider`（UI処理）と`ZipProcessor`（ファイル処理）の明確な分離
+1. **責任分離**: Extension（サムネイル生成）とApp（ファイルルーティング）の明確な分離
 2. **純Swift実装**: 外部ライブラリに依存しない軽量設計
 3. **メモリ最適化**: 8MBバッファによる制御されたメモリ使用
-4. **エラーハンドリング**: NSErrorベースの段階的フォールバック
+4. **即座終了**: 外部アプリ起動後の自動終了でリソース解放
+5. **一時ファイル管理**: サンドボックス制約に対応した一時ファイル作成・削除
 
 ## 開発時の注意点
 
@@ -119,3 +151,22 @@ qlmanage -m | grep -i coverzip
 - 独立プロセスでの動作
 - サンドボックス制約下での実装
 - QuickLook Thumbnail Extensionとしての登録必須
+
+## 設定ファイル（settings.json）
+
+### 設定例
+```json
+{
+  "keywords": {
+    "example": "Archive Utility",
+    "test": "BetterZip 5"
+  },
+  "default": "Archive Utility"
+}
+```
+
+### 設定管理
+- **場所**: `~/Library/Application Support/CoverZip/settings.json`
+- **編集**: Settings画面（Cmd+,）から外部エディタで編集
+- **自動生成**: 初回起動時にデフォルト設定を自動作成
+- **キーワードマッチング**: ZIPファイル名（拡張子除去）に対してキーワード検索実行

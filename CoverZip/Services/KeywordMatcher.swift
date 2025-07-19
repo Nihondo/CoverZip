@@ -31,8 +31,8 @@ class KeywordMatcher {
     /**
      * ZIPファイル名に対してキーワードマッチングを実行
      * 
-     * @param zipFileURL ZIPファイルのURL（一時ファイルの可能性あり）
-     * @param originalFileName 元のZIPファイル名
+     * @param zipFileURL ZIPファイルのURL（ファイル名取得用、必要に応じて使用）
+     * @param originalFileName 元のZIPファイル名（優先的に使用）
      * @param settings JSON設定ファイルのキーワード設定
      * @return マッチング結果
      */
@@ -53,6 +53,17 @@ class KeywordMatcher {
             fileName = zipFileURL.deletingPathExtension().lastPathComponent
         }
         
+        return checkKeyword(for: fileName, using: settings)
+    }
+    
+    /**
+     * ファイル名に対してキーワードマッチングを実行（簡素化版）
+     * 
+     * @param fileName チェック対象のファイル名（拡張子除去済み）
+     * @param settings JSON設定ファイルのキーワード設定
+     * @return マッチング結果
+     */
+    static func checkKeyword(for fileName: String, using settings: KeywordSettings) -> KeywordMatchResult {
         NSLog("ZIPファイル名マッチング開始: ファイル名='\(fileName)'")
         
         // 各キーワードをチェック
