@@ -13,45 +13,17 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 20) {
+            Image(systemName: "doc.zipper")
+                .font(.system(size: 64))
+                .foregroundColor(.secondary)
+            
             Text("CoverZip")
                 .font(.largeTitle)
                 .fontWeight(.bold)
-                .padding()
             
-            if let fileName = document.originalFileName {
-                VStack(spacing: 10) {
-                    Text("処理完了: \(fileName)")
-                        .font(.headline)
-                    
-                    if let matchResult = document.matchResult {
-                        if let application = matchResult.matchedApplication {
-                            Text("マッチしたアプリケーション: \(application)")
-                                .foregroundColor(.green)
-                        } else {
-                            Text("デフォルトアプリケーションで開きます")
-                                .foregroundColor(.orange)
-                        }
-                    }
-                }
-                .padding()
-                .onAppear {
-                    // 処理完了後にウィンドウを閉じる
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        NSApplication.shared.keyWindow?.close()
-                    }
-                }
-            } else {
-                VStack(spacing: 20) {
-                    Image(systemName: "doc.zipper")
-                        .font(.system(size: 64))
-                        .foregroundColor(.secondary)
-                    
-                    Text("ZIPファイルを開いてください")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
-                }
-                .padding()
-            }
+            Text("ZIPファイルルーティング")
+                .font(.title2)
+                .foregroundColor(.secondary)
             
             Spacer()
         }

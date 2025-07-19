@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import Foundation
 
 extension UTType {
     static var zipArchive: UTType {
@@ -15,29 +16,9 @@ extension UTType {
 }
 
 struct CoverZipDocument: FileDocument {
-    var zipFileURL: URL?
-    var originalFileName: String?
-    var matchResult: KeywordMatchResult?
-    var launchResult: AppLaunchResult?
 
-    init(zipFileURL: URL? = nil, originalFileName: String? = nil) {
-        self.zipFileURL = zipFileURL
-        self.originalFileName = originalFileName
-        self.matchResult = nil
-        self.launchResult = nil
-        
-        if let url = zipFileURL {
-            let settings = KeywordSettings.load()
-            let matchResult = KeywordMatcher.findMatchingApplication(for: url, originalFileName: originalFileName, using: settings)
-            
-            self.matchResult = matchResult
-            
-            if let application = matchResult.matchedApplication {
-                self.launchResult = AppLauncher.launchApplication(with: url, applicationName: application)
-            } else {
-                self.launchResult = AppLauncher.launchWithDefaultApplication(zipFileURL: url)
-            }
-        }
+    init() {
+        // 何もしない - ウィンドウ表示は不要
     }
 
     static var readableContentTypes: [UTType] { [.zipArchive] }
@@ -46,25 +27,13 @@ struct CoverZipDocument: FileDocument {
         // 元のファイル名を取得
         let originalFileName = configuration.file.filename ?? "unknown.zip"
         
-        // プロパティを初期化
-        self.zipFileURL = nil
-        self.originalFileName = originalFileName
-        
-        // ファイル名とパス名のみでキーワードマッチングを実行
+        // ファイル名のみでキーワードマッチングを実行
         let settings = KeywordSettings.load()
-        let matchResult = KeywordMatcher.findMatchingApplication(
-            for: URL(fileURLWithPath: originalFileName),
-            originalFileName: originalFileName,
-            using: settings
-        )
-        
-        self.matchResult = matchResult
         
         // 外部アプリケーション起動を即座に実行
         do {
             guard let data = configuration.file.regularFileContents else {
                 NSLog("ファイルデータが読み取れませんでした")
-                self.launchResult = .fileNotFound
                 return
             }
             
@@ -75,13 +44,20 @@ struct CoverZipDocument: FileDocument {
             
             try data.write(to: tempURL)
             
+            // キーワードマッチングを実行
+            let matchResult = KeywordMatcher.findMatchingApplication(
+                for: tempURL,
+                originalFileName: originalFileName,
+                using: settings
+            )
+            
             // 外部アプリケーションで開く
             if let application = matchResult.matchedApplication {
                 NSLog("外部アプリケーション起動: \(application)")
-                self.launchResult = AppLauncher.launchApplication(with: tempURL, applicationName: application)
+                _ = AppLauncher.launchApplication(with: tempURL, applicationName: application)
             } else {
                 NSLog("デフォルトアプリケーション起動")
-                self.launchResult = AppLauncher.launchWithDefaultApplication(zipFileURL: tempURL)
+                _ = AppLauncher.launchWithDefaultApplication(zipFileURL: tempURL)
             }
             
             // 遅延削除
@@ -91,7 +67,6 @@ struct CoverZipDocument: FileDocument {
             
         } catch {
             NSLog("外部アプリケーション起動に失敗: \(error)")
-            self.launchResult = .launchFailed(error)
         }
     }
     
