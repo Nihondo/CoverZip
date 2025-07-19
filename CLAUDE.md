@@ -4,25 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-CoverZipは、ZIPファイルのサムネイルを表示するmacOS QuickLook Extensionです。ZIPファイル内の先頭の画像ファイルを使用してアイコンを生成します。
+CoverZipは、ZIPファイルのサムネイルを表示するmacOS QuickLook Extensionです。ZIPファイル内の先頭の画像ファイルを使用してサムネイルを生成し、Finderでの視覚的な識別を可能にします。
 
-## プロジェクト構造
+## アーキテクチャ
 
-### メインアプリケーション
-- `CoverZip/` - メインアプリケーション（Document-based App）
-- `CoverZipTests/` - ユニットテスト
-- `CoverZipUITests/` - UIテスト
+### コアコンポーネント分離設計
+1. **ThumbnailProvider.swift** - QuickLook拡張機能のエントリーポイント
+   - `QLThumbnailProvider`を継承したメインクラス
+   - 画像の縦横比維持とスケーリング処理
+   - `ZipProcessor`を呼び出してZIPファイル処理を委譲
 
-### QuickLook Extension
+2. **ZipProcessor.swift** - ZIP処理専用クラス（純Swift実装）
+   - ZIPファイルの解析（Central Directory + Local File Header）
+   - DEFLATE圧縮データの展開（8MBバッファ）
+   - 画像ファイルの検出と抽出
+   - 外部ライブラリ不要、標準フレームワークのみ使用
+
+### App Extension制約への対応
+- サンドボックス環境での動作保証
+- メモリ使用量の最適化（8MBバッファ制限）
+- App Extensionプロセス分離への適合
+
+### プロジェクト構造
+- `CoverZip/` - SwiftUIベースのメインアプリケーション（Document-based App）
 - `coverZipExtension/` - QuickLook Thumbnail Extension
-  - `ThumbnailProvider.swift` - サムネイル生成のメインクラス
+  - `ThumbnailProvider.swift` - QuickLookエントリーポイント
+  - `ZipProcessor.swift` - ZIP処理ロジック
   - `Info.plist` - Extension設定
-
-### リファレンスコード
-- `HetimaZip-qlgenerator-master/` - 古いQuickLook Generatorの実装（参考用）
-  - `GenerateThumbnailForURL.m` - サムネイル生成のエントリーポイント
-  - `HZQZipItem.m` - ZIPファイルの処理
-  - `HZQImageAgent.m` - 画像処理
+- `CoverZipTests/` - Swift Testingベースのユニットテスト
+- `CoverZipUITests/` - UI自動化テスト
+- `HetimaZip-qlgenerator-master/` - 旧実装（参考用）
 
 ## ビルドと開発
 
@@ -38,11 +49,16 @@ xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUI
 xcodebuild -project CoverZip.xcodeproj -target coverZipExtension build -configuration Debug CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 ```
 
-### Extension のテスト
+### Extensionのテスト
 ```bash
-# QuickLook Extension を確認
+# QuickLook Extensionをリロード
 qlmanage -r
+
+# 特定のZIPファイルでサムネイル生成テスト
 qlmanage -t path/to/test.zip
+
+# Extensionの詳細確認
+qlmanage -m | grep -i coverzip
 ```
 
 ## 技術的詳細
@@ -50,56 +66,41 @@ qlmanage -t path/to/test.zip
 ### Extension の設定
 - **NSExtensionPointIdentifier**: `com.apple.quicklook.thumbnail`
 - **NSExtensionPrincipalClass**: `ThumbnailProvider`
-- **サポートファイル形式**: ZIPファイル（設定が必要）
+- **サポートファイル形式**: ZIPファイル（`public.zip-archive`）
 
 ### 実装のポイント
-1. `QLThumbnailProvider` を継承した `ThumbnailProvider` クラス
-2. `provideThumbnail(for:_:)` メソッドでサムネイル生成
-3. ZIPファイル内の画像ファイルを抽出してサムネイル化
-
-### リファレンスコードの重要な機能
-- `HZQZipItem`: ZIPファイルの解析とファイル一覧取得
-- `imageDataArrayWithExpectation`: ZIP内の画像データを取得
-- `anyImageData`: 先頭の画像データを取得
-- minizipライブラリによるZIPファイル処理
+1. **責任分離**: `ThumbnailProvider`（UI処理）と`ZipProcessor`（ファイル処理）の明確な分離
+2. **純Swift実装**: 外部ライブラリに依存しない軽量設計
+3. **メモリ最適化**: 8MBバッファによる制御されたメモリ使用
+4. **エラーハンドリング**: NSErrorベースの段階的フォールバック
 
 ## 開発時の注意点
 
 ### Extension の特徴
 - QuickLook Extensionは独立したプロセスで動作
 - サンドボックス環境での制限
-- メモリ使用量の制限
+- メモリ使用量の制限（8MBバッファ）
 
 ### デバッグ方法
 - Extension のデバッグには特別な設定が必要
 - System Preferencesでの有効化が必要
 - `qlmanage -r` でExtensionをリロード
 
-### ZIPファイル処理
-- C言語のminizipライブラリを使用
-- ファイル名のエンコーディング処理（UTF-8, Shift-JIS）
-- 画像ファイルの検出（.jpg, .png, .icns など）
+### ZIPファイル処理の技術詳細
+- **純Swift実装**: Foundation/Compressionフレームワークのみ使用
+- **対応圧縮方式**: DEFLATE（方式8）と非圧縮（方式0）
+- **対応画像形式**: .jpg, .jpeg, .png, .gif, .bmp, .tiff, .ico, .icns
+- **メモリ効率**: 8MBバッファによる制御されたメモリ使用
+- **ファイル名エンコーディング**: UTF-8対応、__MACOSX隠しファイル除外
 
-## 実装内容
+## 実装制約
 
-### 完了した機能
-- **ZIPファイル解析**: 純SwiftでZIPファイルのCentral DirectoryとLocal File Headerを解析
-- **画像ファイル検出**: .jpg, .jpeg, .png, .gif, .bmp, .tiff, .ico, .icns 形式の画像を検出
-- **DEFLATE展開**: Compression frameworkを使用したZIPファイル内の圧縮データ展開
-- **縦横比維持**: 画像の縦横比を保持したサムネイル生成
-- **AppKit統合**: NSImageとNSBezierPathを使用した描画
+### 制限事項
+- 暗号化ZIPファイルは未対応
+- 大容量ZIPファイルでのメモリ制限
+- DEFLATE以外の圧縮方式は未対応
 
-### 実装の特徴
-- **外部ライブラリ不要**: 標準のFoundationとCompressionフレームワークのみ使用
-- **サンドボックス対応**: App Extensionの制限に準拠
-- **軽量実装**: minizipライブラリを使用せず、純Swift実装
-
-### 既知の制限事項
-- **暗号化ZIP**: パスワード付きZIPファイルは未対応
-- **圧縮方式**: DEFLATE（方式8）と非圧縮（方式0）のみ対応
-- **ファイルサイズ**: 大きなZIPファイルでのメモリ制限
-
-## 今後の改善予定
-- エラーハンドリングの強化
-- 圧縮方式の追加対応
-- パフォーマンスの最適化
+### App Extension環境
+- 独立プロセスでの動作
+- サンドボックス制約下での実装
+- QuickLook Thumbnail Extensionとしての登録必須
