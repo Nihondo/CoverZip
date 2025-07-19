@@ -200,10 +200,10 @@ class ZipProcessor {
      */
     private static func inflateData(_ compressedData: Data) -> Data? {
         return compressedData.withUnsafeBytes { bytes in
-            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 1024 * 1024) // 1MB buffer
+            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 8 * 1024 * 1024) // 8MB buffer
             defer { buffer.deallocate() }
             
-            let decompressedSize = compression_decode_buffer(buffer, 1024 * 1024, bytes.bindMemory(to: UInt8.self).baseAddress!, compressedData.count, nil, COMPRESSION_ZLIB)
+            let decompressedSize = compression_decode_buffer(buffer, 8 * 1024 * 1024, bytes.bindMemory(to: UInt8.self).baseAddress!, compressedData.count, nil, COMPRESSION_ZLIB)
             
             if decompressedSize > 0 {
                 return Data(bytes: buffer, count: decompressedSize)
