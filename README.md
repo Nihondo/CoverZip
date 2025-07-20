@@ -85,16 +85,70 @@ xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUI
 ```
 
 ### 設定例
+
+#### 基本設定（後方互換性）
 ```json
 {
   "keywords": {
-    "example": "Archive Utility",
-    "test": "BetterZip 5",
-    "project": "The Unarchiver"
+    "comic": {
+      "type": "filename",
+      "application": "SimpleComicViewer.app"
+    },
+    "manga": {
+      "type": "filename", 
+      "application": "SimpleComicViewer.app"
+    },
+    "Downloads": {
+      "type": "pathname",
+      "application": "Archive Utility.app"
+    }
   },
-  "default": "Archive Utility"
+  "default": "Archive Utility.app"
 }
 ```
+
+#### 高度な設定（ワイルドカード・正規表現対応）
+```json
+{
+  "keywords": {
+    "comic": {
+      "type": "filename",
+      "application": "SimpleComicViewer.app",
+      "matchMode": "contains"
+    },
+    "vol*": {
+      "type": "filename",
+      "application": "SimpleComicViewer.app", 
+      "matchMode": "wildcard"
+    },
+    "^backup_\\d+$": {
+      "type": "pathname",
+      "application": "Archive Utility.app",
+      "matchMode": "regex"
+    },
+    "Downloads": {
+      "type": "pathname",
+      "application": "The Unarchiver.app",
+      "matchMode": "contains"
+    }
+  },
+  "default": "Archive Utility.app"
+}
+```
+
+#### マッチング方式の説明
+- **contains** (デフォルト): 部分一致検索
+  - 例: `"comic"` → `comic_vol1.zip` にマッチ
+- **wildcard**: ワイルドカード (`*`, `?`) 対応
+  - 例: `"vol*"` → `vol1.zip`, `vol_special.zip` にマッチ
+  - 例: `"*backup*"` → `auto_backup_2024.zip` にマッチ
+- **regex**: 正規表現対応
+  - 例: `"^backup_\\d+$"` → `backup_123` にマッチ（先頭末尾固定）
+  - 例: `"(manga|comic)"` → `manga.zip`, `comic.zip` にマッチ
+
+#### キーワードタイプの説明
+- **filename**: ZIPファイル名でマッチング（拡張子除く）
+- **pathname**: ZIPファイルのフルパスでマッチング
 
 ### 設定の編集
 1. Cmd+, または アプリメニューから CoverZip > Settings... を選択
