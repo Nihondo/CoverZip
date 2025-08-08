@@ -67,7 +67,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // キーワードマッチングと外部アプリケーション起動を実行
         let originalFileName = url.lastPathComponent
-        let settings = /.load()
+        let settings = KeywordSettings.load()
         
         // キーワードマッチングを実行（ファイル名とパス名の両方を使用）
         let fileName = URL(fileURLWithPath: originalFileName).deletingPathExtension().lastPathComponent
