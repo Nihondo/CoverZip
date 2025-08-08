@@ -30,7 +30,7 @@ CoverZipは、二つの独立した機能を持つmacOSアプリケーション�
 - PNG (.png)
 - GIF (.gif)
 - BMP (.bmp)
-- TIFF (.tiff)
+- TIFF (.tiff, .tif)
 - ICO (.ico)
 - ICNS (.icns)
 
@@ -86,39 +86,29 @@ xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUI
 
 ### 設定例
 
-#### 基本設定（後方互換性）
+アプリケーション初回起動時に、以下の内容でデフォルトの設定ファイルが自動生成されます。このファイルは後から自由に編集できます。
+
 ```json
 {
   "keywords": {
-    "comic": {
+    "コミック": {
       "type": "filename",
-      "application": "SimpleComicViewer.app"
+      "application": "SimpleComicViewer.app",
+      "matchMode": "contains"
     },
     "manga": {
-      "type": "filename", 
-      "application": "SimpleComicViewer.app"
-    },
-    "Downloads": {
-      "type": "pathname",
-      "application": "Archive Utility.app"
-    }
-  },
-  "default": "Archive Utility.app"
-}
-```
-
-#### 高度な設定（ワイルドカード・正規表現対応）
-```json
-{
-  "keywords": {
-    "comic": {
       "type": "filename",
+      "application": "SimpleComicViewer.app",
+      "matchMode": "contains"
+    },
+    "comic": {
+      "type": "pathname",
       "application": "SimpleComicViewer.app",
       "matchMode": "contains"
     },
     "vol*": {
       "type": "filename",
-      "application": "SimpleComicViewer.app", 
+      "application": "SimpleComicViewer.app",
       "matchMode": "wildcard"
     },
     "^backup_\\d+$": {
@@ -126,9 +116,14 @@ xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUI
       "application": "Archive Utility.app",
       "matchMode": "regex"
     },
-    "Downloads": {
+    "写真": {
+      "type": "filename",
+      "application": "Photos.app",
+      "matchMode": "contains"
+    },
+    "photo": {
       "type": "pathname",
-      "application": "The Unarchiver.app",
+      "application": "Photos.app",
       "matchMode": "contains"
     }
   },
@@ -162,8 +157,9 @@ xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUI
 
 ```
 CoverZip/
-├── CoverZip/                    # メインアプリケーション（Settings scene）
-│   ├── CoverZipApp.swift        # AppDelegateによるファイル処理制御
+├── CoverZip/                    # メインアプリケーション
+│   ├── CoverZipApp.swift        # SwiftUI Appライフサイクルエントリーポイント
+│   ├── AppDelegate.swift        # ファイル処理、アプリケーションデリゲート
 │   ├── Services/                # ビジネスロジック層
 │   │   ├── KeywordMatcher.swift    # ファイル名マッチング
 │   │   ├── AppLauncher.swift       # 外部アプリ起動
