@@ -66,24 +66,28 @@ struct KeywordSettings: Codable {
     
     
     /**
-     * アプリケーションバンドル内のsettings.jsonファイルから設定を読み込む
+     * settings.jsonファイルから設定を読み込む
+     * ユーザーが編集可能なApplication Supportディレクトリの設定を優先する
      */
     static func load() -> KeywordSettings {
-        // 1. アプリケーションバンドル内のsettings.jsonを試す
-        if let bundlePath = Bundle.main.path(forResource: "settings", ofType: "json"),
-           let data = try? Data(contentsOf: URL(fileURLWithPath: bundlePath)),
-           let settings = try? JSONDecoder().decode(KeywordSettings.self, from: data) {
-            return settings
-        }
-        
-        // 2. アプリケーションサポートディレクトリのsettings.jsonを試す
+        // 1. アプリケーションサポートディレクトリのsettings.jsonを試す
         if let appSupportURL = getApplicationSupportDirectory(),
            let data = try? Data(contentsOf: appSupportURL.appendingPathComponent("settings.json")),
            let settings = try? JSONDecoder().decode(KeywordSettings.self, from: data) {
+            NSLog("ユーザー設定ファイルを読み込みました: \(appSupportURL.appendingPathComponent("settings.json").path)")
+            return settings
+        }
+        
+        // 2. アプリケーションバンドル内のsettings.jsonを試す
+        if let bundlePath = Bundle.main.path(forResource: "settings", ofType: "json"),
+           let data = try? Data(contentsOf: URL(fileURLWithPath: bundlePath)),
+           let settings = try? JSONDecoder().decode(KeywordSettings.self, from: data) {
+            NSLog("バンドル内のデフォルト設定ファイルを読み込みました: \(bundlePath)")
             return settings
         }
         
         // 3. デフォルト設定を返す
+        NSLog("有効な設定ファイルが見つからなかったため、デフォルト設定を返します")
         return defaultSettings
     }
     
