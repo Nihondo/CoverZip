@@ -134,6 +134,18 @@ class ImageManager {
     func getCurrentPageNumber() -> Int {
         return currentIndex + 1
     }
+
+    /// 指定ページへ移動（1始まり）
+    /// - Parameter page: 1...imageCount の範囲内で移動。範囲外は丸め込み。
+    /// - Returns: 有効な画像が存在する場合にtrue
+    func goToPage(_ page: Int) -> Bool {
+        guard !imageEntries.isEmpty else { return false }
+        let clamped = max(1, min(page, imageEntries.count))
+        let newIndex = clamped - 1
+        currentIndex = newIndex
+        preloadAdjacentImages()
+        return true
+    }
     
     /**
      * 画像があるかどうかを確認する

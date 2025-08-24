@@ -17,6 +17,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     @IBOutlet weak var imageView: NSImageView!
     @IBOutlet weak var pageLabel: NSTextField!
+    @IBOutlet weak var pageSlider: NSSlider!
     
     private var imageManager = ImageManager()
     private var mouseMonitors: [Any] = []
@@ -40,30 +41,41 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     override func viewWillAppear() {
         super.viewWillAppear()
         // マウスイベントをホスト（Finder）へ渡さないためにローカルモニタで吸収（down/up 両方）
-        if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event -> NSEvent? in
+    if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
             if self.view.window != nil {
+                // 座標変換に失敗したら安全側でイベントを通す
+                guard let p = self.convertEventPointToView(event) else { return event }
+                // 自ビュー領域内の時は吸収（NSControl上は通す）
+                guard self.view.bounds.contains(p) else { return event }
+                // スライダーなどのNSControl（やそのサブビュー）上のクリックは通す（ただしimageView配下は除外）
+                if self.isPointInsidePassThroughControl(p) { return event }
+                // 画像エリアのクリックは吸収（ダブルクリック抑止）
                 self.pendingSingleClick?.cancel()
                 self.pendingSingleClick = nil
-                return nil // 全てのマウスダウンイベントを吸収
+                return nil
             }
             return event
         }) {
             mouseMonitors.append(down)
         }
-        if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event -> NSEvent? in
+    if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
             if self.view.window != nil {
-                // マウスアップでページめくり処理を実行
-                guard let vPoint = self.convertEventPointToView(event) else { return nil }
+                // 座標変換に失敗したら安全側でイベントを通す
+                guard let vPoint = self.convertEventPointToView(event) else { return event }
+                // 自ビュー領域外はホストに渡す
+                guard self.view.bounds.contains(vPoint) else { return event }
+                // スライダーなどのNSControl（やそのサブビュー）上のクリックは通す（ただしimageView配下は除外）
+                if self.isPointInsidePassThroughControl(vPoint) { return event }
+                // マウスアップでページめくり処理を実行（画像エリアのみ）
                 let bounds = self.view.bounds
-                guard bounds.contains(vPoint) else { return nil }
                 if vPoint.x < bounds.width / 2 {
                     if self.imageManager.previousImage() { self.displayCurrentImage() }
                 } else {
                     if self.imageManager.nextImage() { self.displayCurrentImage() }
                 }
-                return nil // 全てのマウスアップイベントを吸収
+                return nil // ホストには渡さない
             }
             return event
         }) {
@@ -112,6 +124,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 displayCurrentImage()
                 // 初期ロード時に隣接画像を先読み
                 imageManager.preloadAdjacentImages()
+                updateSliderLimits()
             }
         } else {
             // 画像が見つからない場合の処理
@@ -140,6 +153,40 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             layer.contentsGravity = .resizeAspect
             layer.minificationFilter = .linear
             layer.magnificationFilter = .linear
+        }
+
+        // スライダーを自動追加（XIB未接続時）
+        if pageSlider == nil {
+            let slider = NSSlider(value: 1, minValue: 1, maxValue: 1, target: self, action: #selector(pageSliderChanged(_:)))
+            slider.isContinuous = true
+            slider.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(slider)
+            self.pageSlider = slider
+
+            // 既存の imageView と pageLabel の間の縦方向制約を解除
+            if let imageView, let pageLabel {
+                let toRemove = view.constraints.filter { c in
+                    let f = c.firstItem as AnyObject?
+                    let s = c.secondItem as AnyObject?
+                    // pageLabel.top = imageView.bottom と imageView.bottom = pageLabel.top を検出
+                    return (f === pageLabel && c.firstAttribute == .top && s === imageView && c.secondAttribute == .bottom)
+                        || (f === imageView && c.firstAttribute == .bottom && s === pageLabel && c.secondAttribute == .top)
+                }
+                NSLayoutConstraint.deactivate(toRemove)
+
+                // 新しいレイアウト: imageView ─8→ slider ─6→ pageLabel
+                NSLayoutConstraint.activate([
+                    slider.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 8),
+                    pageLabel.topAnchor.constraint(equalTo: slider.bottomAnchor, constant: 6),
+                    slider.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+                    slider.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
+                ])
+            }
+        } else {
+            // XIB接続済みならターゲット設定のみ
+            pageSlider.target = self
+            pageSlider.action = #selector(pageSliderChanged(_:))
+            pageSlider.isContinuous = true
         }
     }
     
@@ -174,6 +221,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if let currentImage = imageManager.getCurrentImage() {
             setImageSafely(currentImage)
             updatePageLabel()
+            // スライダーの位置を現在ページに同期
+            pageSlider?.integerValue = imageManager.getCurrentPageNumber()
             // 画像のアスペクト比に基づいて縦いっぱいの希望サイズを提示
             currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
             updatePreferredContentSizeIfNeeded()
@@ -202,6 +251,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         imageView?.imageAlignment = .alignCenter
         imageView?.image = image
         pageLabel?.stringValue = ""
+    // スライダーを無効化
+    pageSlider?.minValue = 1
+    pageSlider?.maxValue = 1
+    pageSlider?.integerValue = 1
+    pageSlider?.isEnabled = false
     }
 
     private func setImageSafely(_ image: NSImage) {
@@ -209,6 +263,30 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         iv.imageScaling = .scaleProportionallyUpOrDown
         iv.imageAlignment = .alignCenter
         iv.image = image
+    }
+
+    // スライダーの最小/最大と有効状態を更新
+    private func updateSliderLimits() {
+        let count = imageManager.getImageCount()
+        if count > 0 {
+            pageSlider?.minValue = 1
+            pageSlider?.maxValue = Double(count)
+            pageSlider?.integerValue = imageManager.getCurrentPageNumber()
+            pageSlider?.isEnabled = true
+        } else {
+            pageSlider?.minValue = 1
+            pageSlider?.maxValue = 1
+            pageSlider?.integerValue = 1
+            pageSlider?.isEnabled = false
+        }
+    }
+
+    // スライダー変更時にページ移動
+    @IBAction func pageSliderChanged(_ sender: NSSlider) {
+        let page = sender.integerValue
+        if imageManager.goToPage(Int(page)) {
+            displayCurrentImage()
+        }
     }
 
     // Quick Look ホストに対して、縦方向いっぱいの希望サイズをヒントとして提示
@@ -237,8 +315,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if let win = event.window {
             screenPoint = win.convertPoint(toScreen: event.locationInWindow)
         } else {
-            // 直接スクリーン座標が来るケース
-            screenPoint = event.locationInWindow
+            // ローカルモニタでwindowがnilな場合は現在のマウス座標を使用
+            screenPoint = NSEvent.mouseLocation
         }
         // 2) プレビューのウィンドウ座標へ
         guard let myWin = view.window else { return nil }
@@ -246,6 +324,18 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 3) ビュー座標へ
         let viewPoint = view.convert(windowPoint, from: nil)
         return viewPoint
+    }
+
+    // 指定ビュー座標が「通過させるべきNSControl」上かを判定（imageView配下は除外して吸収対象にする）
+    private func isPointInsidePassThroughControl(_ pointInView: NSPoint) -> Bool {
+        guard let hit = view.hitTest(pointInView) else { return false }
+        var v: NSView? = hit
+        while let cur = v {
+            if let iv = self.imageView, cur === iv { return false }
+            if cur is NSControl { return true }
+            v = cur.superview
+        }
+        return false
     }
     
     private func updatePageLabel() {
