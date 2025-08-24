@@ -27,6 +27,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var sliderConstraints: [NSLayoutConstraint] = []
     private var directLabelTopConstraint: NSLayoutConstraint?
     private let sliderVisibilityWidthThreshold: CGFloat = 600 // この幅未満では非表示（Finderカラム想定）
+    // 日本のコミック向けにページ方向を反転（左=進む、右=戻る、スライダーは左が大きいページ）
+    private var isRightToLeftReading: Bool = true
     
     override var nibName: NSNib.Name? {
         return NSNib.Name("PreviewViewController")
@@ -53,7 +55,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 // 自ビュー領域内の時は吸収（NSControl上は通す）
                 guard self.view.bounds.contains(p) else { return event }
                 // スライダーなどのNSControl（やそのサブビュー）上のクリックは通す（ただしimageView配下は除外）
-                if self.isPointInsidePassThroughControl(p) { return event }
+                if self.isPointInsidePassThroughControl(p) {
+                    // A案: スライダートラック上クリック時は即時に値を反映してアクション実行（イベントは通す）
+                    self.immediatelyJumpSliderIfNeeded(atViewPoint: p)
+                    return event
+                }
                 // 画像エリアのクリックは吸収（ダブルクリック抑止）
                 self.pendingSingleClick?.cancel()
                 self.pendingSingleClick = nil
@@ -74,10 +80,21 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 if self.isPointInsidePassThroughControl(vPoint) { return event }
                 // マウスアップでページめくり処理を実行（画像エリアのみ）
                 let bounds = self.view.bounds
-                if vPoint.x < bounds.width / 2 {
-                    if self.imageManager.previousImage() { self.displayCurrentImage() }
+                let isLeftHalf = vPoint.x < bounds.width / 2
+                if self.isRightToLeftReading {
+                    // 反転: 左=進む、右=戻る
+                    if isLeftHalf {
+                        if self.imageManager.nextImage() { self.displayCurrentImage() }
+                    } else {
+                        if self.imageManager.previousImage() { self.displayCurrentImage() }
+                    }
                 } else {
-                    if self.imageManager.nextImage() { self.displayCurrentImage() }
+                    // 通常: 左=戻る、右=進む
+                    if isLeftHalf {
+                        if self.imageManager.previousImage() { self.displayCurrentImage() }
+                    } else {
+                        if self.imageManager.nextImage() { self.displayCurrentImage() }
+                    }
                 }
                 return nil // ホストには渡さない
             }
@@ -170,11 +187,13 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             slider.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(slider)
             self.pageSlider = slider
+            applySliderLayoutDirection()
         } else {
             // XIB接続済みならターゲット設定のみ
             pageSlider.target = self
             pageSlider.action = #selector(pageSliderChanged(_:))
             pageSlider.isContinuous = true
+            applySliderLayoutDirection()
         }
 
         // 制約の再構成（スライダー表示/非表示を切り替え可能に）
@@ -235,8 +254,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if let currentImage = imageManager.getCurrentImage() {
             setImageSafely(currentImage)
             updatePageLabel()
-            // スライダーの位置を現在ページに同期
-            pageSlider?.integerValue = imageManager.getCurrentPageNumber()
+            // スライダーの位置を現在ページに同期（方向反転に対応）
+            syncSliderToCurrentPage()
             // 画像のアスペクト比に基づいて縦いっぱいの希望サイズを提示
             currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
             updatePreferredContentSizeIfNeeded()
@@ -279,6 +298,38 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         iv.image = image
     }
 
+    // スライダー上のクリックなら、クリック位置に即時ジャンプしてアクションを発火（イベント自体は通す）
+    private func immediatelyJumpSliderIfNeeded(atViewPoint pointInView: NSPoint) {
+        guard let slider = pageSlider, slider.isHidden == false, slider.isEnabled else { return }
+        // クリックがスライダー（または子孫）上か確認
+        guard isPointInsidePageSlider(pointInView) else { return }
+        // ビュー座標→スライダー座標
+        let local = slider.convert(pointInView, from: view)
+        guard slider.bounds.width > 0 else { return }
+        var ratio = max(0, min(1, Double(local.x / slider.bounds.width)))
+        // RTL時は比率を反転（左端=最大値）
+        if isRightToLeftReading { ratio = 1 - ratio }
+        let newValue = slider.minValue + (slider.maxValue - slider.minValue) * ratio
+        // ノブを即時移動（ページは整数なので丸め）
+        let rounded = Double(Int(newValue.rounded()))
+        if slider.doubleValue != rounded {
+            slider.doubleValue = rounded
+            // 直接アクションを呼ぶ（target/actionに委ねる）
+            if let action = slider.action { NSApp.sendAction(action, to: slider.target, from: slider) }
+        }
+    }
+
+    // ビュー座標が pageSlider（またはそのサブビュー階層）上かを判定
+    private func isPointInsidePageSlider(_ pointInView: NSPoint) -> Bool {
+        guard let slider = pageSlider, let hit = view.hitTest(pointInView) else { return false }
+        var v: NSView? = hit
+        while let cur = v {
+            if cur === slider { return true }
+            v = cur.superview
+        }
+        return false
+    }
+
     // 表示コンテキスト（主に幅）に応じてスライダーの可視性を切り替える
     private func updateSliderVisibilityForContext() {
         guard pageSlider != nil else { return }
@@ -295,6 +346,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         guard let slider = pageSlider else { return }
         slider.isHidden = !visible
         slider.isEnabled = visible && imageManager.getImageCount() > 1
+        // レイアウト方向も反映
+        applySliderLayoutDirection()
         // 制約の切り替え
         if visible {
             if let c = directLabelTopConstraint { c.isActive = false }
@@ -306,13 +359,22 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         view.layoutSubtreeIfNeeded()
     }
 
+    // スライダーのハイライト向きを読書方向に合わせる
+    private func applySliderLayoutDirection() {
+        guard let slider = pageSlider else { return }
+        if #available(macOS 10.12, *) {
+            slider.userInterfaceLayoutDirection = isRightToLeftReading ? .rightToLeft : .leftToRight
+        }
+    }
+
     // スライダーの最小/最大と有効状態を更新
     private func updateSliderLimits() {
         let count = imageManager.getImageCount()
         if count > 0 {
             pageSlider?.minValue = 1
             pageSlider?.maxValue = Double(count)
-            pageSlider?.integerValue = imageManager.getCurrentPageNumber()
+            // 現在ページに同期（方向反転に対応）
+            syncSliderToCurrentPage()
             pageSlider?.isEnabled = true
         } else {
             pageSlider?.minValue = 1
@@ -324,10 +386,19 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     // スライダー変更時にページ移動
     @IBAction func pageSliderChanged(_ sender: NSSlider) {
+        // スライダーの見た目方向はRTLに合わせているため、内部値は反転しない
         let page = sender.integerValue
         if imageManager.goToPage(Int(page)) {
             displayCurrentImage()
         }
+    }
+
+    // 現在ページをスライダー位置へ反映（方向反転対応）
+    private func syncSliderToCurrentPage() {
+        guard let slider = pageSlider else { return }
+        // 内部値はそのまま同期（見た目の方向はUIレベルで反映）
+        let current = imageManager.getCurrentPageNumber()
+        slider.integerValue = current
     }
 
     // Quick Look ホストに対して、縦方向いっぱいの希望サイズをヒントとして提示
