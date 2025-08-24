@@ -81,8 +81,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     override func viewDidAppear() {
         super.viewDidAppear()
-        // ビューが表示されたらFirst Responderになってキーイベントを受け取る
-        view.window?.makeFirstResponder(self)
+    // Quick LookではFirst Responderを取得しない
         // レイアウト完了後のサイズで初回画像を再フィット
         if imageManager.hasImages() {
             displayCurrentImage()
@@ -255,26 +254,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         pageLabel?.stringValue = "\(currentPage) / \(totalPages)"
     }
     
-    // MARK: - Keyboard Events
-    
-    override var acceptsFirstResponder: Bool {
-        return true
-    }
-    
-    override func keyDown(with event: NSEvent) {
-        switch event.keyCode {
-        // page up
-        case 116: // Page Upキー - 前の画像
-            if imageManager.previousImage() {
-                displayCurrentImage()
-            }
-        case 119: // Page Downキー - 次の画像
-            if imageManager.nextImage() {
-                displayCurrentImage()
-            }
-        default:
-            super.keyDown(with: event)
-        }
-    }
+    // キーボード入力はQuick Lookホストに委ねる（本拡張では未処理）
 
 }
