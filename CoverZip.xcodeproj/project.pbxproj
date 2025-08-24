@@ -85,16 +85,6 @@
 			path = CoverZip;
 			sourceTree = "<group>";
 		};
-		426EFEBE2E26708B00AD23E5 /* CoverZipTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = CoverZipTests;
-			sourceTree = "<group>";
-		};
-		426EFEC82E26708B00AD23E5 /* CoverZipUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = CoverZipUITests;
-			sourceTree = "<group>";
-		};
 		426EFEF42E2670FC00AD23E5 /* coverZipExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -143,8 +133,6 @@
 			isa = PBXGroup;
 			children = (
 				426EFEAC2E26708A00AD23E5 /* CoverZip */,
-				426EFEBE2E26708B00AD23E5 /* CoverZipTests */,
-				426EFEC82E26708B00AD23E5 /* CoverZipUITests */,
 				426EFEF42E2670FC00AD23E5 /* coverZipExtension */,
 				426EFEEF2E2670FC00AD23E5 /* Frameworks */,
 				426EFEAB2E26708A00AD23E5 /* Products */,
@@ -211,9 +199,6 @@
 			dependencies = (
 				426EFEBD2E26708B00AD23E5 /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				426EFEBE2E26708B00AD23E5 /* CoverZipTests */,
-			);
 			name = CoverZipTests;
 			packageProductDependencies = (
 			);
@@ -233,9 +218,6 @@
 			);
 			dependencies = (
 				426EFEC72E26708B00AD23E5 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				426EFEC82E26708B00AD23E5 /* CoverZipUITests */,
 			);
 			name = CoverZipUITests;
 			packageProductDependencies = (
