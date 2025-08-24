@@ -1,34 +1,134 @@
 //
-//  ZipProcessor.swift
-//  coverZipExtension
+//  ImageManager.swift
+//  coverZipViewer
 //
-//  Created by Nihondo on 2025/07/19.
+//  Created by Nihondo on 2025/08/24.
 //
 
 import Foundation
+import AppKit
 import Compression
 
 /**
- * ZIPファイルの処理を担当するクラス
- * ZIPファイルの解析、画像ファイルの検索・抽出機能を提供する
+ * ZIPファイル内の画像エントリを表す構造体
  */
-class ZipProcessor {
+struct ImageEntry {
+    let filename: String           // ファイル名
+    let imageData: Data           // 画像データ
+}
+
+/**
+ * ZIPファイル内のファイルエントリを表す構造体
+ */
+struct ZipEntry {
+    let filename: String           // ファイル名
+    let localHeaderOffset: Int     // Local File Headerのオフセット位置
+}
+
+/**
+ * プレビュー用の画像管理クラス
+ * ZIPファイル内の画像リストを管理し、ページング機能を提供する
+ */
+class ImageManager {
+    
+    private var imageEntries: [ImageEntry] = []
+    private var currentIndex: Int = 0
     
     /**
-     * ZIPファイルから最初の画像ファイルを抽出する
+     * ZIPファイルから画像を読み込む
      * 
      * @param url ZIPファイルのURL
-     * @return 画像データ（見つからない場合はnil）
+     * @return 読み込み成功時はtrue、失敗時はfalse
      */
-    static func extractFirstImageFromZip(at url: URL) -> Data? {
-        do {
-            let data = try Data(contentsOf: url)
-            return parseZipAndFindFirstImage(data: data)
-        } catch {
-            NSLog("Error reading ZIP file: \(error)")
+    func loadImages(from url: URL) -> Bool {
+        imageEntries = extractAllImagesFromZip(at: url)
+        currentIndex = 0
+        return !imageEntries.isEmpty
+    }
+    
+    /**
+     * 現在の画像を取得する
+     * 
+     * @return 現在の画像データ（画像がない場合はnil）
+     */
+    func getCurrentImage() -> NSImage? {
+        guard !imageEntries.isEmpty, currentIndex >= 0, currentIndex < imageEntries.count else {
             return nil
         }
+        
+        let imageData = imageEntries[currentIndex].imageData
+        return NSImage(data: imageData)
     }
+    
+    /**
+     * 現在の画像のファイル名を取得する
+     * 
+     * @return 現在の画像のファイル名（画像がない場合は空文字列）
+     */
+    func getCurrentImageName() -> String {
+        guard !imageEntries.isEmpty, currentIndex >= 0, currentIndex < imageEntries.count else {
+            return ""
+        }
+        
+        return imageEntries[currentIndex].filename
+    }
+    
+    /**
+     * 次の画像に移動する
+     * 
+     * @return 移動成功時はtrue、移動できない場合はfalse
+     */
+    func nextImage() -> Bool {
+        guard !imageEntries.isEmpty, currentIndex < imageEntries.count - 1 else {
+            return false
+        }
+        
+        currentIndex += 1
+        return true
+    }
+    
+    /**
+     * 前の画像に移動する
+     * 
+     * @return 移動成功時はtrue、移動できない場合はfalse
+     */
+    func previousImage() -> Bool {
+        guard !imageEntries.isEmpty, currentIndex > 0 else {
+            return false
+        }
+        
+        currentIndex -= 1
+        return true
+    }
+    
+    /**
+     * 画像の総数を取得する
+     * 
+     * @return 画像の総数
+     */
+    func getImageCount() -> Int {
+        return imageEntries.count
+    }
+    
+    /**
+     * 現在のページ番号を取得する（1始まり）
+     * 
+     * @return 現在のページ番号
+     */
+    func getCurrentPageNumber() -> Int {
+        return currentIndex + 1
+    }
+    
+    /**
+     * 画像があるかどうかを確認する
+     * 
+     * @return 画像がある場合はtrue、ない場合はfalse
+     */
+    func hasImages() -> Bool {
+        return !imageEntries.isEmpty
+    }
+    
+    // MARK: - ZIP Processing Methods
     
     /**
      * ZIPファイルから全ての画像ファイルを抽出する
@@ -36,7 +136,7 @@ class ZipProcessor {
      * @param url ZIPファイルのURL
      * @return 画像エントリの配列（見つからない場合は空配列）
      */
-    static func extractAllImagesFromZip(at url: URL) -> [ImageEntry] {
+    private func extractAllImagesFromZip(at url: URL) -> [ImageEntry] {
         do {
             let data = try Data(contentsOf: url)
             return parseZipAndFindAllImages(data: data)
@@ -47,37 +147,12 @@ class ZipProcessor {
     }
     
     /**
-     * ZIPファイルデータを解析し、最初の画像ファイルを検索する
-     * 
-     * @param data ZIPファイルのバイナリデータ
-     * @return 最初に見つかった画像ファイルのデータ（見つからない場合はnil）
-     */
-    private static func parseZipAndFindFirstImage(data: Data) -> Data? {
-        // ZIP Central Directory の検索
-        guard let centralDirectoryOffset = findCentralDirectoryOffset(in: data) else {
-            return nil
-        }
-        
-        // Central Directory からファイルエントリを読み取り
-        let entries = parseCentralDirectory(data: data, offset: centralDirectoryOffset)
-        
-        // 最初の画像ファイルを探す
-        for entry in entries {
-            if isImageFile(filename: entry.filename) {
-                return extractFileData(data: data, entry: entry)
-            }
-        }
-        
-        return nil
-    }
-    
-    /**
      * ZIPファイルデータを解析し、全ての画像ファイルを検索する
      * 
      * @param data ZIPファイルのバイナリデータ
      * @return 全ての画像ファイルのエントリ配列
      */
-    private static func parseZipAndFindAllImages(data: Data) -> [ImageEntry] {
+    private func parseZipAndFindAllImages(data: Data) -> [ImageEntry] {
         // ZIP Central Directory の検索
         guard let centralDirectoryOffset = findCentralDirectoryOffset(in: data) else {
             return []
@@ -106,7 +181,7 @@ class ZipProcessor {
      * @param data ZIPファイルのバイナリデータ
      * @return Central Directoryの開始オフセット（見つからない場合はnil）
      */
-    private static func findCentralDirectoryOffset(in data: Data) -> Int? {
+    private func findCentralDirectoryOffset(in data: Data) -> Int? {
         // End of Central Directory Record の検索 (0x06054b50)
         let eocdrSignature: [UInt8] = [0x50, 0x4b, 0x05, 0x06]
         
@@ -131,7 +206,7 @@ class ZipProcessor {
      * @param offset Central Directoryの開始オフセット
      * @return ZIPファイル内のファイルエントリのリスト
      */
-    private static func parseCentralDirectory(data: Data, offset: Int) -> [ZipEntry] {
+    private func parseCentralDirectory(data: Data, offset: Int) -> [ZipEntry] {
         var entries: [ZipEntry] = []
         var currentOffset = offset
         
@@ -173,7 +248,7 @@ class ZipProcessor {
      * @param filename 判定対象のファイル名
      * @return 画像ファイルの場合はtrue、そうでなければfalse
      */
-    private static func isImageFile(filename: String) -> Bool {
+    private func isImageFile(filename: String) -> Bool {
         let lowercaseFilename = filename.lowercased()
         let imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".ico", ".icns"]
         
@@ -198,7 +273,7 @@ class ZipProcessor {
      * @param entry 抽出対象のファイルエントリ
      * @return 展開されたファイルデータ（失敗した場合はnil）
      */
-    private static func extractFileData(data: Data, entry: ZipEntry) -> Data? {
+    private func extractFileData(data: Data, entry: ZipEntry) -> Data? {
         let offset = entry.localHeaderOffset
         
         // Local File Header の署名をチェック (0x04034b50)
@@ -242,7 +317,7 @@ class ZipProcessor {
      * @param compressedData 圧縮されたデータ
      * @return 展開されたデータ（失敗した場合はnil）
      */
-    private static func inflateData(_ compressedData: Data) -> Data? {
+    private func inflateData(_ compressedData: Data) -> Data? {
         return compressedData.withUnsafeBytes { bytes in
             let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 8 * 1024 * 1024) // 8MB buffer
             defer { buffer.deallocate() }
@@ -256,20 +331,4 @@ class ZipProcessor {
             return nil
         }
     }
-}
-
-/**
- * ZIPファイル内のファイルエントリを表す構造体
- */
-struct ZipEntry {
-    let filename: String           // ファイル名
-    let localHeaderOffset: Int     // Local File Headerのオフセット位置
-}
-
-/**
- * ZIPファイル内の画像エントリを表す構造体
- */
-struct ImageEntry {
-    let filename: String           // ファイル名
-    let imageData: Data           // 画像データ
 }
