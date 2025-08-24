@@ -22,8 +22,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var mouseMonitors: [Any] = []
     private var pendingSingleClick: DispatchWorkItem?
     private var currentImageAspect: CGFloat?
-    private var lastCanvasSize: CGSize?
-    private var resizeDebounceTimer: Timer?
     
     override var nibName: NSNib.Name? {
         return NSNib.Name("PreviewViewController")
@@ -85,8 +83,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         mouseMonitors.removeAll()
         pendingSingleClick?.cancel()
         pendingSingleClick = nil
-        resizeDebounceTimer?.invalidate()
-        resizeDebounceTimer = nil
     }
     
     override func viewDidAppear() {
@@ -103,32 +99,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     override func viewDidLayout() {
         super.viewDidLayout()
-        // キャンバスサイズが変わったら再レンダリング（デバウンス処理付き）
-        handleCanvasSizeChange()
+        // 自動リサイズ機能を使用するため、手動でのリサイズ処理は不要
     }
     
-    private func handleCanvasSizeChange() {
-        let canvas = currentCanvasSize()
-        let shouldRedraw: Bool
-        
-        if let last = lastCanvasSize {
-            shouldRedraw = abs(last.width - canvas.width) > 0.5 || abs(last.height - canvas.height) > 0.5
-        } else {
-            shouldRedraw = true
-        }
-        
-        guard shouldRedraw && imageManager.hasImages() else { return }
-        
-        // 既存のタイマーをキャンセル
-        resizeDebounceTimer?.invalidate()
-        
-        // 短時間の遅延で描画を実行（連続するリサイズイベントをまとめる）
-        resizeDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: false) { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.displayCurrentImage()
-            }
-        }
-    }
 
     /*
     func preparePreviewOfSearchableItem(identifier: String, queryString: String?) async throws {
@@ -159,7 +132,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     private func setupUI() {
         // ImageViewの設定
-        imageView?.imageScaling = .scaleNone // カスタム描画用
+        imageView?.imageScaling = .scaleProportionallyUpOrDown // 自動リサイズ
         imageView?.imageAlignment = .alignCenter
         imageView?.wantsLayer = true // レイヤーバックド表示で高速化
         
@@ -232,21 +205,17 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         attributedString.draw(at: NSPoint(x: 10, y: (image.size.height - textSize.height) / 2))
         image.unlockFocus()
         
-        imageView?.imageScaling = .scaleNone
+        imageView?.imageScaling = .scaleProportionallyUpOrDown
         imageView?.imageAlignment = .alignCenter
-        imageView?.image = renderAspectFit(image, canvasSize: imageView?.bounds.size ?? view.bounds.size)
+        imageView?.image = image
         pageLabel?.stringValue = ""
     }
 
-    // キャンバスサイズにアスペクトフィットで描画したビットマップを返す
     private func setImageSafely(_ image: NSImage) {
         guard let iv = imageView else { return }
-    let canvas = currentCanvasSize()
-        iv.imageScaling = .scaleNone
+        iv.imageScaling = .scaleProportionallyUpOrDown
         iv.imageAlignment = .alignCenter
-        iv.image = renderAspectFit(image, canvasSize: canvas)
-    lastCanvasSize = canvas
-        iv.needsDisplay = true
+        iv.image = image
     }
 
     // Quick Look ホストに対して、縦方向いっぱいの希望サイズをヒントとして提示
@@ -267,58 +236,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if preferredContentSize != size { preferredContentSize = size }
     }
 
-    private func renderAspectFit(_ image: NSImage, canvasSize: CGSize) -> NSImage {
-        let canvasSize = CGSize(width: max(1, canvasSize.width), height: max(1, canvasSize.height))
-        let result = NSImage(size: canvasSize)
-        
-        result.lockFocus()
-        
-        // 高品質描画のためのグラフィックスコンテキスト設定
-        if let context = NSGraphicsContext.current?.cgContext {
-            context.interpolationQuality = .high
-            context.setShouldAntialias(true)
-            context.setAllowsAntialiasing(true)
-        }
-        
-        // 背景をクリア
-        NSColor.clear.setFill()
-        NSBezierPath(rect: NSRect(origin: .zero, size: canvasSize)).fill()
-        
-        let imgSize = image.size
-        guard imgSize.width > 0 && imgSize.height > 0 else {
-            result.unlockFocus()
-            return result
-        }
-        
-        // アスペクト比を維持してフィット
-        let scale = min(canvasSize.width / imgSize.width, canvasSize.height / imgSize.height)
-        let drawSize = CGSize(width: imgSize.width * scale, height: imgSize.height * scale)
-        let origin = CGPoint(x: (canvasSize.width - drawSize.width) / 2, y: (canvasSize.height - drawSize.height) / 2)
-        
-        // 高品質描画ヒントを設定
-        let hints: [NSImageRep.HintKey: Any] = [
-            .interpolation: NSImageInterpolation.high.rawValue
-        ]
-        
-        image.draw(in: NSRect(origin: origin, size: drawSize), 
-                  from: NSRect(origin: .zero, size: imgSize), 
-                  operation: .sourceOver, 
-                  fraction: 1.0, 
-                  respectFlipped: true, 
-                  hints: hints)
-        
-        result.unlockFocus()
-        return result
-    }
 
-    private func currentCanvasSize() -> CGSize {
-        if let iv = imageView {
-            let s = iv.bounds.size
-            if s.width > 0 && s.height > 0 { return s }
-        }
-        let vs = view.bounds.size
-        return CGSize(width: max(1, vs.width), height: max(1, vs.height))
-    }
 
     private func convertEventPointToView(_ event: NSEvent) -> NSPoint? {
         // 1) まずスクリーン座標へ
