@@ -23,6 +23,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var mouseMonitors: [Any] = []
     private var pendingSingleClick: DispatchWorkItem?
     private var currentImageAspect: CGFloat?
+    // スライダー表示/非表示のための制約管理
+    private var sliderConstraints: [NSLayoutConstraint] = []
+    private var directLabelTopConstraint: NSLayoutConstraint?
+    private let sliderVisibilityWidthThreshold: CGFloat = 600 // この幅未満では非表示（Finderカラム想定）
     
     override var nibName: NSNib.Name? {
         return NSNib.Name("PreviewViewController")
@@ -41,7 +45,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     override func viewWillAppear() {
         super.viewWillAppear()
         // マウスイベントをホスト（Finder）へ渡さないためにローカルモニタで吸収（down/up 両方）
-    if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event -> NSEvent? in
+        if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
             if self.view.window != nil {
                 // 座標変換に失敗したら安全側でイベントを通す
@@ -59,7 +63,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         }) {
             mouseMonitors.append(down)
         }
-    if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event -> NSEvent? in
+        if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
             if self.view.window != nil {
                 // 座標変換に失敗したら安全側でイベントを通す
@@ -100,11 +104,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         }
         // ホストにサイズ希望を伝える（可能なら）
         updatePreferredContentSizeIfNeeded()
+    // 表示コンテキストに応じてスライダー可視性を更新
+    updateSliderVisibilityForContext()
     }
 
     override func viewDidLayout() {
         super.viewDidLayout()
         // 自動リサイズ機能を使用するため、手動でのリサイズ処理は不要
+    // レイアウト変化に応じてスライダーの可視性を見直す
+    updateSliderVisibilityForContext()
     }
     
 
@@ -162,31 +170,37 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             slider.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(slider)
             self.pageSlider = slider
-
-            // 既存の imageView と pageLabel の間の縦方向制約を解除
-            if let imageView, let pageLabel {
-                let toRemove = view.constraints.filter { c in
-                    let f = c.firstItem as AnyObject?
-                    let s = c.secondItem as AnyObject?
-                    // pageLabel.top = imageView.bottom と imageView.bottom = pageLabel.top を検出
-                    return (f === pageLabel && c.firstAttribute == .top && s === imageView && c.secondAttribute == .bottom)
-                        || (f === imageView && c.firstAttribute == .bottom && s === pageLabel && c.secondAttribute == .top)
-                }
-                NSLayoutConstraint.deactivate(toRemove)
-
-                // 新しいレイアウト: imageView ─8→ slider ─6→ pageLabel
-                NSLayoutConstraint.activate([
-                    slider.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 8),
-                    pageLabel.topAnchor.constraint(equalTo: slider.bottomAnchor, constant: 6),
-                    slider.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-                    slider.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
-                ])
-            }
         } else {
             // XIB接続済みならターゲット設定のみ
             pageSlider.target = self
             pageSlider.action = #selector(pageSliderChanged(_:))
             pageSlider.isContinuous = true
+        }
+
+        // 制約の再構成（スライダー表示/非表示を切り替え可能に）
+        if let imageView, let pageLabel, let slider = pageSlider {
+            // 既存の imageView と pageLabel の間の縦方向制約を解除
+            let toRemove = view.constraints.filter { c in
+                let f = c.firstItem as AnyObject?
+                let s = c.secondItem as AnyObject?
+                return (f === pageLabel && c.firstAttribute == .top && s === imageView && c.secondAttribute == .bottom)
+                    || (f === imageView && c.firstAttribute == .bottom && s === pageLabel && c.secondAttribute == .top)
+            }
+            NSLayoutConstraint.deactivate(toRemove)
+
+            // スライダー経由の制約を作成（保持）
+            sliderConstraints = [
+                slider.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 8),
+                pageLabel.topAnchor.constraint(equalTo: slider.bottomAnchor, constant: 6),
+                slider.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+                slider.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
+            ]
+            // スライダーを使わず直接 label を imageView に接続する制約（保持、初期は非アクティブ）
+            directLabelTopConstraint = pageLabel.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 8)
+
+            // デフォルトはスライダー表示を前提に有効化（後で文脈に応じて切替）
+            NSLayoutConstraint.activate(sliderConstraints)
+            directLabelTopConstraint?.isActive = false
         }
     }
     
@@ -263,6 +277,33 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         iv.imageScaling = .scaleProportionallyUpOrDown
         iv.imageAlignment = .alignCenter
         iv.image = image
+    }
+
+    // 表示コンテキスト（主に幅）に応じてスライダーの可視性を切り替える
+    private func updateSliderVisibilityForContext() {
+        guard pageSlider != nil else { return }
+        let shouldHide = shouldHideSliderForContext()
+        setSliderVisible(!shouldHide)
+    }
+
+    private func shouldHideSliderForContext() -> Bool {
+        // Finderカラム内は狭い幅で表示されることが多い。閾値未満は非表示。
+        return view.bounds.width < sliderVisibilityWidthThreshold
+    }
+
+    private func setSliderVisible(_ visible: Bool) {
+        guard let slider = pageSlider else { return }
+        slider.isHidden = !visible
+        slider.isEnabled = visible && imageManager.getImageCount() > 1
+        // 制約の切り替え
+        if visible {
+            if let c = directLabelTopConstraint { c.isActive = false }
+            NSLayoutConstraint.activate(sliderConstraints)
+        } else {
+            NSLayoutConstraint.deactivate(sliderConstraints)
+            if let c = directLabelTopConstraint { c.isActive = true }
+        }
+        view.layoutSubtreeIfNeeded()
     }
 
     // スライダーの最小/最大と有効状態を更新
