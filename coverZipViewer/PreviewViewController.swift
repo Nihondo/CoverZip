@@ -15,6 +15,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     private var imageManager = ImageManager()
     private var mouseMonitors: [Any] = []
+    private var lastCanvasSize: CGSize?
     
     override var nibName: NSNib.Name? {
         return NSNib.Name("PreviewViewController")
@@ -59,6 +60,23 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         super.viewDidAppear()
         // ビューが表示されたらFirst Responderになってキーイベントを受け取る
         view.window?.makeFirstResponder(self)
+        // レイアウト完了後のサイズで初回画像を再フィット
+        if imageManager.hasImages() {
+            displayCurrentImage()
+        }
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        // キャンバスサイズが変わったら再レンダリング
+        let canvas = currentCanvasSize()
+        if let last = lastCanvasSize {
+            if abs(last.width - canvas.width) > 0.5 || abs(last.height - canvas.height) > 0.5 {
+                if imageManager.hasImages() { displayCurrentImage() }
+            }
+        } else {
+            if imageManager.hasImages() { displayCurrentImage() }
+        }
     }
 
     /*
@@ -93,6 +111,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         
         // キーイベントを受け取るためのResponder設定
         view.wantsLayer = true
+    // レイヤーは使わず、都度アスペクトフィットでラスタライズして表示
     }
     
     private func setupGestureRecognizers() {
@@ -125,7 +144,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     private func displayCurrentImage() {
         if let currentImage = imageManager.getCurrentImage() {
-            imageView?.image = currentImage
+            setImageSafely(currentImage)
             updatePageLabel()
         }
     }
@@ -148,8 +167,48 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         attributedString.draw(at: NSPoint(x: 10, y: (image.size.height - textSize.height) / 2))
         image.unlockFocus()
         
-        imageView?.image = image
+        imageView?.imageScaling = .scaleNone
+        imageView?.imageAlignment = .alignCenter
+        imageView?.image = renderAspectFit(image, canvasSize: imageView?.bounds.size ?? view.bounds.size)
         pageLabel?.stringValue = ""
+    }
+
+    // キャンバスサイズにアスペクトフィットで描画したビットマップを返す
+    private func setImageSafely(_ image: NSImage) {
+        guard let iv = imageView else { return }
+    let canvas = currentCanvasSize()
+        iv.imageScaling = .scaleNone
+        iv.imageAlignment = .alignCenter
+        iv.image = renderAspectFit(image, canvasSize: canvas)
+    lastCanvasSize = canvas
+        iv.needsDisplay = true
+    }
+
+    private func renderAspectFit(_ image: NSImage, canvasSize: CGSize) -> NSImage {
+        let canvasSize = CGSize(width: max(1, canvasSize.width), height: max(1, canvasSize.height))
+        let result = NSImage(size: canvasSize)
+        result.lockFocus()
+        NSColor.clear.setFill()
+        NSBezierPath(rect: NSRect(origin: .zero, size: canvasSize)).fill()
+        let imgSize = image.size
+        guard imgSize.width > 0 && imgSize.height > 0 else {
+            result.unlockFocus(); return result
+        }
+        let scale = min(canvasSize.width / imgSize.width, canvasSize.height / imgSize.height)
+        let drawSize = CGSize(width: imgSize.width * scale, height: imgSize.height * scale)
+        let origin = CGPoint(x: (canvasSize.width - drawSize.width) / 2, y: (canvasSize.height - drawSize.height) / 2)
+        image.draw(in: NSRect(origin: origin, size: drawSize), from: NSRect(origin: .zero, size: imgSize), operation: .sourceOver, fraction: 1.0, respectFlipped: true, hints: nil)
+        result.unlockFocus()
+        return result
+    }
+
+    private func currentCanvasSize() -> CGSize {
+        if let iv = imageView {
+            let s = iv.bounds.size
+            if s.width > 0 && s.height > 0 { return s }
+        }
+        let vs = view.bounds.size
+        return CGSize(width: max(1, vs.width), height: max(1, vs.height))
     }
     
     private func updatePageLabel() {
