@@ -1,17 +1,26 @@
 # CoverZip
 
-CoverZipは、二つの独立した機能を持つmacOSアプリケーションです：
+CoverZipは、三つの独立した機能を持つmacOSアプリケーションです：
 
 1. **QuickLook Thumbnail Extension** - ZIPファイル内の先頭画像を使用したサムネイル生成
-2. **ZIPファイルルーティングアプリケーション** - ファイル名キーワードマッチングによる外部アプリケーション自動起動
+2. **QuickLook Preview Extension** - ZIPファイル内画像のフルスクリーンプレビューとページング機能
+3. **ZIPファイルルーティングアプリケーション** - ファイル名キーワードマッチングによる外部アプリケーション自動起動
 
 ## 特徴
 
-### QuickLook Extension
+### QuickLook Thumbnail Extension
 - **ZIPファイルサムネイル生成**: ZIPファイル内の最初の画像ファイルを使用してサムネイルを生成
 - **純Swift実装**: 標準のFoundationとCompressionフレームワークのみを使用
 - **App Extension対応**: macOS QuickLook Thumbnail Extensionとして実装
 - **軽量**: 外部ライブラリに依存しない軽量な実装
+
+### QuickLook Preview Extension
+- **フルスクリーンプレビュー**: ZIPファイル内のすべての画像をフルスクリーンで表示
+- **ページング機能**: マウスクリック・キーボードでのページ移動
+- **ページスライダー**: ページ位置を視覚的に表示・操作
+- **RTL読書対応**: 日本のコミック向け右から左への読書方向
+- **レスポンシブUI**: ウィンドウ幅に応じてUI要素を動的調整
+- **設定共有**: App Groupによるメインアプリとの設定同期
 
 ### ファイルルーティング機能
 - **キーワードマッチング**: ZIPファイル名に基づいた自動アプリケーション起動
@@ -60,7 +69,9 @@ xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUI
 
 1. アプリケーションを一度実行
 2. システム設定 > プライバシーとセキュリティ > 機能拡張 > QuickLook
-3. CoverZipを有効化
+3. CoverZip（両方のExtension）を有効化
+   - CoverZip Thumbnail Extension
+   - CoverZip Preview Extension
 
 ## 使用方法
 
@@ -68,6 +79,20 @@ xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUI
 1. インストール後、Finderでサムネイル表示を有効にします
 2. ZIPファイルを含むフォルダで、表示 > サムネイル を選択
 3. 画像を含むZIPファイルのサムネイルが自動的に生成されます
+
+### QuickLook プレビュー機能
+1. Finderで画像を含むZIPファイルを選択
+2. スペースキーを押すかプレビューアイコンをクリック
+3. フルスクリーンでZIPファイル内の画像が表示されます
+
+#### プレビュー操作方法
+- **ページ移動**: 画面の左右をクリック、または矢印キーで移動
+- **スライダー操作**: ページスライダーをクリック・ドラッグで任意のページへジャンプ
+- **キーボード操作**:
+  - 左右矢印キー: ページ移動（読書方向設定に応じて動作）
+  - Home/End: 最初/最後のページへ
+  - Page Up/Down: 5ページずつ移動
+  - Escape: プレビューを閉じる
 
 ### ZIPファイルルーティング機能
 1. CoverZipにZIPファイルをドロップまたは関連付けで開く
@@ -163,12 +188,21 @@ CoverZip/
 │   ├── Services/                # ビジネスロジック層
 │   │   ├── KeywordMatcher.swift    # ファイル名マッチング
 │   │   ├── AppLauncher.swift       # 外部アプリ起動
-│   │   └── SettingsFileManager.swift # 設定ファイル管理
+│   │   ├── SettingsFileManager.swift # 設定ファイル管理
+│   │   └── AppSettings.swift       # App Group共有設定
 │   └── Models/
 │       └── KeywordSettings.swift   # JSON設定データモデル
 ├── coverZipExtension/           # QuickLook Thumbnail Extension
-│   ├── ThumbnailProvider.swift  # QuickLookエントリーポイント
+│   ├── ThumbnailProvider.swift  # サムネイル生成エントリーポイント
 │   ├── ZipProcessor.swift       # ZIP処理ロジック（純Swift実装）
+│   └── Info.plist              # Extension設定
+├── coverZipViewer/             # QuickLook Preview Extension
+│   ├── PreviewProvider.swift   # プレビューエントリーポイント
+│   ├── PreviewViewController.swift # プレビューUI制御（NSViewController）
+│   ├── ImageManager.swift      # 画像管理・ページング制御
+│   ├── Settings.swift          # App Group共有設定
+│   ├── Base.lproj/
+│   │   └── PreviewViewController.xib # UI定義
 │   └── Info.plist              # Extension設定
 ├── CoverZipTests/              # Swift Testingベースのユニットテスト
 └── CoverZipUITests/            # UI自動化テスト
@@ -179,11 +213,14 @@ CoverZip/
 ```bash
 # Extension単体のビルド
 xcodebuild -project CoverZip.xcodeproj -target coverZipExtension build -configuration Debug CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+xcodebuild -project CoverZip.xcodeproj -target coverZipViewer build -configuration Debug CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 
 # QuickLook Extension のテスト
 qlmanage -r                    # Extensionをリロード
-qlmanage -t path/to/test.zip   # 特定のZIPファイルでテスト
+qlmanage -t path/to/test.zip   # サムネイル生成テスト
+qlmanage -p path/to/test.zip   # プレビューテスト
 qlmanage -m | grep -i coverzip # Extension登録状況確認
+pluginkit -m | grep -i coverzip # 詳細なExtension情報
 ```
 
 ### 技術的詳細
@@ -205,6 +242,13 @@ processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
 - 画像の縦横比を保持したリサイズ
 - App Extensionのメモリ制限に配慮した実装
 
+#### Preview Extension UI
+- NSViewControllerベースのフルUI制御
+- ページスライダー・ページ番号表示
+- マウス/キーボード操作対応
+- RTL読書方向（右から左）対応
+- レスポンシブUIデザイン
+
 #### Settings Scene アーキテクチャ
 - WindowGroupの代替としてSettings sceneを使用
 - 不要なウィンドウ生成を回避しバックグラウンド処理に最適化
@@ -213,9 +257,10 @@ processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
 ## アーキテクチャの特徴
 
 ### 責任分離
-- **Extension**: サムネイル生成のみに専念
-- **App**: ファイルルーティングのみに専念
-- **共通**: ZipProcessor（純Swift ZIP処理ロジック）
+- **Thumbnail Extension**: サムネイル生成のみに専念
+- **Preview Extension**: フルスクリーンプレビュー・ページング機能
+- **Main App**: ファイルルーティングのみに専念
+- **共通**: ZipProcessor（純Swift ZIP処理ロジック）、設定管理（App Group）
 
 ### パフォーマンス最適化
 - 一時ファイル作成を廃止し、元ファイルを直接使用
@@ -226,12 +271,14 @@ processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
 - JSON設定ファイルによる柔軟なキーワードマッピング
 - 外部エディタでの設定編集機能
 - 初回起動時のデフォルト設定自動生成
+- App Group (`group.com.dmng.CoverZip`) による Extension との設定共有
 
 ## 制限事項
 
 - **暗号化ZIP**: パスワード付きZIPファイルは未対応
 - **圧縮方式**: DEFLATE（方式8）と非圧縮（方式0）のみ対応
 - **大容量ファイル**: 大きなZIPファイルでのメモリ制限あり（8MBバッファ）
+- **Preview Extension**: サンドボックス環境での制約、独立プロセスでの実行
 
 ## ライセンス
 
