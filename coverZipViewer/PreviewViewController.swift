@@ -15,6 +15,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     private var imageManager = ImageManager()
     private var mouseMonitors: [Any] = []
+    private var pendingSingleClick: DispatchWorkItem?
+    private var currentImageAspect: CGFloat?
     private var lastCanvasSize: CGSize?
     
     override var nibName: NSNib.Name? {
@@ -34,26 +36,49 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     override func viewWillAppear() {
         super.viewWillAppear()
         // ダブルクリックをホスト（Finder）へ渡さないためにローカルモニタで吸収（down/up 両方）
-    if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event in
+        if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event in
             guard let self else { return event }
-            if self.view.window != nil, event.clickCount >= 2 { return nil }
+            if self.view.window != nil, event.clickCount >= 2 {
+                // ダブルクリック検出: 保留中のシングルクリック処理をキャンセル
+                self.pendingSingleClick?.cancel()
+                self.pendingSingleClick = nil
+                return nil
+            }
             return event
     }) {
             mouseMonitors.append(down)
         }
-    if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event in
+        if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
             guard let self else { return event }
-            if self.view.window != nil, event.clickCount >= 2 { return nil }
+            if self.view.window != nil, event.clickCount >= 2 {
+                self.pendingSingleClick?.cancel()
+                self.pendingSingleClick = nil
+                return nil
+            }
+            // シングルクリックをここで処理（フルスクリーンでも確実に反応させる）
+            if event.clickCount == 1 {
+                guard let vPoint = self.convertEventPointToView(event) else { return event }
+                let bounds = self.view.bounds
+                guard bounds.contains(vPoint) else { return event }
+                if vPoint.x < bounds.width / 2 {
+                    if self.imageManager.previousImage() { self.displayCurrentImage() }
+                } else {
+                    if self.imageManager.nextImage() { self.displayCurrentImage() }
+                }
+                return nil // ホスト側に渡さない
+            }
             return event
-    }) {
+    } {
             mouseMonitors.append(up)
         }
     }
 
     override func viewWillDisappear() {
         super.viewWillDisappear()
-        for m in mouseMonitors { NSEvent.removeMonitor(m) }
+    for m in mouseMonitors { NSEvent.removeMonitor(m) }
         mouseMonitors.removeAll()
+    pendingSingleClick?.cancel()
+    pendingSingleClick = nil
     }
     
     override func viewDidAppear() {
@@ -64,6 +89,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if imageManager.hasImages() {
             displayCurrentImage()
         }
+    // ホストにサイズ希望を伝える（可能なら）
+    updatePreferredContentSizeIfNeeded()
     }
 
     override func viewDidLayout() {
@@ -115,28 +142,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
     
     private func setupGestureRecognizers() {
-    // シングルクリックでページ送り（ダブルクリックはローカルモニタで吸収）
-    let singleClick = NSClickGestureRecognizer(target: self, action: #selector(handleClick(_:)))
-    singleClick.numberOfClicksRequired = 1
-    view.addGestureRecognizer(singleClick)
+        // フルスクリーンのため、クリックはローカルモニタで処理する
     }
     
-    @objc private func handleClick(_ gesture: NSClickGestureRecognizer) {
-        let location = gesture.location(in: view)
-        let viewWidth = view.bounds.width
-        
-        if location.x < viewWidth / 2 {
-            // 左半分がクリックされた場合 - 前の画像
-            if imageManager.previousImage() {
-                displayCurrentImage()
-            }
-        } else {
-            // 右半分がクリックされた場合 - 次の画像
-            if imageManager.nextImage() {
-                displayCurrentImage()
-            }
-        }
-    }
+    @objc private func handleClick(_ gesture: NSClickGestureRecognizer) {}
 
     // ダブルクリック時は何もしない（シングルクリックハンドラで検知して無視）
     
@@ -146,6 +155,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if let currentImage = imageManager.getCurrentImage() {
             setImageSafely(currentImage)
             updatePageLabel()
+            // 画像のアスペクト比に基づいて縦いっぱいの希望サイズを提示
+            currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
+            updatePreferredContentSizeIfNeeded()
         }
     }
     
@@ -184,6 +196,24 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         iv.needsDisplay = true
     }
 
+    // Quick Look ホストに対して、縦方向いっぱいの希望サイズをヒントとして提示
+    private func updatePreferredContentSizeIfNeeded() {
+        guard let screen = view.window?.screen ?? NSScreen.main else { return }
+        let visible = screen.visibleFrame.size
+        guard visible.height > 0 else { return }
+        let aspect = currentImageAspect ?? (view.bounds.height > 0 ? max(view.bounds.width, 1) / view.bounds.height : 1.0)
+        // まず高さを画面の可視領域いっぱいに
+        var targetHeight = visible.height
+        var targetWidth = aspect * targetHeight
+        // 横幅が画面を超える場合は横に合わせて縮小
+        if targetWidth > visible.width {
+            targetWidth = visible.width
+            targetHeight = max(1, targetWidth / max(aspect, 0.0001))
+        }
+        let size = NSSize(width: targetWidth, height: targetHeight)
+        if preferredContentSize != size { preferredContentSize = size }
+    }
+
     private func renderAspectFit(_ image: NSImage, canvasSize: CGSize) -> NSImage {
         let canvasSize = CGSize(width: max(1, canvasSize.width), height: max(1, canvasSize.height))
         let result = NSImage(size: canvasSize)
@@ -209,6 +239,23 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         }
         let vs = view.bounds.size
         return CGSize(width: max(1, vs.width), height: max(1, vs.height))
+    }
+
+    private func convertEventPointToView(_ event: NSEvent) -> NSPoint? {
+        // 1) まずスクリーン座標へ
+        let screenPoint: NSPoint
+        if let win = event.window {
+            screenPoint = win.convertPoint(toScreen: event.locationInWindow)
+        } else {
+            // 直接スクリーン座標が来るケース
+            screenPoint = event.locationInWindow
+        }
+        // 2) プレビューのウィンドウ座標へ
+        guard let myWin = view.window else { return nil }
+        let windowPoint = myWin.convertPoint(fromScreen: screenPoint)
+        // 3) ビュー座標へ
+        let viewPoint = view.convert(windowPoint, from: nil)
+        return viewPoint
     }
     
     private func updatePageLabel() {
