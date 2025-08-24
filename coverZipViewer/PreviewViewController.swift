@@ -272,25 +272,14 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     override func keyDown(with event: NSEvent) {
         switch event.keyCode {
-        case 126: // 上矢印キー - 前の画像
+        // page up
+        case 116: // Page Upキー - 前の画像
             if imageManager.previousImage() {
                 displayCurrentImage()
             }
-        case 125: // 下矢印キー - 次の画像
+        case 119: // Page Downキー - 次の画像
             if imageManager.nextImage() {
                 displayCurrentImage()
-            }
-        case 49: // スペースキー
-            if event.modifierFlags.contains(.shift) {
-                // Shift+スペース - 前の画像
-                if imageManager.previousImage() {
-                    displayCurrentImage()
-                }
-            } else {
-                // スペースキー - 次の画像
-                if imageManager.nextImage() {
-                    displayCurrentImage()
-                }
             }
         default:
             super.keyDown(with: event)

@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="11762" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" customObjectInstantitationMethod="direct">
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="23727" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" customObjectInstantitationMethod="direct">
     <dependencies>
-        <deployment identifier="macosx"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="11762"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="23727"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <objects>
-        <customObject id="-2" userLabel="File's Owner" customClass="PreviewViewController" customModuleProvider="target">
+        <customObject id="-2" userLabel="File's Owner" customClass="PreviewViewController" customModule="coverZipViewer" customModuleProvider="target">
             <connections>
                 <outlet property="imageView" destination="image-view" id="image-outlet"/>
                 <outlet property="pageLabel" destination="page-label" id="page-outlet"/>
@@ -20,11 +19,11 @@
             <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
             <subviews>
                 <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="image-view">
-                    <rect key="frame" x="0.0" y="20" width="480" height="232"/>
-                    <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyUpOrDown" id="image-cell"/>
+                    <rect key="frame" x="0.0" y="26" width="480" height="246"/>
+                    <imageCell key="cell" alignment="left" imageScaling="proportionallyUpOrDown" id="image-cell"/>
                 </imageView>
-                <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="page-label">
-                    <rect key="frame" x="200" y="2" width="80" height="16"/>
+                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="page-label">
+                    <rect key="frame" x="225" y="2" width="31" height="16"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" alignment="center" title="1 / 1" id="page-cell">
                         <font key="font" metaFont="system"/>
                         <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
@@ -33,13 +32,14 @@
                 </textField>
             </subviews>
             <constraints>
-                <constraint firstItem="image-view" firstAttribute="top" secondItem="c22-O7-iKe" secondAttribute="top" id="image-top"/>
                 <constraint firstItem="image-view" firstAttribute="leading" secondItem="c22-O7-iKe" secondAttribute="leading" id="image-leading"/>
+                <constraint firstItem="image-view" firstAttribute="top" secondItem="c22-O7-iKe" secondAttribute="top" id="image-top"/>
                 <constraint firstAttribute="trailing" secondItem="image-view" secondAttribute="trailing" id="image-trailing"/>
-                <constraint firstItem="page-label" firstAttribute="top" secondItem="image-view" secondAttribute="bottom" constant="8" id="label-top"/>
-                <constraint firstItem="page-label" firstAttribute="centerX" secondItem="c22-O7-iKe" secondAttribute="centerX" id="label-center"/>
                 <constraint firstAttribute="bottom" secondItem="page-label" secondAttribute="bottom" constant="2" id="label-bottom"/>
+                <constraint firstItem="page-label" firstAttribute="centerX" secondItem="c22-O7-iKe" secondAttribute="centerX" id="label-center"/>
+                <constraint firstItem="page-label" firstAttribute="top" secondItem="image-view" secondAttribute="bottom" constant="8" id="label-top"/>
             </constraints>
+            <point key="canvasLocation" x="139" y="-36"/>
         </customView>
     </objects>
 </document>
