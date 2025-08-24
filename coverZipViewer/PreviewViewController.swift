@@ -39,43 +39,34 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     override func viewWillAppear() {
         super.viewWillAppear()
-        // ダブルクリックをホスト（Finder）へ渡さないためにローカルモニタで吸収（down/up 両方）
+        // マウスイベントをホスト（Finder）へ渡さないためにローカルモニタで吸収（down/up 両方）
         if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
-            if self.view.window != nil, event.clickCount >= 2 {
-                // ダブルクリック検出: 保留中のシングルクリック処理をキャンセル
-                NSLog("🔵 DoubleClick MouseDown: clickCount=\(event.clickCount), returning nil")
+            if self.view.window != nil {
+                NSLog("🔵 MouseDown: returning nil")
                 self.pendingSingleClick?.cancel()
                 self.pendingSingleClick = nil
-                return nil
+                return nil // 全てのマウスダウンイベントを吸収
             }
-            NSLog("🔵 SingleClick MouseDown: clickCount=\(event.clickCount), returning nil")
-            return nil // シングルクリックもホストに渡さない
+            return event
     }) {
             mouseMonitors.append(down)
         }
         if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
-            if self.view.window != nil, event.clickCount >= 2 {
-                NSLog("🔴 DoubleClick MouseUp: clickCount=\(event.clickCount), returning nil")
-                self.pendingSingleClick?.cancel()
-                self.pendingSingleClick = nil
-                return nil // ダブルクリックイベントを吸収してホストに渡さない
-            }
-            // シングルクリックをここで処理（フルスクリーンでも確実に反応させる）
-            if event.clickCount == 1 {
-                guard let vPoint = self.convertEventPointToView(event) else { return event }
+            if self.view.window != nil {
+                // マウスアップでページめくり処理を実行
+                guard let vPoint = self.convertEventPointToView(event) else { return nil }
                 let bounds = self.view.bounds
-                guard bounds.contains(vPoint) else { return event }
+                guard bounds.contains(vPoint) else { return nil }
                 if vPoint.x < bounds.width / 2 {
                     if self.imageManager.previousImage() { self.displayCurrentImage() }
                 } else {
                     if self.imageManager.nextImage() { self.displayCurrentImage() }
                 }
-                NSLog("🔴 SingleClick MouseUp: clickCount=\(event.clickCount), returning nil after processing")
-                return nil // イベントを処理したので吸収
+                NSLog("🔴 MouseUp: processed, returning nil")
+                return nil // 全てのマウスアップイベントを吸収
             }
-            NSLog("🔴 Other MouseUp: clickCount=\(event.clickCount), returning event")
             return event
         }) {
             mouseMonitors.append(up)
