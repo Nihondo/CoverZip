@@ -26,7 +26,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // スライダー表示/非表示のための制約管理
     private var sliderConstraints: [NSLayoutConstraint] = []
     private var directLabelTopConstraint: NSLayoutConstraint?
-    private let sliderVisibilityWidthThreshold: CGFloat = 600 // この幅未満では非表示（Finderカラム想定）
+    private var sliderVisibilityWidthThreshold: CGFloat = 600 // この幅未満では非表示（Finderカラム想定）
     // 日本のコミック向けにページ方向を反転（左=進む、右=戻る、スライダーは左が大きいページ）
     private var isRightToLeftReading: Bool = true
     
@@ -40,6 +40,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+    // UserDefaultsから設定をロード
+    isRightToLeftReading = AppSettings.shared.isRightToLeftReading
+    sliderVisibilityWidthThreshold = CGFloat(AppSettings.shared.sliderVisibilityWidthThreshold)
         setupUI()
         setupGestureRecognizers()
     }
@@ -116,6 +119,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         super.viewDidAppear()
     // Quick LookではFirst Responderを取得しない
         // レイアウト完了後のサイズで初回画像を再フィット
+        // 設定の変更を反映
+        let newRTL = AppSettings.shared.isRightToLeftReading
+        if newRTL != isRightToLeftReading { isRightToLeftReading = newRTL; applySliderLayoutDirection(); syncSliderToCurrentPage() }
+        let newThreshold = CGFloat(AppSettings.shared.sliderVisibilityWidthThreshold)
+        if newThreshold != sliderVisibilityWidthThreshold { sliderVisibilityWidthThreshold = newThreshold; updateSliderVisibilityForContext() }
         if imageManager.hasImages() {
             displayCurrentImage()
         }
