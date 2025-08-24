@@ -14,6 +14,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     @IBOutlet weak var pageLabel: NSTextField!
     
     private var imageManager = ImageManager()
+    private var mouseMonitors: [Any] = []
     
     override var nibName: NSNib.Name? {
         return NSNib.Name("PreviewViewController")
@@ -27,6 +28,31 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         super.viewDidLoad()
         setupUI()
         setupGestureRecognizers()
+    }
+
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        // ダブルクリックをホスト（Finder）へ渡さないためにローカルモニタで吸収（down/up 両方）
+    if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event in
+            guard let self else { return event }
+            if self.view.window != nil, event.clickCount >= 2 { return nil }
+            return event
+    }) {
+            mouseMonitors.append(down)
+        }
+    if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event in
+            guard let self else { return event }
+            if self.view.window != nil, event.clickCount >= 2 { return nil }
+            return event
+    }) {
+            mouseMonitors.append(up)
+        }
+    }
+
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        for m in mouseMonitors { NSEvent.removeMonitor(m) }
+        mouseMonitors.removeAll()
     }
     
     override func viewDidAppear() {
@@ -70,9 +96,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
     
     private func setupGestureRecognizers() {
-        // 画面クリック用のジェスチャー認識
-        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleClick(_:)))
-        view.addGestureRecognizer(clickGesture)
+    // シングルクリックでページ送り（ダブルクリックはローカルモニタで吸収）
+    let singleClick = NSClickGestureRecognizer(target: self, action: #selector(handleClick(_:)))
+    singleClick.numberOfClicksRequired = 1
+    view.addGestureRecognizer(singleClick)
     }
     
     @objc private func handleClick(_ gesture: NSClickGestureRecognizer) {
@@ -91,6 +118,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             }
         }
     }
+
+    // ダブルクリック時は何もしない（シングルクリックハンドラで検知して無視）
     
     // MARK: - Image Display
     
