@@ -40,24 +40,27 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     override func viewWillAppear() {
         super.viewWillAppear()
         // ダブルクリックをホスト（Finder）へ渡さないためにローカルモニタで吸収（down/up 両方）
-        if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event in
+        if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
             if self.view.window != nil, event.clickCount >= 2 {
                 // ダブルクリック検出: 保留中のシングルクリック処理をキャンセル
+                NSLog("🔵 DoubleClick MouseDown: clickCount=\(event.clickCount), returning nil")
                 self.pendingSingleClick?.cancel()
                 self.pendingSingleClick = nil
                 return nil
             }
-            return event
+            NSLog("🔵 SingleClick MouseDown: clickCount=\(event.clickCount), returning nil")
+            return nil // シングルクリックもホストに渡さない
     }) {
             mouseMonitors.append(down)
         }
-        if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event in
+        if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
             if self.view.window != nil, event.clickCount >= 2 {
+                NSLog("🔴 DoubleClick MouseUp: clickCount=\(event.clickCount), returning nil")
                 self.pendingSingleClick?.cancel()
                 self.pendingSingleClick = nil
-                return event // イベントを通す
+                return nil // ダブルクリックイベントを吸収してホストに渡さない
             }
             // シングルクリックをここで処理（フルスクリーンでも確実に反応させる）
             if event.clickCount == 1 {
@@ -69,8 +72,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 } else {
                     if self.imageManager.nextImage() { self.displayCurrentImage() }
                 }
-                return event // イベントを処理したが通す
+                NSLog("🔴 SingleClick MouseUp: clickCount=\(event.clickCount), returning nil after processing")
+                return nil // イベントを処理したので吸収
             }
+            NSLog("🔴 Other MouseUp: clickCount=\(event.clickCount), returning event")
             return event
         }) {
             mouseMonitors.append(up)

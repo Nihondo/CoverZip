@@ -20,7 +20,7 @@
             <subviews>
                 <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="image-view">
                     <rect key="frame" x="0.0" y="26" width="480" height="246"/>
-                    <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyUpOrDown" id="image-cell"/>
+                    <imageCell key="cell" alignment="left" imageScaling="proportionallyUpOrDown" id="image-cell"/>
                 </imageView>
                 <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="page-label">
                     <rect key="frame" x="225" y="2" width="31" height="16"/>
