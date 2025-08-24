@@ -43,13 +43,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
             if self.view.window != nil {
-                NSLog("🔵 MouseDown: returning nil")
                 self.pendingSingleClick?.cancel()
                 self.pendingSingleClick = nil
                 return nil // 全てのマウスダウンイベントを吸収
             }
             return event
-    }) {
+        }) {
             mouseMonitors.append(down)
         }
         if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event -> NSEvent? in
@@ -64,7 +63,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 } else {
                     if self.imageManager.nextImage() { self.displayCurrentImage() }
                 }
-                NSLog("🔴 MouseUp: processed, returning nil")
                 return nil // 全てのマウスアップイベントを吸収
             }
             return event
@@ -89,8 +87,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if imageManager.hasImages() {
             displayCurrentImage()
         }
-    // ホストにサイズ希望を伝える（可能なら）
-    updatePreferredContentSizeIfNeeded()
+        // ホストにサイズ希望を伝える（可能なら）
+        updatePreferredContentSizeIfNeeded()
     }
 
     override func viewDidLayout() {
