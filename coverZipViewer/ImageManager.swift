@@ -33,6 +33,9 @@ class ImageManager {
     
     private var imageEntries: [ImageEntry] = []
     private var currentIndex: Int = 0
+    private var imageCache: [Int: NSImage] = [:]
+    private let maxCacheSize: Int = 10
+    private var memoryPressureObserver: NSObjectProtocol?
     
     /**
      * ZIPファイルから画像を読み込む
@@ -43,6 +46,8 @@ class ImageManager {
     func loadImages(from url: URL) -> Bool {
         imageEntries = extractAllImagesFromZip(at: url)
         currentIndex = 0
+        imageCache.removeAll()
+        setupMemoryPressureMonitoring()
         return !imageEntries.isEmpty
     }
     
@@ -56,8 +61,17 @@ class ImageManager {
             return nil
         }
         
+        if let cachedImage = imageCache[currentIndex] {
+            return cachedImage
+        }
+        
         let imageData = imageEntries[currentIndex].imageData
-        return NSImage(data: imageData)
+        guard let image = NSImage(data: imageData) else {
+            return nil
+        }
+        
+        cacheImage(image, at: currentIndex)
+        return image
     }
     
     /**
@@ -84,6 +98,7 @@ class ImageManager {
         }
         
         currentIndex += 1
+        preloadAdjacentImages()
         return true
     }
     
@@ -98,6 +113,7 @@ class ImageManager {
         }
         
         currentIndex -= 1
+        preloadAdjacentImages()
         return true
     }
     
@@ -126,6 +142,89 @@ class ImageManager {
      */
     func hasImages() -> Bool {
         return !imageEntries.isEmpty
+    }
+    
+    // MARK: - Cache Management Methods
+    
+    private func cacheImage(_ image: NSImage, at index: Int) {
+        if imageCache.count >= maxCacheSize {
+            removeOldestCachedImage()
+        }
+        imageCache[index] = image
+    }
+    
+    private func removeOldestCachedImage() {
+        guard !imageCache.isEmpty else { return }
+        
+        // 現在のインデックスから最も離れているキャッシュを削除
+        let farthestIndex = imageCache.keys.max { abs($0 - currentIndex) < abs($1 - currentIndex) }
+        if let indexToRemove = farthestIndex {
+            imageCache.removeValue(forKey: indexToRemove)
+        }
+    }
+    
+    func preloadAdjacentImages() {
+        let indicesToLoad = [currentIndex - 1, currentIndex + 1].filter { 
+            $0 >= 0 && $0 < imageEntries.count && imageCache[$0] == nil 
+        }
+        
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            for index in indicesToLoad {
+                self?.loadImageAtIndex(index)
+            }
+        }
+    }
+    
+    private func loadImageAtIndex(_ index: Int) {
+        guard index >= 0, index < imageEntries.count, imageCache[index] == nil else {
+            return
+        }
+        
+        let imageData = imageEntries[index].imageData
+        if let image = NSImage(data: imageData) {
+            DispatchQueue.main.async { [weak self] in
+                self?.cacheImage(image, at: index)
+            }
+        }
+    }
+    
+    // MARK: - Memory Management Methods
+    
+    private func setupMemoryPressureMonitoring() {
+        removeMemoryPressureObserver()
+        
+        // App ExtensionではNSApplicationの通知を使用できないため、シンプルなキャッシュサイズ制限のみ実装
+        // 必要に応じて、メモリ使用量を手動で監視する実装も可能
+    }
+    
+    private func removeMemoryPressureObserver() {
+        if let observer = memoryPressureObserver {
+            NotificationCenter.default.removeObserver(observer)
+            memoryPressureObserver = nil
+        }
+    }
+    
+    private func handleMemoryPressure() {
+        // 現在の画像以外のキャッシュをクリア
+        let currentImage = imageCache[currentIndex]
+        imageCache.removeAll()
+        
+        if let image = currentImage {
+            imageCache[currentIndex] = image
+        }
+    }
+    
+    func clearCache() {
+        let currentImage = imageCache[currentIndex]
+        imageCache.removeAll()
+        
+        if let image = currentImage {
+            imageCache[currentIndex] = image
+        }
+    }
+    
+    deinit {
+        removeMemoryPressureObserver()
     }
     
     // MARK: - ZIP Processing Methods

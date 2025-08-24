@@ -20,7 +20,7 @@
             <subviews>
                 <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="image-view">
                     <rect key="frame" x="0.0" y="26" width="480" height="246"/>
-                    <imageCell key="cell" alignment="left" imageScaling="proportionallyUpOrDown" id="image-cell"/>
+                    <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyUpOrDown" id="image-cell"/>
                 </imageView>
                 <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="page-label">
                     <rect key="frame" x="225" y="2" width="31" height="16"/>
@@ -32,6 +32,7 @@
                 </textField>
             </subviews>
             <constraints>
+                <constraint firstItem="image-view" firstAttribute="bottom" secondItem="page-label" secondAttribute="top" priority="750" constant="-8" id="image-bottom"/>
                 <constraint firstItem="image-view" firstAttribute="leading" secondItem="c22-O7-iKe" secondAttribute="leading" id="image-leading"/>
                 <constraint firstItem="image-view" firstAttribute="top" secondItem="c22-O7-iKe" secondAttribute="top" id="image-top"/>
                 <constraint firstAttribute="trailing" secondItem="image-view" secondAttribute="trailing" id="image-trailing"/>
