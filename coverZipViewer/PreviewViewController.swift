@@ -73,6 +73,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 if self.isPointInsidePassThroughControl(p) {
                     // A案: スライダートラック上クリック時は即時に値を反映してアクション実行（イベントは通す）
                     self.immediatelyJumpSliderIfNeeded(atViewPoint: p)
+                    print("[DEBUG] Mouse down passed through to control")
                     return event
                 }
                 // 画像エリアのクリックは吸収（ダブルクリック抑止）
@@ -92,24 +93,33 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 // 自ビュー領域外はホストに渡す
                 guard self.view.bounds.contains(vPoint) else { return event }
                 // スライダーなどのNSControl（やそのサブビュー）上のクリックは通す（ただしimageView配下は除外）
-                if self.isPointInsidePassThroughControl(vPoint) { return event }
+                if self.isPointInsidePassThroughControl(vPoint) { 
+                    print("[DEBUG] Click passed through to control")
+                    return event 
+                }
                 // マウスアップでページめくり処理を実行（画像エリアのみ）
                 let bounds = self.view.bounds
                 let isLeftHalf = vPoint.x < bounds.width / 2
                 let isSpreadMode = self.currentViewMode == .spread
                 
+                print("[DEBUG] Click detected at (\(vPoint.x), \(vPoint.y)) in bounds \(bounds), isLeftHalf=\(isLeftHalf), isSpreadMode=\(isSpreadMode)")
+                
                 if self.isRightToLeftReading {
                     // 反転: 左=進む、右=戻る
                     if isLeftHalf {
+                        print("[DEBUG] RTL: Left click - Next page")
                         if self.imageManager.nextImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
                     } else {
+                        print("[DEBUG] RTL: Right click - Previous page")
                         if self.imageManager.previousImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
                     }
                 } else {
                     // 通常: 左=戻る、右=進む
                     if isLeftHalf {
+                        print("[DEBUG] LTR: Left click - Previous page")
                         if self.imageManager.previousImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
                     } else {
+                        print("[DEBUG] LTR: Right click - Next page")
                         if self.imageManager.nextImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
                     }
                 }
@@ -579,7 +589,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         guard let hit = view.hitTest(pointInView) else { return false }
         var v: NSView? = hit
         while let cur = v {
+            // 左右両方のImageViewをクリック対象から除外（ページ移動処理の対象にする）
             if let iv = self.imageView, cur === iv { return false }
+            if let riv = self.rightImageView, cur === riv { return false }
             if cur is NSControl { return true }
             v = cur.superview
         }
