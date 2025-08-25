@@ -11,6 +11,7 @@ enum SettingsKeys {
     static let isRightToLeftReading = "isRightToLeftReading"
     static let sliderVisibilityWidthThreshold = "sliderVisibilityWidthThreshold"
     static let alwaysSinglePageForCover = "alwaysSinglePageForCover"
+    static let defaultViewMode = "defaultViewMode" // "auto" | "single" | "spread"
 }
 
 /// App Group identifier placeholder. Set this to your App Group ID (e.g., "group.com.example.CoverZip").
@@ -34,7 +35,8 @@ final class AppSettings {
         self.defaults.register(defaults: [
             SettingsKeys.isRightToLeftReading: true,
             SettingsKeys.sliderVisibilityWidthThreshold: 600.0,
-            SettingsKeys.alwaysSinglePageForCover: true
+            SettingsKeys.alwaysSinglePageForCover: true,
+            SettingsKeys.defaultViewMode: "auto"
         ])
     }
 
@@ -51,5 +53,19 @@ final class AppSettings {
     var alwaysSinglePageForCover: Bool {
         get { defaults.object(forKey: SettingsKeys.alwaysSinglePageForCover) as? Bool ?? true }
         set { defaults.set(newValue, forKey: SettingsKeys.alwaysSinglePageForCover) }
+    }
+
+    enum ViewModePreference: String {
+        case auto
+        case single
+        case spread
+    }
+
+    var defaultViewMode: ViewModePreference {
+        get {
+            let raw = defaults.string(forKey: SettingsKeys.defaultViewMode) ?? "auto"
+            return ViewModePreference(rawValue: raw) ?? .auto
+        }
+        set { defaults.set(newValue.rawValue, forKey: SettingsKeys.defaultViewMode) }
     }
 }

@@ -41,6 +41,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         case spread
     }
     private var currentViewMode: ViewMode = .single
+    private var didApplyInitialViewMode = false
+    private var initialModeOverride: ViewMode? = nil
     
     override var nibName: NSNib.Name? {
         return NSNib.Name("PreviewViewController")
@@ -149,6 +151,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let newThreshold = CGFloat(AppSettings.shared.sliderVisibilityWidthThreshold)
         if newThreshold != sliderVisibilityWidthThreshold { sliderVisibilityWidthThreshold = newThreshold; updateSliderVisibilityForContext() }
         if imageManager.hasImages() {
+            applyInitialViewModeIfNeeded()
             displayCurrentImage()
         }
         // ホストにサイズ希望を伝える（可能なら）
@@ -164,6 +167,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         updateSliderVisibilityForContext()
         // アスペクト比変更に応じて表示モードを再評価
         if imageManager.hasImages() {
+            // レイアウト変更時は基本オート。ただし初回のユーザ設定は維持済み
             displayCurrentImage()
         }
     }
@@ -182,6 +186,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // ZIPファイルから画像を読み込む
         if imageManager.loadImages(from: url) {
             await MainActor.run {
+                // 初回表示モードをユーザー設定に基づき適用
+                applyInitialViewModeIfNeeded()
                 displayCurrentImage()
                 // 初期ロード時に隣接画像を先読み
                 imageManager.preloadAdjacentImages()
@@ -378,13 +384,33 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
     
     private func shouldUseSpreadMode() -> Bool {
-        // ウィンドウが横長の場合、かつ表紙でない場合に見開きモード
+        // デフォルト表示モードの設定を優先（初回適用時に currentViewMode を設定）
+        // ここは通常の自動判定。
         let bounds = view.bounds
         let isLandscape = bounds.width > bounds.height
-        let alwaysSingleForCover = true // 暫定的にハードコード
+        let alwaysSingleForCover = AppSettings.shared.alwaysSinglePageForCover
         let isCover = imageManager.isCoverPage()
         
         return isLandscape && (!alwaysSingleForCover || !isCover)
+    }
+
+    private func applyInitialViewModeIfNeeded() {
+        guard !didApplyInitialViewMode else { return }
+        didApplyInitialViewMode = true
+        let pref = AppSettings.shared.defaultViewMode
+        switch pref {
+        case .auto:
+            // 何もしない（後続の shouldUseSpreadMode に委ねる）
+            break
+        case .single:
+            setViewMode(.single)
+        case .spread:
+            if AppSettings.shared.alwaysSinglePageForCover && imageManager.isCoverPage() {
+                setViewMode(.single)
+            } else {
+                setViewMode(.spread)
+            }
+        }
     }
     
     @objc private func handleClick(_ gesture: NSClickGestureRecognizer) {}
