@@ -31,7 +31,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // 日本のコミック向けにページ方向を反転（左=進む、右=戻る、スライダーは左が大きいページ）
     private var isRightToLeftReading: Bool = true
     // 見開き表示用の制約管理
-    private var singlePageConstraints: [NSLayoutConstraint] = []
     private var spreadConstraints: [NSLayoutConstraint] = []
     private var originalImageViewConstraints: [NSLayoutConstraint] = []
     
@@ -42,7 +41,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
     private var currentViewMode: ViewMode = .single
     private var didApplyInitialViewMode = false
-    private var initialModeOverride: ViewMode? = nil
+
+    // App Group UserDefaults ヘルパー（AppSettings 非依存化）
+    private let appGroupID = "group.com.dmng.CoverZip"
+    private func sharedDefaults() -> UserDefaults { UserDefaults(suiteName: appGroupID) ?? .standard }
+    private func loadIsRTL() -> Bool { sharedDefaults().object(forKey: "isRightToLeftReading") as? Bool ?? true }
+    private func loadSliderThreshold() -> CGFloat { CGFloat(sharedDefaults().object(forKey: "sliderVisibilityWidthThreshold") as? Double ?? 600.0) }
+    private func loadAlwaysSinglePageForCover() -> Bool { sharedDefaults().object(forKey: "alwaysSinglePageForCover") as? Bool ?? true }
+    private enum PrefViewMode: String { case auto, single, spread }
+    private func loadDefaultViewMode() -> PrefViewMode { PrefViewMode(rawValue: sharedDefaults().string(forKey: "defaultViewMode") ?? "auto") ?? .auto }
     
     override var nibName: NSNib.Name? {
         return NSNib.Name("PreviewViewController")
@@ -55,8 +62,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     override func viewDidLoad() {
         super.viewDidLoad()
     // UserDefaultsから設定をロード
-    isRightToLeftReading = AppSettings.shared.isRightToLeftReading
-    sliderVisibilityWidthThreshold = CGFloat(AppSettings.shared.sliderVisibilityWidthThreshold)
+    isRightToLeftReading = loadIsRTL()
+    sliderVisibilityWidthThreshold = loadSliderThreshold()
         setupUI()
         setupGestureRecognizers()
     }
@@ -146,9 +153,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // Quick LookではFirst Responderを取得しない
         // レイアウト完了後のサイズで初回画像を再フィット
         // 設定の変更を反映
-        let newRTL = AppSettings.shared.isRightToLeftReading
+    let newRTL = loadIsRTL()
         if newRTL != isRightToLeftReading { isRightToLeftReading = newRTL; applySliderLayoutDirection(); syncSliderToCurrentPage() }
-        let newThreshold = CGFloat(AppSettings.shared.sliderVisibilityWidthThreshold)
+    let newThreshold = loadSliderThreshold()
         if newThreshold != sliderVisibilityWidthThreshold { sliderVisibilityWidthThreshold = newThreshold; updateSliderVisibilityForContext() }
         if imageManager.hasImages() {
             applyInitialViewModeIfNeeded()
@@ -325,8 +332,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                    (constraint.firstAttribute == .trailing || constraint.secondAttribute == .trailing)
         }
         
-        // 単ページモード用の制約（空 - XIB制約を使用）
-        singlePageConstraints = []
+    // 単ページモードは XIB 既定制約を使用
         
         // 見開きモード用の制約
         spreadConstraints = [
@@ -408,7 +414,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // ここは通常の自動判定。
         let bounds = view.bounds
         let isLandscape = bounds.width > bounds.height
-        let alwaysSingleForCover = AppSettings.shared.alwaysSinglePageForCover
+    let alwaysSingleForCover = loadAlwaysSinglePageForCover()
         let isCover = imageManager.isCoverPage()
         
         return isLandscape && (!alwaysSingleForCover || !isCover)
@@ -417,7 +423,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private func applyInitialViewModeIfNeeded() {
         guard !didApplyInitialViewMode else { return }
         didApplyInitialViewMode = true
-        let pref = AppSettings.shared.defaultViewMode
+        let pref = loadDefaultViewMode()
         switch pref {
         case .auto:
             // 何もしない（後続の shouldUseSpreadMode に委ねる）
@@ -425,7 +431,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         case .single:
             setViewMode(.single)
         case .spread:
-            if AppSettings.shared.alwaysSinglePageForCover && imageManager.isCoverPage() {
+            if loadAlwaysSinglePageForCover() && imageManager.isCoverPage() {
                 setViewMode(.single)
             } else {
                 setViewMode(.spread)
