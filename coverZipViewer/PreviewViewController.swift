@@ -335,7 +335,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         
         // 単ページモードで開始
         currentViewMode = .single
-        rightImageView.isHidden = true
+    rightImageView.isHidden = true
+    // 単ページ初期は中央寄せ
+    imageView.imageAlignment = .alignCenter
+    rightImageView.imageAlignment = .alignCenter
     }
     
     private func setupGestureRecognizers() {
@@ -354,6 +357,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             // 元のImageView制約を復活
             NSLayoutConstraint.activate(originalImageViewConstraints)
             rightImageView?.isHidden = true
+            // 単ページは中央寄せ
+            imageView?.imageAlignment = .alignCenter
+            rightImageView?.imageAlignment = .alignCenter
             
         case .spread:
             // 元のImageView制約を無効化（競合回避）
@@ -361,6 +367,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             // 見開き制約を有効化
             NSLayoutConstraint.activate(spreadConstraints)
             rightImageView?.isHidden = false
+            // 見開き時は内側に寄せる（中央でくっつける）
+            // 左画像は右寄せ、右画像は左寄せ
+            imageView?.imageAlignment = .alignRight
+            rightImageView?.imageAlignment = .alignLeft
         }
         
         view.needsLayout = true
@@ -439,8 +449,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     private func setImageSafely(_ image: NSImage?, toImageView imageView: NSImageView?) {
         guard let iv = imageView else { return }
+        // スケーリングのみ固定。アラインメントはモード切替で設定したものを維持する
         iv.imageScaling = .scaleProportionallyUpOrDown
-        iv.imageAlignment = .alignCenter
         iv.image = image
     }
 
