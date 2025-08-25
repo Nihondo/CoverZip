@@ -36,6 +36,8 @@ class ImageManager {
     private var imageCache: [Int: NSImage] = [:]
     private let maxCacheSize: Int = 10
     private var memoryPressureObserver: NSObjectProtocol?
+    // 見開きの左右組み合わせを1ページ分ずらすためのオフセット（0 or 1）
+    private var spreadPairOffset: Int = 0
     
     /**
      * ZIPファイルから画像を読み込む
@@ -92,10 +94,12 @@ class ImageManager {
         
         let leftIndex: Int
         let rightIndex: Int
+        // ペア判定の偶奇を、オフセットで反転可能にする
+        let parity = (currentIndex + spreadPairOffset) % 2
         
         if isRightToLeft {
             // RTL: 左3-右2, 左5-右4...（奇数ページが左）
-            if currentIndex % 2 == 1 {
+            if parity == 1 {
                 // 偶数ページ（2, 4, 6...）の場合、右側に配置し、左側は次のページ
                 leftIndex = currentIndex + 1
                 rightIndex = currentIndex
@@ -106,7 +110,7 @@ class ImageManager {
             }
         } else {
             // LTR: 左2-右3, 左4-右5...（偶数ページが左）
-            if currentIndex % 2 == 1 {
+            if parity == 1 {
                 // 偶数ページ（2, 4, 6...）の場合、左側に配置し、右側は次のページ
                 leftIndex = currentIndex
                 rightIndex = currentIndex + 1
@@ -122,6 +126,17 @@ class ImageManager {
         
         return (leftImage, rightImage)
     }
+
+    // 現在の見開きペアリングオフセットをトグル（0<->1）
+    func toggleSpreadPairOffset() {
+        spreadPairOffset = 1 - spreadPairOffset
+    }
+
+    func setSpreadPairOffset(_ value: Int) {
+        spreadPairOffset = (value % 2 + 2) % 2
+    }
+
+    func getSpreadPairOffset() -> Int { spreadPairOffset }
     
     /**
      * 指定されたインデックスの画像を取得する

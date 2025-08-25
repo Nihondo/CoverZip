@@ -349,6 +349,26 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     private func setupGestureRecognizers() {
         // フルスクリーンのため、クリックはローカルモニタで処理する
+        // 右クリック用コンテキストメニュー
+        view.menu = makeContextMenu()
+    }
+
+    private func makeContextMenu() -> NSMenu {
+        let menu = NSMenu()
+        let title = "見開きの左右を1ページ補正"
+    let item = NSMenuItem(title: title, action: #selector(toggleSpreadPairingOffset(_:)), keyEquivalent: "")
+        item.target = self
+    item.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
+        menu.addItem(item)
+        return menu
+    }
+
+    @objc private func toggleSpreadPairingOffset(_ sender: NSMenuItem) {
+        imageManager.toggleSpreadPairOffset()
+        // チェックマークを更新
+        sender.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
+        // 再描画（見開き時に効果、単ページでも次の見開きで反映）
+        displayCurrentImage()
     }
     
     private func setViewMode(_ mode: ViewMode) {
