@@ -16,6 +16,7 @@ import Compression
 class PreviewViewController: NSViewController, QLPreviewingController {
     
     @IBOutlet weak var imageView: NSImageView!
+    @IBOutlet weak var rightImageView: NSImageView!
     @IBOutlet weak var pageLabel: NSTextField!
     @IBOutlet weak var pageSlider: NSSlider!
     
@@ -29,6 +30,17 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var sliderVisibilityWidthThreshold: CGFloat = 600 // この幅未満では非表示（Finderカラム想定）
     // 日本のコミック向けにページ方向を反転（左=進む、右=戻る、スライダーは左が大きいページ）
     private var isRightToLeftReading: Bool = true
+    // 見開き表示用の制約管理
+    private var singlePageConstraints: [NSLayoutConstraint] = []
+    private var spreadConstraints: [NSLayoutConstraint] = []
+    private var originalImageViewConstraints: [NSLayoutConstraint] = []
+    
+    // 表示モード
+    enum ViewMode {
+        case single
+        case spread
+    }
+    private var currentViewMode: ViewMode = .single
     
     override var nibName: NSNib.Name? {
         return NSNib.Name("PreviewViewController")
@@ -84,19 +96,21 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 // マウスアップでページめくり処理を実行（画像エリアのみ）
                 let bounds = self.view.bounds
                 let isLeftHalf = vPoint.x < bounds.width / 2
+                let isSpreadMode = self.currentViewMode == .spread
+                
                 if self.isRightToLeftReading {
                     // 反転: 左=進む、右=戻る
                     if isLeftHalf {
-                        if self.imageManager.nextImage() { self.displayCurrentImage() }
+                        if self.imageManager.nextImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
                     } else {
-                        if self.imageManager.previousImage() { self.displayCurrentImage() }
+                        if self.imageManager.previousImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
                     }
                 } else {
                     // 通常: 左=戻る、右=進む
                     if isLeftHalf {
-                        if self.imageManager.previousImage() { self.displayCurrentImage() }
+                        if self.imageManager.previousImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
                     } else {
-                        if self.imageManager.nextImage() { self.displayCurrentImage() }
+                        if self.imageManager.nextImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
                     }
                 }
                 return nil // ホストには渡さない
@@ -136,8 +150,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     override func viewDidLayout() {
         super.viewDidLayout()
         // 自動リサイズ機能を使用するため、手動でのリサイズ処理は不要
-    // レイアウト変化に応じてスライダーの可視性を見直す
-    updateSliderVisibilityForContext()
+        // レイアウト変化に応じてスライダーの可視性を見直す
+        updateSliderVisibilityForContext()
+        // アスペクト比変更に応じて表示モードを再評価
+        if imageManager.hasImages() {
+            displayCurrentImage()
+        }
     }
     
 
@@ -175,14 +193,33 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         imageView?.imageAlignment = .alignCenter
         imageView?.wantsLayer = true // レイヤーバックド表示で高速化
         
+        // 右側ImageViewの設定
+        rightImageView?.imageScaling = .scaleProportionallyUpOrDown
+        rightImageView?.imageAlignment = .alignCenter
+        rightImageView?.wantsLayer = true
+        rightImageView?.isHidden = true // 初期は非表示
+        
+        // ImageViewのフレーム設定を確認
+        imageView?.imageFrameStyle = .none
+        rightImageView?.imageFrameStyle = .none
+        
         // Auto Layout制約の優先度調整
         setupConstraintPriorities()
+        
+        // 見開き表示用の制約を設定
+        setupViewModeConstraints()
         
         // キーイベントを受け取るためのResponder設定
         view.wantsLayer = true
         
         // 高品質な画像表示のための設定
         if let layer = imageView?.layer {
+            layer.contentsGravity = .resizeAspect
+            layer.minificationFilter = .linear
+            layer.magnificationFilter = .linear
+        }
+        
+        if let layer = rightImageView?.layer {
             layer.contentsGravity = .resizeAspect
             layer.minificationFilter = .linear
             layer.magnificationFilter = .linear
@@ -241,6 +278,14 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         imageView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         imageView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         
+        // 右側ImageViewも同様に設定
+        if let rightImageView = rightImageView {
+            rightImageView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            rightImageView.setContentHuggingPriority(.defaultLow, for: .vertical)
+            rightImageView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            rightImageView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        }
+        
         // PageLabelの優先度を高く設定（サイズを保持）
         pageLabel.setContentHuggingPriority(.required, for: .horizontal)
         pageLabel.setContentHuggingPriority(.required, for: .vertical)
@@ -248,8 +293,78 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         pageLabel.setContentCompressionResistancePriority(.required, for: .vertical)
     }
     
+    private func setupViewModeConstraints() {
+        guard let imageView = imageView, let rightImageView = rightImageView else {
+            return
+        }
+        
+        // 右側ImageViewをAuto Layoutに切り替える
+        rightImageView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // XIBの元のImageView制約を保存（見開き時に一時無効化するため）
+        originalImageViewConstraints = view.constraints.filter { constraint in
+            let firstItem = constraint.firstItem as AnyObject?
+            let secondItem = constraint.secondItem as AnyObject?
+            return (firstItem === imageView || secondItem === imageView) && 
+                   (constraint.firstAttribute == .trailing || constraint.secondAttribute == .trailing)
+        }
+        
+        // 単ページモード用の制約（空 - XIB制約を使用）
+        singlePageConstraints = []
+        
+        // 見開きモード用の制約
+        spreadConstraints = [
+            // 左側ImageViewの新しい制約（元の右端制約の代替）
+            imageView.trailingAnchor.constraint(equalTo: view.centerXAnchor),
+            // 右側ImageViewの制約
+            rightImageView.leadingAnchor.constraint(equalTo: view.centerXAnchor),
+            rightImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            rightImageView.topAnchor.constraint(equalTo: imageView.topAnchor),
+            rightImageView.bottomAnchor.constraint(equalTo: imageView.bottomAnchor)
+        ]
+        
+        // 単ページモードで開始
+        currentViewMode = .single
+        rightImageView.isHidden = true
+    }
+    
     private func setupGestureRecognizers() {
         // フルスクリーンのため、クリックはローカルモニタで処理する
+    }
+    
+    private func setViewMode(_ mode: ViewMode) {
+        guard currentViewMode != mode else { return }
+        
+        currentViewMode = mode
+        
+        switch mode {
+        case .single:
+            // 見開き制約を無効化
+            NSLayoutConstraint.deactivate(spreadConstraints)
+            // 元のImageView制約を復活
+            NSLayoutConstraint.activate(originalImageViewConstraints)
+            rightImageView?.isHidden = true
+            
+        case .spread:
+            // 元のImageView制約を無効化（競合回避）
+            NSLayoutConstraint.deactivate(originalImageViewConstraints)
+            // 見開き制約を有効化
+            NSLayoutConstraint.activate(spreadConstraints)
+            rightImageView?.isHidden = false
+        }
+        
+        view.needsLayout = true
+        view.layoutSubtreeIfNeeded()
+    }
+    
+    private func shouldUseSpreadMode() -> Bool {
+        // ウィンドウが横長の場合、かつ表紙でない場合に見開きモード
+        let bounds = view.bounds
+        let isLandscape = bounds.width > bounds.height
+        let alwaysSingleForCover = true // 暫定的にハードコード
+        let isCover = imageManager.isCoverPage()
+        
+        return isLandscape && (!alwaysSingleForCover || !isCover)
     }
     
     @objc private func handleClick(_ gesture: NSClickGestureRecognizer) {}
@@ -259,15 +374,28 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // MARK: - Image Display
     
     private func displayCurrentImage() {
-        if let currentImage = imageManager.getCurrentImage() {
-            setImageSafely(currentImage)
-            updatePageLabel()
-            // スライダーの位置を現在ページに同期（方向反転に対応）
-            syncSliderToCurrentPage()
-            // 画像のアスペクト比に基づいて縦いっぱいの希望サイズを提示
-            currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
-            updatePreferredContentSizeIfNeeded()
+        // アスペクト比に基づいて表示モードを決定
+        let useSpread = shouldUseSpreadMode()
+        
+        setViewMode(useSpread ? .spread : .single)
+        
+        if useSpread {
+            // 見開き表示
+            let (leftImage, rightImage) = imageManager.getSpreadImages(isRightToLeft: isRightToLeftReading)
+            setImageSafely(leftImage, toImageView: imageView)
+            setImageSafely(rightImage, toImageView: rightImageView)
+        } else {
+            // 単ページ表示
+            if let currentImage = imageManager.getCurrentImage() {
+                setImageSafely(currentImage, toImageView: imageView)
+                currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
+            }
         }
+        
+        updatePageLabel()
+        // スライダーの位置を現在ページに同期（方向反転に対応）
+        syncSliderToCurrentPage()
+        updatePreferredContentSizeIfNeeded()
     }
     
     private func displayNoImagesMessage() {
@@ -299,7 +427,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     pageSlider?.isEnabled = false
     }
 
-    private func setImageSafely(_ image: NSImage) {
+    private func setImageSafely(_ image: NSImage?, toImageView imageView: NSImageView?) {
         guard let iv = imageView else { return }
         iv.imageScaling = .scaleProportionallyUpOrDown
         iv.imageAlignment = .alignCenter

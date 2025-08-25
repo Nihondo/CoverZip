@@ -75,6 +75,79 @@ class ImageManager {
     }
     
     /**
+     * 見開き用の画像を取得する（左右2ページ）
+     * 
+     * @param isRightToLeft 右から左読み（日本語）の場合はtrue
+     * @return (左ページ画像, 右ページ画像)のタプル。片方がない場合はnilが入る
+     */
+    func getSpreadImages(isRightToLeft: Bool) -> (left: NSImage?, right: NSImage?) {
+        guard !imageEntries.isEmpty else {
+            return (nil, nil)
+        }
+        
+        // 表紙（1ページ目）は常に単ページ
+        if currentIndex == 0 {
+            return (getCurrentImage(), nil)
+        }
+        
+        let leftIndex: Int
+        let rightIndex: Int
+        
+        if isRightToLeft {
+            // RTL: 左3-右2, 左5-右4...（奇数ページが左）
+            if currentIndex % 2 == 1 {
+                // 偶数ページ（2, 4, 6...）の場合、右側に配置し、左側は次のページ
+                leftIndex = currentIndex + 1
+                rightIndex = currentIndex
+            } else {
+                // 奇数ページ（3, 5, 7...）の場合、左側に配置し、右側は前のページ
+                leftIndex = currentIndex
+                rightIndex = currentIndex - 1
+            }
+        } else {
+            // LTR: 左2-右3, 左4-右5...（偶数ページが左）
+            if currentIndex % 2 == 1 {
+                // 偶数ページ（2, 4, 6...）の場合、左側に配置し、右側は次のページ
+                leftIndex = currentIndex
+                rightIndex = currentIndex + 1
+            } else {
+                // 奇数ページ（3, 5, 7...）の場合、右側に配置し、左側は前のページ
+                leftIndex = currentIndex - 1
+                rightIndex = currentIndex
+            }
+        }
+        
+        let leftImage = getImageAtIndex(leftIndex)
+        let rightImage = getImageAtIndex(rightIndex)
+        
+        return (leftImage, rightImage)
+    }
+    
+    /**
+     * 指定されたインデックスの画像を取得する
+     * 
+     * @param index 画像のインデックス
+     * @return 画像データ（範囲外やエラーの場合はnil）
+     */
+    private func getImageAtIndex(_ index: Int) -> NSImage? {
+        guard index >= 0, index < imageEntries.count else {
+            return nil
+        }
+        
+        if let cachedImage = imageCache[index] {
+            return cachedImage
+        }
+        
+        let imageData = imageEntries[index].imageData
+        guard let image = NSImage(data: imageData) else {
+            return nil
+        }
+        
+        cacheImage(image, at: index)
+        return image
+    }
+    
+    /**
      * 現在の画像のファイル名を取得する
      * 
      * @return 現在の画像のファイル名（画像がない場合は空文字列）
@@ -90,14 +163,32 @@ class ImageManager {
     /**
      * 次の画像に移動する
      * 
+     * @param isSpreadMode 見開きモードの場合はtrue
      * @return 移動成功時はtrue、移動できない場合はfalse
      */
-    func nextImage() -> Bool {
-        guard !imageEntries.isEmpty, currentIndex < imageEntries.count - 1 else {
+    func nextImage(isSpreadMode: Bool = false) -> Bool {
+        guard !imageEntries.isEmpty else {
             return false
         }
         
-        currentIndex += 1
+        if isSpreadMode {
+            // 見開きモードでは2ページずつ移動（表紙除く）
+            if currentIndex == 0 {
+                // 表紙から2ページ目へ
+                guard currentIndex < imageEntries.count - 1 else { return false }
+                currentIndex = 1
+            } else {
+                // 2ページずつ進む
+                let nextIndex = currentIndex + 2
+                guard nextIndex < imageEntries.count else { return false }
+                currentIndex = nextIndex
+            }
+        } else {
+            // 単ページモードでは1ページずつ
+            guard currentIndex < imageEntries.count - 1 else { return false }
+            currentIndex += 1
+        }
+        
         preloadAdjacentImages()
         return true
     }
@@ -105,14 +196,29 @@ class ImageManager {
     /**
      * 前の画像に移動する
      * 
+     * @param isSpreadMode 見開きモードの場合はtrue
      * @return 移動成功時はtrue、移動できない場合はfalse
      */
-    func previousImage() -> Bool {
+    func previousImage(isSpreadMode: Bool = false) -> Bool {
         guard !imageEntries.isEmpty, currentIndex > 0 else {
             return false
         }
         
-        currentIndex -= 1
+        if isSpreadMode {
+            // 見開きモードでは2ページずつ移動
+            if currentIndex == 1 {
+                // 2ページ目から表紙へ
+                currentIndex = 0
+            } else {
+                // 2ページずつ戻る
+                let prevIndex = currentIndex - 2
+                currentIndex = max(0, prevIndex)
+            }
+        } else {
+            // 単ページモードでは1ページずつ
+            currentIndex -= 1
+        }
+        
         preloadAdjacentImages()
         return true
     }
@@ -154,6 +260,15 @@ class ImageManager {
      */
     func hasImages() -> Bool {
         return !imageEntries.isEmpty
+    }
+    
+    /**
+     * 現在のページが表紙かどうかを判定する
+     * 
+     * @return 表紙の場合はtrue、それ以外はfalse
+     */
+    func isCoverPage() -> Bool {
+        return currentIndex == 0
     }
     
     // MARK: - Cache Management Methods

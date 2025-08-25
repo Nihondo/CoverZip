@@ -9,6 +9,7 @@
             <connections>
                 <outlet property="imageView" destination="image-view" id="image-outlet"/>
                 <outlet property="pageLabel" destination="page-label" id="page-outlet"/>
+                <outlet property="rightImageView" destination="right-image-view" id="right-image-outlet"/>
                 <outlet property="view" destination="c22-O7-iKe" id="NRM-P4-wb6"/>
             </connections>
         </customObject>
@@ -22,6 +23,11 @@
                     <rect key="frame" x="0.0" y="26" width="480" height="246"/>
                     <imageCell key="cell" alignment="left" imageScaling="proportionallyUpOrDown" id="image-cell"/>
                 </imageView>
+                <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="right-image-view">
+                    <rect key="frame" x="240" y="26" width="240" height="246"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <imageCell key="cell" alignment="left" imageScaling="proportionallyUpOrDown" id="right-image-cell"/>
+                </imageView>
                 <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" allowsCharacterPickerTouchBarItem="YES" translatesAutoresizingMaskIntoConstraints="NO" id="page-label">
                     <rect key="frame" x="224" y="2" width="32" height="16"/>
                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" alignment="center" title="1 / 1" id="page-cell">
@@ -32,7 +38,6 @@
                 </textField>
             </subviews>
             <constraints>
-                <constraint firstItem="image-view" firstAttribute="bottom" secondItem="page-label" secondAttribute="top" priority="750" constant="-8" id="image-bottom"/>
                 <constraint firstItem="image-view" firstAttribute="leading" secondItem="c22-O7-iKe" secondAttribute="leading" id="image-leading"/>
                 <constraint firstItem="image-view" firstAttribute="top" secondItem="c22-O7-iKe" secondAttribute="top" id="image-top"/>
                 <constraint firstAttribute="trailing" secondItem="image-view" secondAttribute="trailing" id="image-trailing"/>

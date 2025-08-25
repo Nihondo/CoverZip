@@ -10,6 +10,7 @@ import Foundation
 enum SettingsKeys {
     static let isRightToLeftReading = "isRightToLeftReading"
     static let sliderVisibilityWidthThreshold = "sliderVisibilityWidthThreshold"
+    static let alwaysSinglePageForCover = "alwaysSinglePageForCover"
 }
 
 /// App Group identifier placeholder. Set this to your App Group ID (e.g., "group.com.example.CoverZip").
@@ -32,7 +33,8 @@ final class AppSettings {
         // Register defaults
         self.defaults.register(defaults: [
             SettingsKeys.isRightToLeftReading: true,
-            SettingsKeys.sliderVisibilityWidthThreshold: 600.0
+            SettingsKeys.sliderVisibilityWidthThreshold: 600.0,
+            SettingsKeys.alwaysSinglePageForCover: true
         ])
     }
 
@@ -44,5 +46,10 @@ final class AppSettings {
     var sliderVisibilityWidthThreshold: Double {
         get { defaults.object(forKey: SettingsKeys.sliderVisibilityWidthThreshold) as? Double ?? 600.0 }
         set { defaults.set(newValue, forKey: SettingsKeys.sliderVisibilityWidthThreshold) }
+    }
+
+    var alwaysSinglePageForCover: Bool {
+        get { defaults.object(forKey: SettingsKeys.alwaysSinglePageForCover) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: SettingsKeys.alwaysSinglePageForCover) }
     }
 }
