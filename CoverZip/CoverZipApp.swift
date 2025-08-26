@@ -24,7 +24,7 @@ struct CoverZipApp: App {
                         Label("ファイルルーティング", systemImage: "arrow.triangle.branch")
                     }
                 
-                if #available(macOS 12.0, *) {
+                if #available(macOS 13.0, *) {
                     PreviewSettingsView()
                         .tabItem {
                             Label("プレビュー設定", systemImage: "eye")
