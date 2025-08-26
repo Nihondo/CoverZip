@@ -209,11 +209,17 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         stopSlideshow()
         isSlideshowEnabled = false
         
+        // 読み方向をデフォルトの右綴じ（RTL）にリセット
+        isRightToLeftReading = true
+        
         // ZIPファイルから画像を読み込む
         if imageManager.loadImages(from: url) {
             await MainActor.run {
                 // 初回表示モードをユーザー設定に基づき適用
                 applyInitialViewModeIfNeeded()
+                // UI要素を更新（読み方向変更を反映）
+                applySliderLayoutDirection()
+                syncSliderToCurrentPage()
                 displayCurrentImage()
                 // 初期ロード時に隣接画像を先読み
                 imageManager.preloadAdjacentImages()
@@ -381,11 +387,20 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
         
+        // 左綴じメニュー（左綴じ時にチェック）
+        let leftToRightItem = NSMenuItem(title: "左綴じ", action: #selector(toggleReadingDirection(_:)), keyEquivalent: "")
+        leftToRightItem.target = self
+        leftToRightItem.state = !isRightToLeftReading ? .on : .off
+        menu.addItem(leftToRightItem)
+        
         // 見開き補正メニュー
         let spreadOffsetItem = NSMenuItem(title: "見開きの左右を1ページ補正", action: #selector(toggleSpreadPairingOffset(_:)), keyEquivalent: "")
         spreadOffsetItem.target = self
         spreadOffsetItem.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
         menu.addItem(spreadOffsetItem)
+        
+        // セパレータ
+        menu.addItem(NSMenuItem.separator())
         
         // スライドショーメニュー
         let slideshowItem = NSMenuItem(title: "スライドショー", action: #selector(toggleSlideshow(_:)), keyEquivalent: "")
@@ -401,6 +416,22 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // チェックマークを更新
         sender.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
         // 再描画（見開き時に効果、単ページでも次の見開きで反映）
+        displayCurrentImage()
+    }
+    
+    @objc private func toggleReadingDirection(_ sender: NSMenuItem) {
+        // 読み方向を切り替え
+        isRightToLeftReading.toggle()
+        
+        // チェックマークを更新（左綴じ時にチェック）
+        sender.state = !isRightToLeftReading ? .on : .off
+        
+        // 設定を保存
+        sharedDefaults().set(isRightToLeftReading, forKey: "isRightToLeftReading")
+        
+        // UI要素を即座に更新
+        applySliderLayoutDirection()
+        syncSliderToCurrentPage()
         displayCurrentImage()
     }
     
