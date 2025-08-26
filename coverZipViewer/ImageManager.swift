@@ -414,7 +414,11 @@ class ImageManager {
                 }
             }
         }
-        
+        // ファイル名の自然順（数字は数値として比較）でソート
+        imageEntries.sort { a, b in
+            naturalLess((a.filename as NSString).lastPathComponent,
+                        (b.filename as NSString).lastPathComponent)
+        }
         return imageEntries
     }
     
@@ -571,6 +575,61 @@ class ImageManager {
         }
         
         return nil
+    }
+
+    // MARK: - Natural sort by filename (numbers compared numerically)
+    private enum Token: Equatable {
+        case text(String)
+        case number(Int, length: Int) // length keeps original digit count for tie-break
+    }
+
+    private func naturalLess(_ lhs: String, _ rhs: String) -> Bool {
+        let lt = tokenize(lhs.lowercased())
+        let rt = tokenize(rhs.lowercased())
+        let n = min(lt.count, rt.count)
+        for i in 0..<n {
+            let a = lt[i]
+            let b = rt[i]
+            switch (a, b) {
+            case let (.number(x, lx), .number(y, ly)):
+                if x != y { return x < y }
+                // same numeric value: shorter digit length comes first (e.g., 2 < 002)
+                if lx != ly { return lx < ly }
+            case let (.text(x), .text(y)):
+                if x != y { return x < y }
+            case (.number, .text):
+                // numbers come before letters after equal prefix
+                return true
+            case (.text, .number):
+                return false
+            }
+        }
+        // All shared tokens equal; shorter wins, else fallback to simple compare
+        if lt.count != rt.count { return lt.count < rt.count }
+        return lhs.localizedCompare(rhs) == .orderedAscending
+    }
+
+    private func tokenize(_ s: String) -> [Token] {
+        var tokens: [Token] = []
+        var i = s.startIndex
+        while i < s.endIndex {
+            let ch = s[i]
+            if ch.isNumber {
+                var j = i
+                while j < s.endIndex, s[j].isNumber { j = s.index(after: j) }
+                let substr = String(s[i..<j])
+                let val = Int(substr) ?? 0
+                tokens.append(.number(val, length: substr.count))
+                i = j
+            } else {
+                var j = i
+                while j < s.endIndex, !s[j].isNumber { j = s.index(after: j) }
+                let substr = String(s[i..<j])
+                tokens.append(.text(substr))
+                i = j
+            }
+        }
+        return tokens
     }
     
     /**
