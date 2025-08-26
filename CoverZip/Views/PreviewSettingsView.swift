@@ -40,14 +40,21 @@ struct PreviewSettingsView: View {
     
     private var readingDirectionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("読み方向")
+            Text("ページ方向")
                 .font(.headline)
             
             VStack(alignment: .leading, spacing: 8) {
-                Toggle("右綴じ（日本のコミック）", isOn: Binding(
-                    get: { settings.isRightToLeftReading },
-                    set: { settings.isRightToLeftReading = $0 }
-                ))
+                HStack {
+                    Text("デフォルトページ方向:")
+                    Picker("", selection: Binding(
+                        get: { settings.isRightToLeftReading },
+                        set: { settings.isRightToLeftReading = $0 }
+                    )) {
+                        Text("右綴じ").tag(true)
+                        Text("左綴じ").tag(false)
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                }
                 
                 Text("右綴じの場合、左クリックで次ページ、右クリックで前ページに移動します")
                     .font(.caption)

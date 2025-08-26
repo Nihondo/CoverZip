@@ -82,6 +82,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // UserDefaultsから設定をロード
     isRightToLeftReading = loadIsRTL()
     sliderVisibilityWidthThreshold = loadSliderThreshold()
+    // ユーザー設定の表示モードを初期ロード
+    userPreferredViewMode = loadDefaultViewMode()
+    print("[DEBUG] Initial userPreferredViewMode loaded: \(userPreferredViewMode)")
         setupUI()
         setupGestureRecognizers()
     }
@@ -677,11 +680,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         guard !didApplyInitialViewMode else { return }
         didApplyInitialViewMode = true
         
-        // ユーザー設定を読み込んで保存
-        userPreferredViewMode = loadDefaultViewMode()
-        
-        // 初期表示モードを適用
+        // 初期表示モードを適用（ユーザー設定は既にviewDidLoadで読み込み済み）
+        print("[DEBUG] Applying initial view mode: \(userPreferredViewMode)")
         let useSpread = shouldUseSpreadMode()
+        print("[DEBUG] shouldUseSpreadMode result: \(useSpread)")
         setViewMode(useSpread ? .spread : .single)
     }
     
