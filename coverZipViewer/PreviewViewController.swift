@@ -492,23 +492,16 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private func advanceSlideshow() {
         let isSpreadMode = currentViewMode == .spread
         
-        if isRightToLeftReading {
-            // RTL: 次のページへ進む
-            if !imageManager.nextImage(isSpreadMode: isSpreadMode) {
-                // 最後のページに到達したらスライドショーを停止
-                stopSlideshow()
-                // メニューの更新（実際の更新は次回メニュー表示時）
-                return
-            }
-        } else {
-            // LTR: 次のページへ進む
-            if !imageManager.nextImage(isSpreadMode: isSpreadMode) {
-                // 最後のページに到達したらスライドショーを停止
-                stopSlideshow()
-                return
-            }
+        // 常に「進む」方向
+        if !imageManager.nextImage(isSpreadMode: isSpreadMode) {
+            // 最後のページに到達したらスライドショーを停止
+            stopSlideshow()
+            return
         }
-        
+
+        // レイアウトを決定してからトランジション→描画
+        setViewMode(shouldUseSpreadMode() ? .spread : .single)
+        applyTransition(forward: true)
         displayCurrentImage()
     }
     
