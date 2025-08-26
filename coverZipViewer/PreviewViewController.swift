@@ -841,9 +841,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
     private func saveWindowFrameIfEnabled() {
         guard AppSettings.shared.restoreWindowFrameEnabled, let win = view.window else { return }
-        // Finderカラムなどの狭いホスト表示は保存対象から除外（幅しきい値未満ならスキップ）
-        let width = win.frame.size.width
-        if width < sliderVisibilityWidthThreshold { return }
         AppSettings.shared.savedWindowFrameString = NSStringFromRect(win.frame)
     }
 
@@ -894,8 +891,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
 
     private func shouldHideSliderForContext() -> Bool {
-        // Finderカラム内は狭い幅で表示されることが多い。閾値未満は非表示。
-        return view.bounds.width < sliderVisibilityWidthThreshold
+        // Finderカラム内かどうかの判定が困難なため、常にスライダーを表示
+        return false
     }
 
     private func setSliderVisible(_ visible: Bool) {

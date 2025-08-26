@@ -8,7 +8,6 @@
 import SwiftUI
 
 @available(macOS 12.0, *)
-@available(macOS 12.0, *)
 struct PreviewSettingsView: View {
     @StateObject private var settings = AppSettingsWriter.shared
     
@@ -18,7 +17,6 @@ struct PreviewSettingsView: View {
                 headerSection
                 readingDirectionSection
                 displayModeSection
-                uiSettingsSection
                 slideshowSection
                 windowSection
             }
@@ -95,45 +93,6 @@ struct PreviewSettingsView: View {
     }
     
     @available(macOS 12.0, *)
-    @available(macOS 12.0, *)
-    private var uiSettingsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("ユーザーインターフェイス")
-                .font(.headline)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("スライダー表示の最小幅:")
-                    Spacer()
-                    if #available(macOS 12.0, *) {
-                        Text("\(Int(settings.sliderVisibilityWidthThreshold))px")
-                            .monospacedDigit()
-                    } else {
-                        // Fallback on earlier versions
-                    };if #available(macOS 12.0, *) {
-                        Text("\(Int(settings.sliderVisibilityWidthThreshold))px")
-                            .monospacedDigit()
-                    } else {
-                        // Fallback on earlier versions
-                    }
-                }
-                
-                Slider(
-                    value: Binding(
-                        get: { settings.sliderVisibilityWidthThreshold },
-                        set: { settings.sliderVisibilityWidthThreshold = $0 }
-                    ),
-                    in: 300...800,
-                    step: 50
-                )
-                
-                Text("この幅未満でプレビューが表示される場合、ページスライダーは非表示になります")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
-    
     private var slideshowSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("スライドショー")
