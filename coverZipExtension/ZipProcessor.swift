@@ -57,17 +57,23 @@ class ZipProcessor {
         guard let centralDirectoryOffset = findCentralDirectoryOffset(in: data) else {
             return nil
         }
-        
+
         // Central Directory からファイルエントリを読み取り
         let entries = parseCentralDirectory(data: data, offset: centralDirectoryOffset)
-        
-        // 最初の画像ファイルを探す
-        for entry in entries {
-            if isImageFile(filename: entry.filename) {
-                return extractFileData(data: data, entry: entry)
+
+        // 画像ファイルのみ抽出し、ファイル名の自然順（数字は数値として比較）でソート
+        let imageEntries = entries
+            .filter { isImageFile(filename: $0.filename) }
+            .sorted { a, b in
+                naturalLess((a.filename as NSString).lastPathComponent,
+                            (b.filename as NSString).lastPathComponent)
             }
+
+        // 先頭（自然順の最初）の画像を展開
+        if let first = imageEntries.first {
+            return extractFileData(data: data, entry: first)
         }
-        
+
         return nil
     }
     
@@ -86,16 +92,21 @@ class ZipProcessor {
         // Central Directory からファイルエントリを読み取り
         let entries = parseCentralDirectory(data: data, offset: centralDirectoryOffset)
         
-        // 全ての画像ファイルを抽出
+        // まず画像ファイルのみ抽出し、ファイル名の自然順でソートしてから展開
+        let imageFileEntries = entries
+            .filter { isImageFile(filename: $0.filename) }
+            .sorted { a, b in
+                naturalLess((a.filename as NSString).lastPathComponent,
+                            (b.filename as NSString).lastPathComponent)
+            }
+
         var imageEntries: [ImageEntry] = []
-        for entry in entries {
-            if isImageFile(filename: entry.filename) {
-                if let imageData = extractFileData(data: data, entry: entry) {
-                    imageEntries.append(ImageEntry(filename: entry.filename, imageData: imageData))
-                }
+        for entry in imageFileEntries {
+            if let imageData = extractFileData(data: data, entry: entry) {
+                imageEntries.append(ImageEntry(filename: entry.filename, imageData: imageData))
             }
         }
-        
+
         return imageEntries
     }
     
@@ -246,6 +257,60 @@ class ZipProcessor {
         }
         
         return nil
+    }
+
+    // MARK: - Natural sort by filename (numbers compared numerically)
+    private enum Token: Equatable {
+        case text(String)
+        case number(Int, length: Int) // 桁数を保持（同値時の安定化に使用）
+    }
+
+    private static func naturalLess(_ lhs: String, _ rhs: String) -> Bool {
+        let lt = tokenize(lhs.lowercased())
+        let rt = tokenize(rhs.lowercased())
+        let n = min(lt.count, rt.count)
+        for i in 0..<n {
+            let a = lt[i]
+            let b = rt[i]
+            switch (a, b) {
+            case let (.number(x, lx), .number(y, ly)):
+                if x != y { return x < y }
+                // 数値が同じ場合は桁数の短い方を先に
+                if lx != ly { return lx < ly }
+            case let (.text(x), .text(y)):
+                if x != y { return x < y }
+            case (.number, .text):
+                // 同一プレフィックス後は数値を先に
+                return true
+            case (.text, .number):
+                return false
+            }
+        }
+        if lt.count != rt.count { return lt.count < rt.count }
+        return lhs.localizedCompare(rhs) == .orderedAscending
+    }
+
+    private static func tokenize(_ s: String) -> [Token] {
+        var tokens: [Token] = []
+        var i = s.startIndex
+        while i < s.endIndex {
+            let ch = s[i]
+            if ch.isNumber {
+                var j = i
+                while j < s.endIndex, s[j].isNumber { j = s.index(after: j) }
+                let substr = String(s[i..<j])
+                let val = Int(substr) ?? 0
+                tokens.append(.number(val, length: substr.count))
+                i = j
+            } else {
+                var j = i
+                while j < s.endIndex, !s[j].isNumber { j = s.index(after: j) }
+                let substr = String(s[i..<j])
+                tokens.append(.text(substr))
+                i = j
+            }
+        }
+        return tokens
     }
     
     /**

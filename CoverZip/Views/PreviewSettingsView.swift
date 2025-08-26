@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-@available(macOS 12.0, *)
+@available(macOS 13.0, *)
 struct PreviewSettingsView: View {
     @StateObject private var settings = AppSettingsWriter.shared
     
@@ -88,7 +88,7 @@ struct PreviewSettingsView: View {
         }
     }
     
-    @available(macOS 12.0, *)
+    @available(macOS 13.0, *)
     private var slideshowSection: some View {
         GroupBox(label: sectionLabel("スライドショー", systemImage: "play.rectangle")) {
             VStack(alignment: .leading, spacing: 8) {
@@ -149,7 +149,7 @@ struct PreviewSettingsView: View {
 }
 
 #Preview {
-    if #available(macOS 12.0, *) {
+    if #available(macOS 13.0, *) {
         PreviewSettingsView()
     } else {
         // Fallback on earlier versions
