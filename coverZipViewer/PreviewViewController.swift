@@ -34,6 +34,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var spreadConstraints: [NSLayoutConstraint] = []
     private var originalImageViewConstraints: [NSLayoutConstraint] = []
     
+    // スライドショー機能
+    private var slideshowTimer: Timer?
+    private var isSlideshowEnabled: Bool = false
+    
     // 表示モード
     enum ViewMode {
         case single
@@ -50,6 +54,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private func loadAlwaysSinglePageForCover() -> Bool { sharedDefaults().object(forKey: "alwaysSinglePageForCover") as? Bool ?? true }
     private enum PrefViewMode: String { case auto, single, spread }
     private func loadDefaultViewMode() -> PrefViewMode { PrefViewMode(rawValue: sharedDefaults().string(forKey: "defaultViewMode") ?? "auto") ?? .auto }
+    private func loadSlideshowEnabled() -> Bool { sharedDefaults().object(forKey: "slideshowEnabled") as? Bool ?? false }
+    private func loadSlideshowInterval() -> Double { sharedDefaults().object(forKey: "slideshowInterval") as? Double ?? 3.0 }
     
     override var nibName: NSNib.Name? {
         return NSNib.Name("PreviewViewController")
@@ -113,6 +119,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 
                 print("[DEBUG] Click detected at (\(vPoint.x), \(vPoint.y)) in bounds \(bounds), isLeftHalf=\(isLeftHalf), isSpreadMode=\(isSpreadMode)")
                 
+                // スライドショー中の手動操作は一時的に停止・再開
+                let wasSlideshow = self.isSlideshowEnabled
+                if wasSlideshow { self.stopSlideshow() }
+                
                 if self.isRightToLeftReading {
                     // 反転: 左=進む、右=戻る
                     if isLeftHalf {
@@ -132,6 +142,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                         if self.imageManager.nextImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
                     }
                 }
+                
+                // スライドショーが有効だった場合は再開
+                if wasSlideshow { self.startSlideshow() }
                 return nil // ホストには渡さない
             }
             return event
@@ -146,6 +159,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         mouseMonitors.removeAll()
         pendingSingleClick?.cancel()
         pendingSingleClick = nil
+        // スライドショーのクリーンアップ
+        stopSlideshow()
     }
     
     override func viewDidAppear() {
@@ -190,6 +205,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     */
 
     func preparePreviewOfFile(at url: URL) async throws {
+        // 新しいファイルが読み込まれる際にスライドショーをリセット
+        stopSlideshow()
+        isSlideshowEnabled = false
+        
         // ZIPファイルから画像を読み込む
         if imageManager.loadImages(from: url) {
             await MainActor.run {
@@ -361,11 +380,19 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     private func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
-        let title = "見開きの左右を1ページ補正"
-    let item = NSMenuItem(title: title, action: #selector(toggleSpreadPairingOffset(_:)), keyEquivalent: "")
-        item.target = self
-    item.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
-        menu.addItem(item)
+        
+        // 見開き補正メニュー
+        let spreadOffsetItem = NSMenuItem(title: "見開きの左右を1ページ補正", action: #selector(toggleSpreadPairingOffset(_:)), keyEquivalent: "")
+        spreadOffsetItem.target = self
+        spreadOffsetItem.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
+        menu.addItem(spreadOffsetItem)
+        
+        // スライドショーメニュー
+        let slideshowItem = NSMenuItem(title: "スライドショー", action: #selector(toggleSlideshow(_:)), keyEquivalent: "")
+        slideshowItem.target = self
+        slideshowItem.state = isSlideshowEnabled ? .on : .off
+        menu.addItem(slideshowItem)
+        
         return menu
     }
 
@@ -374,6 +401,57 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // チェックマークを更新
         sender.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
         // 再描画（見開き時に効果、単ページでも次の見開きで反映）
+        displayCurrentImage()
+    }
+    
+    @objc private func toggleSlideshow(_ sender: NSMenuItem) {
+        if isSlideshowEnabled {
+            stopSlideshow()
+        } else {
+            startSlideshow()
+        }
+        // チェックマークを更新
+        sender.state = isSlideshowEnabled ? .on : .off
+        // 設定を保存
+        sharedDefaults().set(isSlideshowEnabled, forKey: "slideshowEnabled")
+    }
+    
+    private func startSlideshow() {
+        guard !isSlideshowEnabled else { return }
+        isSlideshowEnabled = true
+        
+        let interval = loadSlideshowInterval()
+        slideshowTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            self?.advanceSlideshow()
+        }
+    }
+    
+    private func stopSlideshow() {
+        isSlideshowEnabled = false
+        slideshowTimer?.invalidate()
+        slideshowTimer = nil
+    }
+    
+    private func advanceSlideshow() {
+        let isSpreadMode = currentViewMode == .spread
+        
+        if isRightToLeftReading {
+            // RTL: 次のページへ進む
+            if !imageManager.nextImage(isSpreadMode: isSpreadMode) {
+                // 最後のページに到達したらスライドショーを停止
+                stopSlideshow()
+                // メニューの更新（実際の更新は次回メニュー表示時）
+                return
+            }
+        } else {
+            // LTR: 次のページへ進む
+            if !imageManager.nextImage(isSpreadMode: isSpreadMode) {
+                // 最後のページに到達したらスライドショーを停止
+                stopSlideshow()
+                return
+            }
+        }
+        
         displayCurrentImage()
     }
     
@@ -594,11 +672,18 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     // スライダー変更時にページ移動
     @IBAction func pageSliderChanged(_ sender: NSSlider) {
+        // スライドショー中のスライダー操作は一時的に停止・再開
+        let wasSlideshow = isSlideshowEnabled
+        if wasSlideshow { stopSlideshow() }
+        
         // スライダーの見た目方向はRTLに合わせているため、内部値は反転しない
         let page = sender.integerValue
         if imageManager.goToPage(Int(page)) {
             displayCurrentImage()
         }
+        
+        // スライドショーが有効だった場合は再開
+        if wasSlideshow { startSlideshow() }
     }
 
     // 現在ページをスライダー位置へ反映（方向反転対応）
