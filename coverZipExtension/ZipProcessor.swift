@@ -144,6 +144,11 @@ class ZipProcessor {
                 break
             }
             
+            // GP Flag / Compression Method / Sizes（Central Directory）
+            let gpFlag = data.subdata(in: currentOffset+8..<currentOffset+10).withUnsafeBytes { $0.load(as: UInt16.self) }
+            let compMethod = data.subdata(in: currentOffset+10..<currentOffset+12).withUnsafeBytes { $0.load(as: UInt16.self) }
+            let cdCompressed = data.subdata(in: currentOffset+20..<currentOffset+24).withUnsafeBytes { $0.load(as: UInt32.self) }
+
             // ファイル名の長さを取得
             let filenameLength = data.subdata(in: currentOffset+28..<currentOffset+30).withUnsafeBytes { $0.load(as: UInt16.self) }
             let extraFieldLength = data.subdata(in: currentOffset+30..<currentOffset+32).withUnsafeBytes { $0.load(as: UInt16.self) }
@@ -156,7 +161,7 @@ class ZipProcessor {
             // Local File Header のオフセットを取得
             let localHeaderOffset = data.subdata(in: currentOffset+42..<currentOffset+46).withUnsafeBytes { $0.load(as: UInt32.self) }
             
-            entries.append(ZipEntry(filename: filename, localHeaderOffset: Int(localHeaderOffset)))
+            entries.append(ZipEntry(filename: filename, localHeaderOffset: Int(localHeaderOffset), compressedSize: Int(cdCompressed), generalPurposeFlag: gpFlag, compressionMethod: compMethod))
             
             // 次のエントリに移動
             currentOffset += 46 + Int(filenameLength) + Int(extraFieldLength) + Int(commentLength)
@@ -213,15 +218,23 @@ class ZipProcessor {
         let filenameLength = data.subdata(in: offset+26..<offset+28).withUnsafeBytes { $0.load(as: UInt16.self) }
         let extraFieldLength = data.subdata(in: offset+28..<offset+30).withUnsafeBytes { $0.load(as: UInt16.self) }
         
-        // 圧縮されたファイルサイズを取得
-        let compressedSize = data.subdata(in: offset+18..<offset+22).withUnsafeBytes { $0.load(as: UInt32.self) }
+    // ローカルヘッダの圧縮サイズ（bit3が立っている場合は0）
+    let lhCompressed = data.subdata(in: offset+18..<offset+22).withUnsafeBytes { $0.load(as: UInt32.self) }
         
-        // 圧縮方法を取得
-        let compressionMethod = data.subdata(in: offset+8..<offset+10).withUnsafeBytes { $0.load(as: UInt16.self) }
+    // 圧縮方法を取得
+    let compressionMethod = data.subdata(in: offset+8..<offset+10).withUnsafeBytes { $0.load(as: UInt16.self) }
         
         // ファイルデータの開始位置
         let fileDataOffset = offset + 30 + Int(filenameLength) + Int(extraFieldLength)
-        let fileData = data.subdata(in: fileDataOffset..<fileDataOffset+Int(compressedSize))
+        // 使用する圧縮サイズ（Data Descriptor使用時はCentral Directoryの値）
+        let useCompressedSize: Int
+        if entry.generalPurposeFlag & 0x0008 != 0 {
+            useCompressedSize = entry.compressedSize
+        } else {
+            useCompressedSize = Int(lhCompressed)
+        }
+        guard useCompressedSize > 0, fileDataOffset + useCompressedSize <= data.count else { return nil }
+        let fileData = data.subdata(in: fileDataOffset..<(fileDataOffset + useCompressedSize))
         
         // 圧縮方法に応じて展開
         if compressionMethod == 0 {
@@ -262,8 +275,11 @@ class ZipProcessor {
  * ZIPファイル内のファイルエントリを表す構造体
  */
 struct ZipEntry {
-    let filename: String           // ファイル名
-    let localHeaderOffset: Int     // Local File Headerのオフセット位置
+    let filename: String            // ファイル名
+    let localHeaderOffset: Int      // Local File Headerのオフセット位置
+    let compressedSize: Int         // Central Directory 記載の圧縮サイズ
+    let generalPurposeFlag: UInt16  // 汎用フラグ（bit3: データディスクリプタ使用）
+    let compressionMethod: UInt16   // 圧縮方式
 }
 
 /**
