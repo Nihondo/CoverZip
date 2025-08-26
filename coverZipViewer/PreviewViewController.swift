@@ -10,6 +10,7 @@ import Quartz
 import Foundation
 import AppKit
 import Compression
+import QuartzCore
 
 // MARK: - Preview View Controller
 
@@ -127,19 +128,31 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                     // 反転: 左=進む、右=戻る
                     if isLeftHalf {
                         print("[DEBUG] RTL: Left click - Next page")
-                        if self.imageManager.nextImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
+                        if self.imageManager.nextImage(isSpreadMode: isSpreadMode) {
+                            self.applyTransition(forward: true)
+                            self.displayCurrentImage()
+                        }
                     } else {
                         print("[DEBUG] RTL: Right click - Previous page")
-                        if self.imageManager.previousImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
+                        if self.imageManager.previousImage(isSpreadMode: isSpreadMode) {
+                            self.applyTransition(forward: false)
+                            self.displayCurrentImage()
+                        }
                     }
                 } else {
                     // 通常: 左=戻る、右=進む
                     if isLeftHalf {
                         print("[DEBUG] LTR: Left click - Previous page")
-                        if self.imageManager.previousImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
+                        if self.imageManager.previousImage(isSpreadMode: isSpreadMode) {
+                            self.applyTransition(forward: false)
+                            self.displayCurrentImage()
+                        }
                     } else {
                         print("[DEBUG] LTR: Right click - Next page")
-                        if self.imageManager.nextImage(isSpreadMode: isSpreadMode) { self.displayCurrentImage() }
+                        if self.imageManager.nextImage(isSpreadMode: isSpreadMode) {
+                            self.applyTransition(forward: true)
+                            self.displayCurrentImage()
+                        }
                     }
                 }
                 
@@ -606,6 +619,35 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     pageSlider?.maxValue = 1
     pageSlider?.integerValue = 1
     pageSlider?.isEnabled = false
+    }
+
+    // MARK: - Simple page push transition
+    private func applyTransition(forward: Bool) {
+        guard let layer = imageView?.layer else { return }
+        let t = CATransition()
+        t.type = .push
+        // 読み方向に合わせて左右を反転
+        let subtype: CATransitionSubtype
+        if isRightToLeftReading {
+            // RTL: 進む=fromLeft, 戻る=fromRight
+            subtype = forward ? .fromLeft : .fromRight
+        } else {
+            // LTR: 進む=fromRight, 戻る=fromLeft
+            subtype = forward ? .fromRight : .fromLeft
+        }
+        t.subtype = subtype
+        t.duration = 0.25
+        t.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(t, forKey: "cz_push")
+        if currentViewMode == .spread, let rLayer = rightImageView?.layer {
+            // 右側には別インスタンス
+            let t2 = CATransition()
+            t2.type = .push
+            t2.subtype = subtype
+            t2.duration = t.duration
+            t2.timingFunction = t.timingFunction
+            rLayer.add(t2, forKey: "cz_push_r")
+        }
     }
 
     private func setImageSafely(_ image: NSImage?, toImageView imageView: NSImageView?) {
