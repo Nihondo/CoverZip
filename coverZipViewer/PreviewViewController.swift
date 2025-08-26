@@ -40,6 +40,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var isSlideshowEnabled: Bool = false
     // ページ切替トランジション（既定ON）
     private var isTransitionEnabled: Bool = true
+    // リサイズ監視のためのオブザーバ
+    private var windowObservers: [NSObjectProtocol] = []
     
     // 表示モード
     enum ViewMode {
@@ -175,6 +177,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     override func viewWillDisappear() {
         super.viewWillDisappear()
+    // 最終フレームを保存
+    saveWindowFrameIfEnabled()
+    // 通知クリーンアップ
+    for o in windowObservers { NotificationCenter.default.removeObserver(o) }
+    windowObservers.removeAll()
         for m in mouseMonitors { NSEvent.removeMonitor(m) }
         mouseMonitors.removeAll()
         pendingSingleClick?.cancel()
@@ -200,6 +207,14 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         updatePreferredContentSizeIfNeeded()
     // 表示コンテキストに応じてスライダー可視性を更新
     updateSliderVisibilityForContext()
+
+        // リサイズ完了時にサイズを保存
+        if let win = view.window {
+            let obs = NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: win, queue: .main) { [weak self] _ in
+                self?.saveWindowFrameIfEnabled()
+            }
+            windowObservers.append(obs)
+        }
     }
 
     override func viewDidLayout() {
@@ -664,6 +679,20 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         sender.state = isTransitionEnabled ? .on : .off
     }
 
+    // 保存フレーム読み出し（共有Defaults）
+    private func loadRestoreWindowFrameEnabled() -> Bool {
+        sharedDefaults().object(forKey: "restoreWindowFrameEnabled") as? Bool ?? true
+    }
+    private func loadSavedWindowFrame() -> NSRect? {
+        guard let s = sharedDefaults().string(forKey: "savedWindowFrameString") else { return nil }
+        return NSRectFromString(s)
+    }
+    private func saveWindowFrameIfEnabled() {
+        guard loadRestoreWindowFrameEnabled(), let win = view.window else { return }
+        let rectStr = NSStringFromRect(win.frame)
+        sharedDefaults().set(rectStr, forKey: "savedWindowFrameString")
+    }
+
     private func setImageSafely(_ image: NSImage?, toImageView imageView: NSImageView?) {
         guard let iv = imageView else { return }
         // スケーリングのみ固定。アラインメントはモード切替で設定したものを維持する
@@ -783,6 +812,13 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     // Quick Look ホストに対して、縦方向いっぱいの希望サイズをヒントとして提示
     private func updatePreferredContentSizeIfNeeded() {
+        // 1) 復元が有効で保存サイズがある場合は、それを優先して返す
+        if loadRestoreWindowFrameEnabled(), let saved = loadSavedWindowFrame() {
+            let sz = saved.size
+            if preferredContentSize != sz { preferredContentSize = sz }
+            return
+        }
+        // 2) 未保存/復元無効のときは、従来通り縦方向いっぱい
         guard let screen = view.window?.screen ?? NSScreen.main else { return }
         let visible = screen.visibleFrame.size
         guard visible.height > 0 else { return }
