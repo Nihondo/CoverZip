@@ -18,20 +18,22 @@ struct CoverZipApp: App {
     
     var body: some Scene {
         Settings {
-            VStack {
-                Text("CoverZip設定")
-                    .font(.title)
-                Text("ZIPファイルルーティングアプリケーション")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            TabView {
+                RoutingSettingsView()
+                    .tabItem {
+                        Label("ファイルルーティング", systemImage: "arrow.triangle.branch")
+                    }
                 
-                Button("設定ファイルを編集") {
-                    let _ = SettingsFileManager.openSettingsFileInExternalEditor()
+                if #available(macOS 12.0, *) {
+                    PreviewSettingsView()
+                        .tabItem {
+                            Label("プレビュー設定", systemImage: "eye")
+                        }
+                } else {
+                    // Fallback on earlier versions
                 }
-                .padding(.top)
             }
-            .padding()
-            .frame(width: 300, height: 150)
+            .frame(minWidth: 500, minHeight: 550)
         }
     }
     
