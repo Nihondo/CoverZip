@@ -444,26 +444,50 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
         
-        // 左綴じメニュー（左綴じ時にチェック）
-        let leftToRightItem = NSMenuItem(title: "左綴じ", action: #selector(toggleReadingDirection(_:)), keyEquivalent: "")
+        // 読み方向選択
+        let rightToLeftItem = NSMenuItem(title: "右綴じ", action: #selector(setRightToLeft(_:)), keyEquivalent: "")
+        rightToLeftItem.target = self
+        rightToLeftItem.state = isRightToLeftReading ? .on : .off
+        menu.addItem(rightToLeftItem)
+        
+        let leftToRightItem = NSMenuItem(title: "左綴じ", action: #selector(setLeftToRight(_:)), keyEquivalent: "")
         leftToRightItem.target = self
         leftToRightItem.state = !isRightToLeftReading ? .on : .off
         menu.addItem(leftToRightItem)
         
-    // 見開き補正メニュー
-    let spreadOffsetItem = NSMenuItem(title: "見開きの左右を1ページ補正", action: #selector(toggleSpreadPairingOffset(_:)), keyEquivalent: "")
-    spreadOffsetItem.target = self
-    spreadOffsetItem.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
-    menu.addItem(spreadOffsetItem)
+        menu.addItem(NSMenuItem.separator())
 
-    // セパレータ（この直下にアニメーショントグルを配置）
-    menu.addItem(NSMenuItem.separator())
+        // 表示モード選択
+        let autoModeItem = NSMenuItem(title: "自動", action: #selector(setViewModeAuto(_:)), keyEquivalent: "")
+        autoModeItem.target = self
+        autoModeItem.state = userPreferredViewMode == .auto ? .on : .off
+        menu.addItem(autoModeItem)
+        
+        let singleModeItem = NSMenuItem(title: "単ページ", action: #selector(setViewModeSingle(_:)), keyEquivalent: "")
+        singleModeItem.target = self
+        singleModeItem.state = userPreferredViewMode == .single ? .on : .off
+        menu.addItem(singleModeItem)
+        
+        let spreadModeItem = NSMenuItem(title: "見開き", action: #selector(setViewModeSpread(_:)), keyEquivalent: "")
+        spreadModeItem.target = self
+        spreadModeItem.state = userPreferredViewMode == .spread ? .on : .off
+        menu.addItem(spreadModeItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // 見開き補正メニュー
+        let spreadOffsetItem = NSMenuItem(title: "見開きの左右を補正", action: #selector(toggleSpreadPairingOffset(_:)), keyEquivalent: "")
+        spreadOffsetItem.target = self
+        spreadOffsetItem.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
+        menu.addItem(spreadOffsetItem)
 
-    // ページ送りアニメ ON/OFF（直下）
-    let transitionItem = NSMenuItem(title: "ページ送りアニメ", action: #selector(toggleTransition(_:)), keyEquivalent: "")
-    transitionItem.target = self
-    transitionItem.state = isTransitionEnabled ? .on : .off
-    menu.addItem(transitionItem)
+        menu.addItem(NSMenuItem.separator())
+
+        // ページ送りアニメ ON/OFF
+        let transitionItem = NSMenuItem(title: "ページ送りアニメ", action: #selector(toggleTransition(_:)), keyEquivalent: "")
+        transitionItem.target = self
+        transitionItem.state = isTransitionEnabled ? .on : .off
+        menu.addItem(transitionItem)
         
         // スライドショーメニュー
         let slideshowItem = NSMenuItem(title: "スライドショー", action: #selector(toggleSlideshow(_:)), keyEquivalent: "")
@@ -473,6 +497,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         
         return menu
     }
+    
+    private func updateContextMenuStates() {
+        // コンテキストメニューを再作成して状態を更新
+        view.menu = makeContextMenu()
+    }
 
     @objc private func toggleSpreadPairingOffset(_ sender: NSMenuItem) {
         imageManager.toggleSpreadPairOffset()
@@ -480,6 +509,51 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         sender.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
         // 再描画（見開き時に効果、単ページでも次の見開きで反映）
         displayCurrentImage()
+    }
+    
+    // 表示モード切替アクション
+    @objc private func setViewModeAuto(_ sender: NSMenuItem) {
+        userPreferredViewMode = .auto
+        sharedDefaults().set("auto", forKey: "defaultViewMode")
+        displayCurrentImage()
+        updateContextMenuStates()
+    }
+    
+    @objc private func setViewModeSingle(_ sender: NSMenuItem) {
+        userPreferredViewMode = .single
+        sharedDefaults().set("single", forKey: "defaultViewMode")
+        displayCurrentImage()
+        updateContextMenuStates()
+    }
+    
+    @objc private func setViewModeSpread(_ sender: NSMenuItem) {
+        userPreferredViewMode = .spread
+        sharedDefaults().set("spread", forKey: "defaultViewMode")
+        displayCurrentImage()
+        updateContextMenuStates()
+    }
+    
+    // 読み方向切替アクション
+    @objc private func setRightToLeft(_ sender: NSMenuItem) {
+        isRightToLeftReading = true
+        sharedDefaults().set(isRightToLeftReading, forKey: "isRightToLeftReading")
+        
+        // UI要素を即座に更新
+        applySliderLayoutDirection()
+        syncSliderToCurrentPage()
+        displayCurrentImage()
+        updateContextMenuStates()
+    }
+    
+    @objc private func setLeftToRight(_ sender: NSMenuItem) {
+        isRightToLeftReading = false
+        sharedDefaults().set(isRightToLeftReading, forKey: "isRightToLeftReading")
+        
+        // UI要素を即座に更新
+        applySliderLayoutDirection()
+        syncSliderToCurrentPage()
+        displayCurrentImage()
+        updateContextMenuStates()
     }
     
     @objc private func toggleReadingDirection(_ sender: NSMenuItem) {
