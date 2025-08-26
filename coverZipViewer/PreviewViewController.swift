@@ -42,6 +42,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var isTransitionEnabled: Bool = true
     // リサイズ監視のためのオブザーバ
     private var windowObservers: [NSObjectProtocol] = []
+    // セッション中にユーザーがウィンドウをリサイズしたか
+    private var hasUserResizedWindow: Bool = false
     
     // 表示モード
     enum ViewMode {
@@ -177,8 +179,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     override func viewWillDisappear() {
         super.viewWillDisappear()
-    // 最終フレームを保存
-    saveWindowFrameIfEnabled()
+    // ユーザーがこのセッションでリサイズした場合のみ最終フレームを保存
+    if hasUserResizedWindow { saveWindowFrameIfEnabled() }
     // 通知クリーンアップ
     for o in windowObservers { NotificationCenter.default.removeObserver(o) }
     windowObservers.removeAll()
@@ -210,7 +212,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
         // リサイズ完了時にサイズを保存
         if let win = view.window {
+            hasUserResizedWindow = false
             let obs = NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: win, queue: .main) { [weak self] _ in
+                self?.hasUserResizedWindow = true
                 self?.saveWindowFrameIfEnabled()
             }
             windowObservers.append(obs)
@@ -679,18 +683,20 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         sender.state = isTransitionEnabled ? .on : .off
     }
 
-    // 保存フレーム読み出し（共有Defaults）
+    // 保存フレーム読み出し/保存（AppSettingsに統一）
     private func loadRestoreWindowFrameEnabled() -> Bool {
-        sharedDefaults().object(forKey: "restoreWindowFrameEnabled") as? Bool ?? true
+        AppSettings.shared.restoreWindowFrameEnabled
     }
     private func loadSavedWindowFrame() -> NSRect? {
-        guard let s = sharedDefaults().string(forKey: "savedWindowFrameString") else { return nil }
+        guard let s = AppSettings.shared.savedWindowFrameString else { return nil }
         return NSRectFromString(s)
     }
     private func saveWindowFrameIfEnabled() {
-        guard loadRestoreWindowFrameEnabled(), let win = view.window else { return }
-        let rectStr = NSStringFromRect(win.frame)
-        sharedDefaults().set(rectStr, forKey: "savedWindowFrameString")
+        guard AppSettings.shared.restoreWindowFrameEnabled, let win = view.window else { return }
+        // Finderカラムなどの狭いホスト表示は保存対象から除外（幅しきい値未満ならスキップ）
+        let width = win.frame.size.width
+        if width < sliderVisibilityWidthThreshold { return }
+        AppSettings.shared.savedWindowFrameString = NSStringFromRect(win.frame)
     }
 
     private func setImageSafely(_ image: NSImage?, toImageView imageView: NSImageView?) {

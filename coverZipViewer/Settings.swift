@@ -14,6 +14,9 @@ enum SettingsKeys {
     static let defaultViewMode = "defaultViewMode" // "auto" | "single" | "spread"
     static let slideshowEnabled = "slideshowEnabled"
     static let slideshowInterval = "slideshowInterval"
+    // Window frame persistence
+    static let restoreWindowFrameEnabled = "restoreWindowFrameEnabled"
+    static let savedWindowFrameString = "savedWindowFrameString"
 }
 
 /// App Group identifier placeholder. Set this to your App Group ID (e.g., "group.com.example.CoverZip").
@@ -40,7 +43,8 @@ final class AppSettings {
             SettingsKeys.alwaysSinglePageForCover: true,
             SettingsKeys.defaultViewMode: "auto",
             SettingsKeys.slideshowEnabled: false,
-            SettingsKeys.slideshowInterval: 3.0
+            SettingsKeys.slideshowInterval: 3.0,
+            SettingsKeys.restoreWindowFrameEnabled: true
         ])
     }
 
@@ -81,5 +85,22 @@ final class AppSettings {
     var slideshowInterval: Double {
         get { defaults.object(forKey: SettingsKeys.slideshowInterval) as? Double ?? 3.0 }
         set { defaults.set(newValue, forKey: SettingsKeys.slideshowInterval) }
+    }
+
+    // MARK: - Window frame persistence
+    var restoreWindowFrameEnabled: Bool {
+        get { defaults.object(forKey: SettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: SettingsKeys.restoreWindowFrameEnabled) }
+    }
+
+    var savedWindowFrameString: String? {
+        get { defaults.string(forKey: SettingsKeys.savedWindowFrameString) }
+        set {
+            if let v = newValue {
+                defaults.set(v, forKey: SettingsKeys.savedWindowFrameString)
+            } else {
+                defaults.removeObject(forKey: SettingsKeys.savedWindowFrameString)
+            }
+        }
     }
 }
