@@ -12,7 +12,6 @@ enum SettingsKeys {
     static let sliderVisibilityWidthThreshold = "sliderVisibilityWidthThreshold"
     static let alwaysSinglePageForCover = "alwaysSinglePageForCover"
     static let defaultViewMode = "defaultViewMode" // "auto" | "single" | "spread"
-    static let slideshowEnabled = "slideshowEnabled"
     static let slideshowInterval = "slideshowInterval"
     // Window frame persistence
     static let restoreWindowFrameEnabled = "restoreWindowFrameEnabled"
@@ -42,7 +41,6 @@ final class AppSettings {
             SettingsKeys.sliderVisibilityWidthThreshold: 600.0,
             SettingsKeys.alwaysSinglePageForCover: true,
             SettingsKeys.defaultViewMode: "auto",
-            SettingsKeys.slideshowEnabled: false,
             SettingsKeys.slideshowInterval: 3.0,
             SettingsKeys.restoreWindowFrameEnabled: true
         ])
@@ -75,11 +73,6 @@ final class AppSettings {
             return ViewModePreference(rawValue: raw) ?? .auto
         }
         set { defaults.set(newValue.rawValue, forKey: SettingsKeys.defaultViewMode) }
-    }
-
-    var slideshowEnabled: Bool {
-        get { defaults.object(forKey: SettingsKeys.slideshowEnabled) as? Bool ?? false }
-        set { defaults.set(newValue, forKey: SettingsKeys.slideshowEnabled) }
     }
 
     var slideshowInterval: Double {

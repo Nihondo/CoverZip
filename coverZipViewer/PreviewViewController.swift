@@ -52,6 +52,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
     private var currentViewMode: ViewMode = .single
     private var didApplyInitialViewMode = false
+    
+    // ユーザー設定管理
+    private var userPreferredViewMode: PrefViewMode = .auto
+    private var isAutoMode: Bool {
+        return userPreferredViewMode == .auto
+    }
 
     // App Group UserDefaults ヘルパー（AppSettings 非依存化）
     private let appGroupID = "group.com.dmng.CoverZip"
@@ -61,7 +67,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private func loadAlwaysSinglePageForCover() -> Bool { sharedDefaults().object(forKey: "alwaysSinglePageForCover") as? Bool ?? true }
     private enum PrefViewMode: String { case auto, single, spread }
     private func loadDefaultViewMode() -> PrefViewMode { PrefViewMode(rawValue: sharedDefaults().string(forKey: "defaultViewMode") ?? "auto") ?? .auto }
-    private func loadSlideshowEnabled() -> Bool { sharedDefaults().object(forKey: "slideshowEnabled") as? Bool ?? false }
     private func loadSlideshowInterval() -> Double { sharedDefaults().object(forKey: "slideshowInterval") as? Double ?? 3.0 }
     
     override var nibName: NSNib.Name? {
@@ -201,6 +206,14 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if newRTL != isRightToLeftReading { isRightToLeftReading = newRTL; applySliderLayoutDirection(); syncSliderToCurrentPage() }
     let newThreshold = loadSliderThreshold()
         if newThreshold != sliderVisibilityWidthThreshold { sliderVisibilityWidthThreshold = newThreshold; updateSliderVisibilityForContext() }
+    
+    // デフォルト表示モード設定の変更をチェック
+    let newViewMode = loadDefaultViewMode()
+    if newViewMode != userPreferredViewMode { 
+        userPreferredViewMode = newViewMode
+        // 設定変更時は表示を即座に更新
+        if imageManager.hasImages() { displayCurrentImage() }
+    }
         if imageManager.hasImages() {
             applyInitialViewModeIfNeeded()
             displayCurrentImage()
@@ -226,10 +239,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 自動リサイズ機能を使用するため、手動でのリサイズ処理は不要
         // レイアウト変化に応じてスライダーの可視性を見直す
         updateSliderVisibilityForContext()
-        // アスペクト比変更に応じて表示モードを再評価
+        // アスペクト比変更に応じて表示モードを再評価（自動モードのみ）
         if imageManager.hasImages() {
-            // レイアウト変更時は基本オート。ただし初回のユーザ設定は維持済み
-            displayCurrentImage()
+            if isAutoMode {
+                // 自動モード：レイアウト変更に応じてモードを再評価
+                displayCurrentImage()
+            } else {
+                // 固定モード：表示更新のみ（モード変更なし）
+                updateImageDisplayOnly()
+            }
         }
     }
     
@@ -488,8 +506,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         }
         // チェックマークを更新
         sender.state = isSlideshowEnabled ? .on : .off
-        // 設定を保存
-        sharedDefaults().set(isSlideshowEnabled, forKey: "slideshowEnabled")
     }
     
     private func startSlideshow() {
@@ -557,33 +573,42 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
     
     private func shouldUseSpreadMode() -> Bool {
-        // デフォルト表示モードの設定を優先（初回適用時に currentViewMode を設定）
-        // ここは通常の自動判定。
-        let bounds = view.bounds
-        let isLandscape = bounds.width > bounds.height
-    let alwaysSingleForCover = loadAlwaysSinglePageForCover()
+        let alwaysSingleForCover = loadAlwaysSinglePageForCover()
         let isCover = imageManager.isCoverPage()
         
-        return isLandscape && (!alwaysSingleForCover || !isCover)
+        // 表紙で「常に単ページ表示」が有効な場合は単ページを強制
+        if alwaysSingleForCover && isCover {
+            return false
+        }
+        
+        // ユーザー設定モードに基づく判定
+        switch userPreferredViewMode {
+        case .auto:
+            // 自動モード：ウィンドウの縦横比で判定
+            let bounds = view.bounds
+            let isLandscape = bounds.width > bounds.height
+            return isLandscape
+            
+        case .single:
+            // 単ページ固定モード
+            return false
+            
+        case .spread:
+            // 見開き固定モード
+            return true
+        }
     }
 
     private func applyInitialViewModeIfNeeded() {
         guard !didApplyInitialViewMode else { return }
         didApplyInitialViewMode = true
-        let pref = loadDefaultViewMode()
-        switch pref {
-        case .auto:
-            // 何もしない（後続の shouldUseSpreadMode に委ねる）
-            break
-        case .single:
-            setViewMode(.single)
-        case .spread:
-            if loadAlwaysSinglePageForCover() && imageManager.isCoverPage() {
-                setViewMode(.single)
-            } else {
-                setViewMode(.spread)
-            }
-        }
+        
+        // ユーザー設定を読み込んで保存
+        userPreferredViewMode = loadDefaultViewMode()
+        
+        // 初期表示モードを適用
+        let useSpread = shouldUseSpreadMode()
+        setViewMode(useSpread ? .spread : .single)
     }
     
     @objc private func handleClick(_ gesture: NSClickGestureRecognizer) {}
@@ -615,6 +640,53 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // スライダーの位置を現在ページに同期（方向反転に対応）
         syncSliderToCurrentPage()
         updatePreferredContentSizeIfNeeded()
+    }
+    
+    private func updateImageDisplayOnly() {
+        // 固定モード用：現在のViewModeを維持したまま画像表示のみ更新
+        let currentMode = currentViewMode
+        
+        if currentMode == .spread {
+            // 見開き表示
+            let (leftImage, rightImage) = imageManager.getSpreadImages(isRightToLeft: isRightToLeftReading)
+            setImageSafely(leftImage, toImageView: imageView)
+            setImageSafely(rightImage, toImageView: rightImageView)
+            
+            // 見開き表示の場合は合成アスペクト比を計算
+            calculateSpreadAspectRatio(leftImage: leftImage, rightImage: rightImage)
+        } else {
+            // 単ページ表示
+            if let currentImage = imageManager.getCurrentImage() {
+                setImageSafely(currentImage, toImageView: imageView)
+                currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
+            }
+        }
+        
+        updatePageLabel()
+        syncSliderToCurrentPage()
+        updatePreferredContentSizeIfNeeded()
+    }
+    
+    private func calculateSpreadAspectRatio(leftImage: NSImage?, rightImage: NSImage?) {
+        // 見開き表示時の合成アスペクト比を計算
+        var totalWidth: CGFloat = 0
+        var maxHeight: CGFloat = 0
+        
+        if let left = leftImage {
+            totalWidth += left.size.width
+            maxHeight = max(maxHeight, left.size.height)
+        }
+        
+        if let right = rightImage {
+            totalWidth += right.size.width
+            maxHeight = max(maxHeight, right.size.height)
+        }
+        
+        if maxHeight > 0 {
+            currentImageAspect = totalWidth / maxHeight
+        } else {
+            currentImageAspect = nil
+        }
     }
     
     private func displayNoImagesMessage() {

@@ -13,7 +13,6 @@ enum AppSettingsKeys {
     static let sliderVisibilityWidthThreshold = "sliderVisibilityWidthThreshold"
     static let alwaysSinglePageForCover = "alwaysSinglePageForCover"
     static let defaultViewMode = "defaultViewMode" // "auto" | "single" | "spread"
-    static let slideshowEnabled = "slideshowEnabled"
     static let slideshowInterval = "slideshowInterval"
     static let restoreWindowFrameEnabled = "restoreWindowFrameEnabled"
     static let savedWindowFrameString = "savedWindowFrameString"
@@ -45,10 +44,6 @@ final class AppSettingsWriter: ObservableObject {
         didSet { defaults.set(defaultViewMode.rawValue, forKey: AppSettingsKeys.defaultViewMode) }
     }
     
-    @Published var slideshowEnabled: Bool = false {
-        didSet { defaults.set(slideshowEnabled, forKey: AppSettingsKeys.slideshowEnabled) }
-    }
-    
     @Published var slideshowInterval: Double = 3.0 {
         didSet { defaults.set(slideshowInterval, forKey: AppSettingsKeys.slideshowInterval) }
     }
@@ -69,7 +64,6 @@ final class AppSettingsWriter: ObservableObject {
             AppSettingsKeys.sliderVisibilityWidthThreshold: 600.0,
             AppSettingsKeys.alwaysSinglePageForCover: true,
             AppSettingsKeys.defaultViewMode: "auto",
-            AppSettingsKeys.slideshowEnabled: false,
             AppSettingsKeys.slideshowInterval: 3.0,
             AppSettingsKeys.restoreWindowFrameEnabled: true
         ])
@@ -88,7 +82,6 @@ final class AppSettingsWriter: ObservableObject {
         isRightToLeftReading = defaults.object(forKey: AppSettingsKeys.isRightToLeftReading) as? Bool ?? true
         sliderVisibilityWidthThreshold = defaults.object(forKey: AppSettingsKeys.sliderVisibilityWidthThreshold) as? Double ?? 600.0
         alwaysSinglePageForCover = defaults.object(forKey: AppSettingsKeys.alwaysSinglePageForCover) as? Bool ?? true
-        slideshowEnabled = defaults.object(forKey: AppSettingsKeys.slideshowEnabled) as? Bool ?? false
         slideshowInterval = defaults.object(forKey: AppSettingsKeys.slideshowInterval) as? Double ?? 3.0
         restoreWindowFrameEnabled = defaults.object(forKey: AppSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true
         

@@ -133,30 +133,23 @@ struct PreviewSettingsView: View {
                 .font(.headline)
             
             VStack(alignment: .leading, spacing: 8) {
-                Toggle("スライドショー機能を有効化", isOn: Binding(
-                    get: { settings.slideshowEnabled },
-                    set: { settings.slideshowEnabled = $0 }
-                ))
-                
-                if settings.slideshowEnabled {
-                    HStack {
-                        Text("表示間隔:")
-                        Spacer()
-                        Text("\(String(format: "%.1f", settings.slideshowInterval))秒")
-                            .monospacedDigit()
-                    }
-                    
-                    Slider(
-                        value: Binding(
-                            get: { settings.slideshowInterval },
-                            set: { settings.slideshowInterval = $0 }
-                        ),
-                        in: 1.0...10.0,
-                        step: 0.5
-                    )
+                HStack {
+                    Text("ページ送り間隔:")
+                    Spacer()
+                    Text("\(String(format: "%.1f", settings.slideshowInterval))秒")
+                        .monospacedDigit()
                 }
                 
-                Text("コンテキストメニューからスライドショーを開始できます")
+                Slider(
+                    value: Binding(
+                        get: { settings.slideshowInterval },
+                        set: { settings.slideshowInterval = $0 }
+                    ),
+                    in: 1.0...10.0,
+                    step: 0.5
+                )
+                
+                Text("コンテキストメニューからスライドショーを開始し、この間隔で自動ページ送りします")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
