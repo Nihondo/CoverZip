@@ -131,12 +131,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                     if isLeftHalf {
                         print("[DEBUG] RTL: Left click - Next page")
                         if self.imageManager.nextImage(isSpreadMode: isSpreadMode) {
+                            // ViewModeを決定してからアニメ適用
+                            self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                             self.applyTransition(forward: true)
                             self.displayCurrentImage()
                         }
                     } else {
                         print("[DEBUG] RTL: Right click - Previous page")
                         if self.imageManager.previousImage(isSpreadMode: isSpreadMode) {
+                            self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                             self.applyTransition(forward: false)
                             self.displayCurrentImage()
                         }
@@ -146,12 +149,14 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                     if isLeftHalf {
                         print("[DEBUG] LTR: Left click - Previous page")
                         if self.imageManager.previousImage(isSpreadMode: isSpreadMode) {
+                            self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                             self.applyTransition(forward: false)
                             self.displayCurrentImage()
                         }
                     } else {
                         print("[DEBUG] LTR: Right click - Next page")
                         if self.imageManager.nextImage(isSpreadMode: isSpreadMode) {
+                            self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                             self.applyTransition(forward: true)
                             self.displayCurrentImage()
                         }
@@ -648,8 +653,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         t.subtype = subtype
         t.duration = 0.25
         t.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        layer.add(t, forKey: "cz_push")
-        if currentViewMode == .spread, let rLayer = rightImageView?.layer {
+    layer.add(t, forKey: "cz_push")
+    if let rLayer = rightImageView?.layer {
             // 右側には別インスタンス
             let t2 = CATransition()
             t2.type = .push
