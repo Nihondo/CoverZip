@@ -38,6 +38,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // スライドショー機能
     private var slideshowTimer: Timer?
     private var isSlideshowEnabled: Bool = false
+    // ページ切替トランジション（既定ON）
+    private var isTransitionEnabled: Bool = true
     
     // 表示モード
     enum ViewMode {
@@ -406,14 +408,20 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         leftToRightItem.state = !isRightToLeftReading ? .on : .off
         menu.addItem(leftToRightItem)
         
-        // 見開き補正メニュー
-        let spreadOffsetItem = NSMenuItem(title: "見開きの左右を1ページ補正", action: #selector(toggleSpreadPairingOffset(_:)), keyEquivalent: "")
-        spreadOffsetItem.target = self
-        spreadOffsetItem.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
-        menu.addItem(spreadOffsetItem)
-        
-        // セパレータ
-        menu.addItem(NSMenuItem.separator())
+    // 見開き補正メニュー
+    let spreadOffsetItem = NSMenuItem(title: "見開きの左右を1ページ補正", action: #selector(toggleSpreadPairingOffset(_:)), keyEquivalent: "")
+    spreadOffsetItem.target = self
+    spreadOffsetItem.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
+    menu.addItem(spreadOffsetItem)
+
+    // セパレータ（この直下にアニメーショントグルを配置）
+    menu.addItem(NSMenuItem.separator())
+
+    // ページ送りアニメ ON/OFF（直下）
+    let transitionItem = NSMenuItem(title: "ページ送りアニメ", action: #selector(toggleTransition(_:)), keyEquivalent: "")
+    transitionItem.target = self
+    transitionItem.state = isTransitionEnabled ? .on : .off
+    menu.addItem(transitionItem)
         
         // スライドショーメニュー
         let slideshowItem = NSMenuItem(title: "スライドショー", action: #selector(toggleSlideshow(_:)), keyEquivalent: "")
@@ -623,6 +631,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     // MARK: - Simple page push transition
     private func applyTransition(forward: Bool) {
+    // トランジションが無効、または動きを抑えるが有効なら適用しない
+    if !isTransitionEnabled { return }
+    if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { return }
         guard let layer = imageView?.layer else { return }
         let t = CATransition()
         t.type = .push
@@ -648,6 +659,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             t2.timingFunction = t.timingFunction
             rLayer.add(t2, forKey: "cz_push_r")
         }
+    }
+
+    // トランジションのON/OFF切替
+    @objc private func toggleTransition(_ sender: NSMenuItem) {
+        isTransitionEnabled.toggle()
+        sender.state = isTransitionEnabled ? .on : .off
     }
 
     private func setImageSafely(_ image: NSImage?, toImageView imageView: NSImageView?) {
