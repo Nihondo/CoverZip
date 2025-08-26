@@ -631,9 +631,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     // MARK: - Simple page push transition
     private func applyTransition(forward: Bool) {
-    // トランジションが無効、または動きを抑えるが有効なら適用しない
+    // トランジションが無効なら適用しない（ユーザー指定優先）
     if !isTransitionEnabled { return }
-    if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { return }
         guard let layer = imageView?.layer else { return }
         let t = CATransition()
         t.type = .push
