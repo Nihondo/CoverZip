@@ -22,6 +22,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     @IBOutlet weak var pageSlider: NSSlider!
     
     private var imageManager = ImageManager()
+    private var readingHistoryManager = ReadingHistoryManager.shared
+    private var currentZipFilename: String = ""
     private var mouseMonitors: [Any] = []
     private var pendingSingleClick: DispatchWorkItem?
     private var currentImageAspect: CGFloat?
@@ -146,6 +148,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                             self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                             self.applyTransition(forward: true)
                             self.displayCurrentImage()
+                            // 履歴を自動保存
+                            self.saveReadingPositionToHistory()
                         }
                     } else {
                         print("[DEBUG] RTL: Right click - Previous page")
@@ -153,6 +157,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                             self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                             self.applyTransition(forward: false)
                             self.displayCurrentImage()
+                            // 履歴を自動保存
+                            self.saveReadingPositionToHistory()
                         }
                     }
                 } else {
@@ -163,6 +169,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                             self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                             self.applyTransition(forward: false)
                             self.displayCurrentImage()
+                            // 履歴を自動保存
+                            self.saveReadingPositionToHistory()
                         }
                     } else {
                         print("[DEBUG] LTR: Right click - Next page")
@@ -170,6 +178,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                             self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                             self.applyTransition(forward: true)
                             self.displayCurrentImage()
+                            // 履歴を自動保存
+                            self.saveReadingPositionToHistory()
                         }
                     }
                 }
@@ -186,11 +196,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     override func viewWillDisappear() {
         super.viewWillDisappear()
-    // ユーザーがこのセッションでリサイズした場合のみ最終フレームを保存
-    if hasUserResizedWindow { saveWindowFrameIfEnabled() }
-    // 通知クリーンアップ
-    for o in windowObservers { NotificationCenter.default.removeObserver(o) }
-    windowObservers.removeAll()
+        
+        // 読書履歴を保存
+        saveReadingPositionToHistory()
+        
+        // ユーザーがこのセッションでリサイズした場合のみ最終フレームを保存
+        if hasUserResizedWindow { saveWindowFrameIfEnabled() }
+        // 通知クリーンアップ
+        for o in windowObservers { NotificationCenter.default.removeObserver(o) }
+        windowObservers.removeAll()
         for m in mouseMonitors { NSEvent.removeMonitor(m) }
         mouseMonitors.removeAll()
         pendingSingleClick?.cancel()
@@ -268,12 +282,18 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         stopSlideshow()
         isSlideshowEnabled = false
         
+        // ファイル名を保存（履歴管理用）
+        currentZipFilename = url.lastPathComponent
+        
         // 読み方向をデフォルトの右綴じ（RTL）にリセット
         isRightToLeftReading = true
         
         // ZIPファイルから画像を読み込む
         if imageManager.loadImages(from: url) {
             await MainActor.run {
+                // 履歴から前回の読書位置を復元
+                restoreReadingPositionFromHistory()
+                
                 // 初回表示モードをユーザー設定に基づき適用
                 applyInitialViewModeIfNeeded()
                 // UI要素を更新（読み方向変更を反映）
@@ -946,6 +966,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let page = sender.integerValue
         if imageManager.goToPage(Int(page)) {
             displayCurrentImage()
+            // 履歴を自動保存
+            saveReadingPositionToHistory()
         }
         
         // スライドショーが有効だった場合は再開
@@ -1025,5 +1047,47 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
     
     // キーボード入力はQuick Lookホストに委ねる（本拡張では未処理）
+    
+    // MARK: - Reading History Management
+    
+    /// 履歴から前回の読書位置を復元
+    private func restoreReadingPositionFromHistory() {
+        guard !currentZipFilename.isEmpty else { return }
+        
+        if let history = readingHistoryManager.loadReadingPosition(filename: currentZipFilename) {
+            print("[ReadingHistory] Restoring position for \(currentZipFilename): page \(history.page), viewMode \(history.viewMode), offset \(history.spreadPairOffset)")
+            
+            // ページ位置を復元
+            _ = imageManager.goToPage(history.page)
+            
+            // 見開きオフセットを復元
+            imageManager.setSpreadPairOffset(history.spreadPairOffset)
+            
+            // 表示モードを復元（ユーザー設定より履歴を優先）
+            if AppSettings.ViewModePreference(rawValue: history.viewMode) != nil {
+                userPreferredViewMode = PrefViewMode(rawValue: history.viewMode) ?? .auto
+            }
+            
+            print("[ReadingHistory] Position restored successfully")
+        } else {
+            print("[ReadingHistory] No history found for \(currentZipFilename)")
+        }
+    }
+    
+    /// 現在の読書位置を履歴に保存
+    private func saveReadingPositionToHistory() {
+        guard !currentZipFilename.isEmpty, imageManager.hasImages() else { return }
+        
+        let currentPage = imageManager.getCurrentPageNumber()
+        let currentViewMode = userPreferredViewMode.rawValue
+        let currentOffset = imageManager.getSpreadPairOffset()
+        
+        readingHistoryManager.saveReadingPosition(
+            filename: currentZipFilename,
+            page: currentPage,
+            viewMode: currentViewMode,
+            spreadPairOffset: currentOffset
+        )
+    }
 
 }

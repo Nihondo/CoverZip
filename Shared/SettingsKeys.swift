@@ -14,6 +14,9 @@ public enum CZSettingsKeys {
     // Window frame persistence
     public static let restoreWindowFrameEnabled = "restoreWindowFrameEnabled"
     public static let savedWindowFrameString = "savedWindowFrameString"
+    // Reading history
+    public static let readingHistoryEnabled = "readingHistoryEnabled"
+    public static let readingHistoryData = "readingHistoryData"
 }
 
 public enum CZAppGroup {

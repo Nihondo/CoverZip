@@ -27,7 +27,8 @@ final class AppSettings {
             CZSettingsKeys.alwaysSinglePageForCover: true,
             CZSettingsKeys.defaultViewMode: "auto",
             CZSettingsKeys.slideshowInterval: 3.0,
-            CZSettingsKeys.restoreWindowFrameEnabled: true
+            CZSettingsKeys.restoreWindowFrameEnabled: true,
+            CZSettingsKeys.readingHistoryEnabled: true
         ])
     }
 
@@ -80,5 +81,11 @@ final class AppSettings {
         defaults.removeObject(forKey: CZSettingsKeys.savedWindowFrameString)
             }
         }
+    }
+    
+    // MARK: - Reading History
+    var readingHistoryEnabled: Bool {
+        get { defaults.object(forKey: CZSettingsKeys.readingHistoryEnabled) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: CZSettingsKeys.readingHistoryEnabled) }
     }
 }
