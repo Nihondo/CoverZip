@@ -48,6 +48,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var hasUserResizedWindow: Bool = false
     // 履歴から綴じ方向を復元済みか（既定で上書きしないためのフラグ）
     private var didRestoreRTLFromHistory: Bool = false
+    // 履歴から表示モードを復元済みか（既定で上書きしないためのフラグ）
+    private var didRestoreViewModeFromHistory: Bool = false
     
     // 表示モード
     enum ViewMode {
@@ -231,7 +233,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     // デフォルト表示モード設定の変更をチェック
     let newViewMode = loadDefaultViewMode()
-    if newViewMode != userPreferredViewMode { 
+    if !didRestoreViewModeFromHistory && newViewMode != userPreferredViewMode { 
         userPreferredViewMode = newViewMode
         // 設定変更時は表示を即座に更新
         if imageManager.hasImages() { displayCurrentImage() }
@@ -294,6 +296,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // まずはグローバル設定の既定を適用（履歴があれば後で上書き）
     didRestoreRTLFromHistory = false
     isRightToLeftReading = loadIsRTL()
+    // 表示モードも既定から開始（履歴があれば後で上書き）
+    didRestoreViewModeFromHistory = false
+    userPreferredViewMode = loadDefaultViewMode()
+    // 新規ファイルごとに初期適用フラグをリセット
+    didApplyInitialViewMode = false
         
         // ZIPファイルから画像を読み込む
         if imageManager.loadImages(from: url) {
@@ -1089,6 +1096,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             // 表示モードを履歴から復元（グローバルのデフォルトは変更しない）
             if let restored = PrefViewMode(rawValue: history.viewMode) {
                 userPreferredViewMode = restored
+                didRestoreViewModeFromHistory = true
                 if imageManager.hasImages() { displayCurrentImage() }
                 updateContextMenuStates()
             }
