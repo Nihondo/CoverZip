@@ -20,5 +20,9 @@
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).PreviewViewController</string>
 	</dict>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.dmng.CoverZip</string>
+	</array>
 </dict>
 </plist>

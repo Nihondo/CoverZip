@@ -89,7 +89,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     sliderVisibilityWidthThreshold = loadSliderThreshold()
     // ユーザー設定の表示モードを初期ロード
     userPreferredViewMode = loadDefaultViewMode()
-    print("[DEBUG] Initial userPreferredViewMode loaded: \(userPreferredViewMode)")
+    NSLog("[DEBUG] Initial userPreferredViewMode loaded: %@", userPreferredViewMode.rawValue)
         setupUI()
         setupGestureRecognizers()
     }
@@ -108,7 +108,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 if self.isPointInsidePassThroughControl(p) {
                     // A案: スライダートラック上クリック時は即時に値を反映してアクション実行（イベントは通す）
                     self.immediatelyJumpSliderIfNeeded(atViewPoint: p)
-                    print("[DEBUG] Mouse down passed through to control")
+                    NSLog("[DEBUG] Mouse down passed through to control")
                     return event
                 }
                 // 画像エリアのクリックは吸収（ダブルクリック抑止）
@@ -129,7 +129,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 guard self.view.bounds.contains(vPoint) else { return event }
                 // スライダーなどのNSControl（やそのサブビュー）上のクリックは通す（ただしimageView配下は除外）
                 if self.isPointInsidePassThroughControl(vPoint) { 
-                    print("[DEBUG] Click passed through to control")
+                    NSLog("[DEBUG] Click passed through to control")
                     return event 
                 }
                 // マウスアップでページめくり処理を実行（画像エリアのみ）
@@ -137,7 +137,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 let isLeftHalf = vPoint.x < bounds.width / 2
                 let isSpreadMode = self.currentViewMode == .spread
                 
-                print("[DEBUG] Click detected at (\(vPoint.x), \(vPoint.y)) in bounds \(bounds), isLeftHalf=\(isLeftHalf), isSpreadMode=\(isSpreadMode)")
+                NSLog("[DEBUG] Click detected at (%f, %f) in bounds %@, isLeftHalf=%d, isSpreadMode=%d", vPoint.x, vPoint.y, NSStringFromRect(bounds), isLeftHalf, isSpreadMode)
                 
                 // スライドショー中の手動操作は一時的に停止・再開
                 let wasSlideshow = self.isSlideshowEnabled
@@ -146,7 +146,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 if self.isRightToLeftReading {
                     // 反転: 左=進む、右=戻る
                     if isLeftHalf {
-                        print("[DEBUG] RTL: Left click - Next page")
+                        NSLog("[DEBUG] RTL: Left click - Next page")
                         if self.imageManager.nextImage(isSpreadMode: isSpreadMode) {
                             // ViewModeを決定してからアニメ適用
                             self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
@@ -156,7 +156,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                             self.saveReadingPositionToHistory()
                         }
                     } else {
-                        print("[DEBUG] RTL: Right click - Previous page")
+                        NSLog("[DEBUG] RTL: Right click - Previous page")
                         if self.imageManager.previousImage(isSpreadMode: isSpreadMode) {
                             self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                             self.applyTransition(forward: false)
@@ -168,7 +168,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 } else {
                     // 通常: 左=戻る、右=進む
                     if isLeftHalf {
-                        print("[DEBUG] LTR: Left click - Previous page")
+                        NSLog("[DEBUG] LTR: Left click - Previous page")
                         if self.imageManager.previousImage(isSpreadMode: isSpreadMode) {
                             self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                             self.applyTransition(forward: false)
@@ -177,7 +177,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                             self.saveReadingPositionToHistory()
                         }
                     } else {
-                        print("[DEBUG] LTR: Right click - Next page")
+                        NSLog("[DEBUG] LTR: Right click - Next page")
                         if self.imageManager.nextImage(isSpreadMode: isSpreadMode) {
                             self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                             self.applyTransition(forward: true)
@@ -255,7 +255,16 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 self?.saveWindowFrameIfEnabled()
             }
             windowObservers.append(obs)
+            
+            // ウィンドウサイズ変更時の画像リサイズ対応
+            let resizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: win, queue: .main) { [weak self] _ in
+                self?.updateImageManagerDisplaySize()
+            }
+            windowObservers.append(resizeObserver)
         }
+        
+        // 初期表示サイズを設定
+        updateImageManagerDisplaySize()
     }
 
     override func viewDidLayout() {
@@ -721,9 +730,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         didApplyInitialViewMode = true
         
         // 初期表示モードを適用（ユーザー設定は既にviewDidLoadで読み込み済み）
-        print("[DEBUG] Applying initial view mode: \(userPreferredViewMode)")
+        NSLog("[DEBUG] Applying initial view mode: %@", userPreferredViewMode.rawValue)
         let useSpread = shouldUseSpreadMode()
-        print("[DEBUG] shouldUseSpreadMode result: \(useSpread)")
+        NSLog("[DEBUG] shouldUseSpreadMode result: %d", useSpread)
         setViewMode(useSpread ? .spread : .single)
     }
     
@@ -1069,6 +1078,34 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     // キーボード入力はQuick Lookホストに委ねる（本拡張では未処理）
     
+    // MARK: - Performance Optimization
+    
+    /// ImageManagerに現在のウィンドウサイズを設定して最適化を有効にする
+    private func updateImageManagerDisplaySize() {
+        guard let window = view.window else { return }
+        
+        let windowSize = window.frame.size
+        let contentSize = view.bounds.size
+        
+        // 高DPIディスプレイ対応：実際の表示に必要なピクセル数を計算
+        let backingScaleFactor = window.backingScaleFactor
+        let targetSize = NSSize(
+            width: max(contentSize.width, windowSize.width) * backingScaleFactor,
+            height: max(contentSize.height, windowSize.height) * backingScaleFactor
+        )
+        
+        // 最大サイズ制限（メモリ使用量を制御）
+        let maxSize: CGFloat = 3840 // 4Kディスプレイ相当
+        let limitedSize = NSSize(
+            width: min(targetSize.width, maxSize),
+            height: min(targetSize.height, maxSize)
+        )
+        
+        imageManager.setTargetDisplaySize(limitedSize)
+        
+        NSLog("[Performance] Updated display size: %dx%d (scale: %f)", Int(limitedSize.width), Int(limitedSize.height), backingScaleFactor)
+    }
+    
     // MARK: - Reading History Management
     
     /// 履歴から前回の読書位置を復元
@@ -1076,7 +1113,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         guard !currentZipFilename.isEmpty else { return }
         
         if let history = readingHistoryManager.loadReadingPosition(filename: currentZipFilename) {
-            print("[ReadingHistory] Restoring position for \(currentZipFilename): page \(history.page), viewMode \(history.viewMode), offset \(history.spreadPairOffset), rtl \(String(describing: history.isRightToLeftReading))")
+            NSLog("[ReadingHistory] Restoring position for %@: page %d, viewMode %@, offset %d, rtl %@", currentZipFilename, history.page, history.viewMode, history.spreadPairOffset, history.isRightToLeftReading?.description ?? "nil")
             
             // ページ位置を復元
             _ = imageManager.goToPage(history.page)
@@ -1102,9 +1139,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             }
             // 表示モードはセッションごとにデフォルトへ初期化するため、履歴からは復元しない
             
-            print("[ReadingHistory] Position restored successfully")
+            NSLog("[ReadingHistory] Position restored successfully")
         } else {
-            print("[ReadingHistory] No history found for \(currentZipFilename)")
+            NSLog("[ReadingHistory] No history found for %@", currentZipFilename)
         }
     }
     

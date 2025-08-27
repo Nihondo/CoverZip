@@ -139,7 +139,7 @@ struct KeywordSettings: Codable {
         
         if let data = try? encoder.encode(settings) {
             try? data.write(to: settingsURL)
-            print("Default settings file created at: \(settingsURL.path)")
+            NSLog("Default settings file created at: %@", settingsURL.path)
         }
     }
     

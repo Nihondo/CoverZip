@@ -33,6 +33,27 @@ class ImageManager {
     // 見開きの左右組み合わせを1ページ分ずらすためのオフセット（0 or 1）
     private var spreadPairOffset: Int = 0
     
+    // リサイズ画像キャッシュ（サイズ別）
+    private var resizedImageCache: [String: NSImage] = [:]
+    private let maxResizedCacheSize: Int = 20
+    private var targetDisplaySize: NSSize = NSSize.zero
+    
+    /**
+     * 表示対象サイズを設定（パフォーマンス最適化用）
+     * 
+     * @param size 表示対象の最大サイズ（ウィンドウサイズ等）
+     */
+    func setTargetDisplaySize(_ size: NSSize) {
+        guard size.width > 0 && size.height > 0 else { return }
+        
+        if targetDisplaySize != size {
+            targetDisplaySize = size
+            // サイズが変わったらリサイズキャッシュをクリア
+            resizedImageCache.removeAll()
+            NSLog("[ImageManager] Target display size updated to \(Int(size.width))x\(Int(size.height))")
+        }
+    }
+    
     /**
      * ZIPファイルから画像を読み込む
      * 
@@ -43,6 +64,7 @@ class ImageManager {
         imageEntries = extractAllImagesFromZip(at: url)
         currentIndex = 0
         imageCache.removeAll()
+        resizedImageCache.removeAll()
         setupMemoryPressureMonitoring()
         return !imageEntries.isEmpty
     }
@@ -143,13 +165,42 @@ class ImageManager {
             return nil
         }
         
+        // リサイズキャッシュから確認（ターゲットサイズが設定されている場合）
+        if targetDisplaySize.width > 0 && targetDisplaySize.height > 0 {
+            let cacheKey = "\(index)_\(Int(targetDisplaySize.width))x\(Int(targetDisplaySize.height))"
+            if let resizedImage = resizedImageCache[cacheKey] {
+                return resizedImage
+            }
+        }
+        
+        // 元画像キャッシュから確認
         if let cachedImage = imageCache[index] {
+            // ターゲットサイズが設定されていればリサイズして返す
+            if targetDisplaySize.width > 0 && targetDisplaySize.height > 0 {
+                if let resizedImage = resizeImageForDisplay(cachedImage, targetSize: targetDisplaySize) {
+                    cacheResizedImage(resizedImage, at: index, size: targetDisplaySize)
+                    return resizedImage
+                }
+            }
             return cachedImage
         }
         
+        // 画像データから新規作成
         let imageData = imageEntries[index].imageData
         guard let image = NSImage(data: imageData) else {
             return nil
+        }
+        
+        // ターゲットサイズが設定されていればリサイズ
+        if targetDisplaySize.width > 0 && targetDisplaySize.height > 0 {
+            if let resizedImage = resizeImageForDisplay(image, targetSize: targetDisplaySize) {
+                cacheResizedImage(resizedImage, at: index, size: targetDisplaySize)
+                // 元画像もキャッシュ（メモリに余裕があれば）
+                if imageCache.count < maxCacheSize {
+                    cacheImage(image, at: index)
+                }
+                return resizedImage
+            }
         }
         
         cacheImage(image, at: index)
@@ -353,10 +404,83 @@ class ImageManager {
     func clearCache() {
         let currentImage = imageCache[currentIndex]
         imageCache.removeAll()
+        resizedImageCache.removeAll()
         
         if let image = currentImage {
             imageCache[currentIndex] = image
         }
+        NSLog("[ImageManager] All image cache cleared")
+    }
+    
+    // MARK: - Image Resizing Methods
+    
+    /**
+     * 表示用に画像をリサイズする
+     */
+    private func resizeImageForDisplay(_ image: NSImage, targetSize: NSSize) -> NSImage? {
+        let originalSize = image.size
+        
+        // リサイズが不要な場合はそのまま返す
+        if originalSize.width <= targetSize.width && originalSize.height <= targetSize.height {
+            return image
+        }
+        
+        // アスペクト比を維持してリサイズ
+        let scale = min(targetSize.width / originalSize.width, targetSize.height / originalSize.height)
+        let newSize = NSSize(width: originalSize.width * scale, height: originalSize.height * scale)
+        
+        // 高品質リサイズ
+        let resizedImage = NSImage(size: newSize)
+        resizedImage.lockFocus()
+        
+        let context = NSGraphicsContext.current?.cgContext
+        context?.interpolationQuality = .high
+        
+        let rect = NSRect(origin: .zero, size: newSize)
+        image.draw(in: rect, from: NSRect(origin: .zero, size: originalSize), operation: .copy, fraction: 1.0)
+        
+        resizedImage.unlockFocus()
+        
+        NSLog("[ImageManager] Resized image from \(Int(originalSize.width))x\(Int(originalSize.height)) to \(Int(newSize.width))x\(Int(newSize.height))")
+        return resizedImage
+    }
+    
+    /**
+     * リサイズ画像をキャッシュに追加
+     */
+    private func cacheResizedImage(_ image: NSImage, at index: Int, size: NSSize) {
+        let cacheKey = "\(index)_\(Int(size.width))x\(Int(size.height))"
+        
+        // キャッシュサイズ制限チェック
+        if resizedImageCache.count >= maxResizedCacheSize {
+            removeOldestResizedCachedImage()
+        }
+        
+        resizedImageCache[cacheKey] = image
+    }
+    
+    /**
+     * 古いリサイズキャッシュを削除
+     */
+    private func removeOldestResizedCachedImage() {
+        // 簡単な実装：現在ページから最も遠いものを削除
+        guard let firstKey = resizedImageCache.keys.first else { return }
+        
+        var oldestKey = firstKey
+        var maxDistance = 0
+        
+        for key in resizedImageCache.keys {
+            if let indexString = key.components(separatedBy: "_").first,
+               let index = Int(indexString) {
+                let distance = abs(index - currentIndex)
+                if distance > maxDistance {
+                    maxDistance = distance
+                    oldestKey = key
+                }
+            }
+        }
+        
+        resizedImageCache.removeValue(forKey: oldestKey)
     }
     
     deinit {

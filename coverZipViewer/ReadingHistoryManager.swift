@@ -69,7 +69,7 @@ final class ReadingHistoryManager {
         
         saveAllHistories(histories)
         
-    print("[ReadingHistory] Saved: \(normalizedFilename) page \(page) viewMode \(viewMode) offset \(spreadPairOffset) rtl \(isRightToLeftReading)")
+    NSLog("[ReadingHistory] Saved: %@ page %d viewMode %@ offset %d rtl %d", normalizedFilename, page, viewMode, spreadPairOffset, isRightToLeftReading)
     }
     
     /// ZIPファイルの前回読書位置を取得
@@ -82,7 +82,7 @@ final class ReadingHistoryManager {
         let histories = loadAllHistories()
         
         if let history = histories.first(where: { $0.filename == normalizedFilename }) {
-            print("[ReadingHistory] Loaded: \(normalizedFilename) page \(history.lastPageNumber) viewMode \(history.viewMode) offset \(history.spreadPairOffset) rtl \(history.isRightToLeftReading as Any)")
+            NSLog("[ReadingHistory] Loaded: %@ page %d viewMode %@ offset %d rtl %@", normalizedFilename, history.lastPageNumber, history.viewMode, history.spreadPairOffset, history.isRightToLeftReading?.description ?? "nil")
             return (page: history.lastPageNumber, viewMode: history.viewMode, spreadPairOffset: history.spreadPairOffset, isRightToLeftReading: history.isRightToLeftReading)
         }
         
@@ -92,7 +92,7 @@ final class ReadingHistoryManager {
     /// 履歴を全てクリア
     func clearAllHistory() {
         defaults.removeObject(forKey: CZSettingsKeys.readingHistoryData)
-        print("[ReadingHistory] All history cleared")
+        NSLog("[ReadingHistory] All history cleared")
     }
     
     /// 履歴の件数を取得
@@ -118,7 +118,7 @@ final class ReadingHistoryManager {
         do {
             return try JSONDecoder().decode([FileReadingHistory].self, from: data)
         } catch {
-            print("[ReadingHistory] Failed to load histories: \(error)")
+            NSLog("[ReadingHistory] Failed to load histories: %@", error.localizedDescription)
             // 破損したデータの場合は空配列を返す
             return []
         }
@@ -129,7 +129,7 @@ final class ReadingHistoryManager {
             let data = try JSONEncoder().encode(histories)
             defaults.set(data, forKey: CZSettingsKeys.readingHistoryData)
         } catch {
-            print("[ReadingHistory] Failed to save histories: \(error)")
+            NSLog("[ReadingHistory] Failed to save histories: %@", error.localizedDescription)
         }
     }
 }
