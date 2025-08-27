@@ -8,64 +8,49 @@
 import Foundation
 import Combine
 
-enum AppSettingsKeys {
-    static let isRightToLeftReading = "isRightToLeftReading"
-    static let sliderVisibilityWidthThreshold = "sliderVisibilityWidthThreshold"
-    static let alwaysSinglePageForCover = "alwaysSinglePageForCover"
-    static let defaultViewMode = "defaultViewMode" // "auto" | "single" | "spread"
-    static let slideshowInterval = "slideshowInterval"
-    static let restoreWindowFrameEnabled = "restoreWindowFrameEnabled"
-    static let savedWindowFrameString = "savedWindowFrameString"
-}
-
-/// App Group identifier. Must match entitlements.
-enum AppGroupID {
-    static let value: String = "group.com.dmng.CoverZip"
-}
-
 final class AppSettingsWriter: ObservableObject {
     static let shared = AppSettingsWriter()
 
     private let defaults: UserDefaults
     
     @Published var isRightToLeftReading: Bool = true {
-        didSet { defaults.set(isRightToLeftReading, forKey: AppSettingsKeys.isRightToLeftReading) }
+        didSet { defaults.set(isRightToLeftReading, forKey: CZSettingsKeys.isRightToLeftReading) }
     }
     
     @Published var sliderVisibilityWidthThreshold: Double = 600.0 {
-        didSet { defaults.set(sliderVisibilityWidthThreshold, forKey: AppSettingsKeys.sliderVisibilityWidthThreshold) }
+        didSet { defaults.set(sliderVisibilityWidthThreshold, forKey: CZSettingsKeys.sliderVisibilityWidthThreshold) }
     }
     
     @Published var alwaysSinglePageForCover: Bool = true {
-        didSet { defaults.set(alwaysSinglePageForCover, forKey: AppSettingsKeys.alwaysSinglePageForCover) }
+        didSet { defaults.set(alwaysSinglePageForCover, forKey: CZSettingsKeys.alwaysSinglePageForCover) }
     }
     
     @Published var defaultViewMode: ViewModePreference = .auto {
-        didSet { defaults.set(defaultViewMode.rawValue, forKey: AppSettingsKeys.defaultViewMode) }
+        didSet { defaults.set(defaultViewMode.rawValue, forKey: CZSettingsKeys.defaultViewMode) }
     }
     
     @Published var slideshowInterval: Double = 3.0 {
-        didSet { defaults.set(slideshowInterval, forKey: AppSettingsKeys.slideshowInterval) }
+        didSet { defaults.set(slideshowInterval, forKey: CZSettingsKeys.slideshowInterval) }
     }
     
     @Published var restoreWindowFrameEnabled: Bool = true {
-        didSet { defaults.set(restoreWindowFrameEnabled, forKey: AppSettingsKeys.restoreWindowFrameEnabled) }
+        didSet { defaults.set(restoreWindowFrameEnabled, forKey: CZSettingsKeys.restoreWindowFrameEnabled) }
     }
 
     private init() {
-        if let shared = UserDefaults(suiteName: AppGroupID.value) {
+    if let shared = UserDefaults(suiteName: CZAppGroup.identifier) {
             self.defaults = shared
         } else {
             self.defaults = .standard
         }
         // Register defaults (same as in extension)
         self.defaults.register(defaults: [
-            AppSettingsKeys.isRightToLeftReading: true,
-            AppSettingsKeys.sliderVisibilityWidthThreshold: 600.0,
-            AppSettingsKeys.alwaysSinglePageForCover: true,
-            AppSettingsKeys.defaultViewMode: "auto",
-            AppSettingsKeys.slideshowInterval: 3.0,
-            AppSettingsKeys.restoreWindowFrameEnabled: true
+            CZSettingsKeys.isRightToLeftReading: true,
+            CZSettingsKeys.sliderVisibilityWidthThreshold: 600.0,
+            CZSettingsKeys.alwaysSinglePageForCover: true,
+            CZSettingsKeys.defaultViewMode: "auto",
+            CZSettingsKeys.slideshowInterval: 3.0,
+            CZSettingsKeys.restoreWindowFrameEnabled: true
         ])
         
         // Load current values from UserDefaults
@@ -79,23 +64,23 @@ final class AppSettingsWriter: ObservableObject {
     }
     
     private func loadSettings() {
-        isRightToLeftReading = defaults.object(forKey: AppSettingsKeys.isRightToLeftReading) as? Bool ?? true
-        sliderVisibilityWidthThreshold = defaults.object(forKey: AppSettingsKeys.sliderVisibilityWidthThreshold) as? Double ?? 600.0
-        alwaysSinglePageForCover = defaults.object(forKey: AppSettingsKeys.alwaysSinglePageForCover) as? Bool ?? true
-        slideshowInterval = defaults.object(forKey: AppSettingsKeys.slideshowInterval) as? Double ?? 3.0
-        restoreWindowFrameEnabled = defaults.object(forKey: AppSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true
+        isRightToLeftReading = defaults.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
+        sliderVisibilityWidthThreshold = defaults.object(forKey: CZSettingsKeys.sliderVisibilityWidthThreshold) as? Double ?? 600.0
+        alwaysSinglePageForCover = defaults.object(forKey: CZSettingsKeys.alwaysSinglePageForCover) as? Bool ?? true
+        slideshowInterval = defaults.object(forKey: CZSettingsKeys.slideshowInterval) as? Double ?? 3.0
+        restoreWindowFrameEnabled = defaults.object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true
         
-        let rawViewMode = defaults.string(forKey: AppSettingsKeys.defaultViewMode) ?? "auto"
+    let rawViewMode = defaults.string(forKey: CZSettingsKeys.defaultViewMode) ?? "auto"
         defaultViewMode = ViewModePreference(rawValue: rawViewMode) ?? .auto
     }
 
     var savedWindowFrameString: String? {
-        get { defaults.string(forKey: AppSettingsKeys.savedWindowFrameString) }
+    get { defaults.string(forKey: CZSettingsKeys.savedWindowFrameString) }
         set {
             if let value = newValue {
-                defaults.set(value, forKey: AppSettingsKeys.savedWindowFrameString)
+                defaults.set(value, forKey: CZSettingsKeys.savedWindowFrameString)
             } else {
-                defaults.removeObject(forKey: AppSettingsKeys.savedWindowFrameString)
+                defaults.removeObject(forKey: CZSettingsKeys.savedWindowFrameString)
             }
         }
     }

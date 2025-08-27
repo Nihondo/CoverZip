@@ -59,15 +59,14 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         return userPreferredViewMode == .auto
     }
 
-    // App Group UserDefaults ヘルパー（AppSettings 非依存化）
-    private let appGroupID = "group.com.dmng.CoverZip"
-    private func sharedDefaults() -> UserDefaults { UserDefaults(suiteName: appGroupID) ?? .standard }
-    private func loadIsRTL() -> Bool { sharedDefaults().object(forKey: "isRightToLeftReading") as? Bool ?? true }
-    private func loadSliderThreshold() -> CGFloat { CGFloat(sharedDefaults().object(forKey: "sliderVisibilityWidthThreshold") as? Double ?? 600.0) }
-    private func loadAlwaysSinglePageForCover() -> Bool { sharedDefaults().object(forKey: "alwaysSinglePageForCover") as? Bool ?? true }
+    // App Group UserDefaults ヘルパー（共有定義に統一）
+    private func sharedDefaults() -> UserDefaults { UserDefaults(suiteName: CZAppGroup.identifier) ?? .standard }
+    private func loadIsRTL() -> Bool { sharedDefaults().object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true }
+    private func loadSliderThreshold() -> CGFloat { CGFloat(sharedDefaults().object(forKey: CZSettingsKeys.sliderVisibilityWidthThreshold) as? Double ?? 600.0) }
+    private func loadAlwaysSinglePageForCover() -> Bool { sharedDefaults().object(forKey: CZSettingsKeys.alwaysSinglePageForCover) as? Bool ?? true }
     private enum PrefViewMode: String { case auto, single, spread }
-    private func loadDefaultViewMode() -> PrefViewMode { PrefViewMode(rawValue: sharedDefaults().string(forKey: "defaultViewMode") ?? "auto") ?? .auto }
-    private func loadSlideshowInterval() -> Double { sharedDefaults().object(forKey: "slideshowInterval") as? Double ?? 3.0 }
+    private func loadDefaultViewMode() -> PrefViewMode { PrefViewMode(rawValue: sharedDefaults().string(forKey: CZSettingsKeys.defaultViewMode) ?? "auto") ?? .auto }
+    private func loadSlideshowInterval() -> Double { sharedDefaults().object(forKey: CZSettingsKeys.slideshowInterval) as? Double ?? 3.0 }
     
     override var nibName: NSNib.Name? {
         return NSNib.Name("PreviewViewController")
