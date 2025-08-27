@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
    LastUpgradeVersion = "1640"
-   version = "1.7">
+   version = "2.2">
    <BuildAction
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES"
-      buildArchitectures = "Automatic">
+      buildArchitectures = "All">
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"
@@ -18,6 +18,43 @@
                BlueprintIdentifier = "426EFEA92E26708A00AD23E5"
                BuildableName = "CoverZip.app"
                BlueprintName = "CoverZip"
+               ReferencedContainer = "container:CoverZip.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <AutocreatedTestPlanReference>
+            </AutocreatedTestPlanReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "426EFEED2E2670FC00AD23E5"
+               BuildableName = "coverZipExtension.appex"
+               BlueprintName = "coverZipExtension"
+               ReferencedContainer = "container:CoverZip.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "42CD41A42E5AEA6400BA89CA"
+               BuildableName = "coverZipViewer.appex"
+               BlueprintName = "coverZipViewer"
                ReferencedContainer = "container:CoverZip.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
