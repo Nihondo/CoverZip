@@ -46,6 +46,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var windowObservers: [NSObjectProtocol] = []
     // セッション中にユーザーがウィンドウをリサイズしたか
     private var hasUserResizedWindow: Bool = false
+    // 履歴から綴じ方向を復元済みか（既定で上書きしないためのフラグ）
+    private var didRestoreRTLFromHistory: Bool = false
     
     // 表示モード
     enum ViewMode {
@@ -219,7 +221,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // レイアウト完了後のサイズで初回画像を再フィット
         // 設定の変更を反映
     let newRTL = loadIsRTL()
-        if newRTL != isRightToLeftReading { isRightToLeftReading = newRTL; applySliderLayoutDirection(); syncSliderToCurrentPage() }
+        if !didRestoreRTLFromHistory && newRTL != isRightToLeftReading {
+            isRightToLeftReading = newRTL
+            applySliderLayoutDirection()
+            syncSliderToCurrentPage()
+        }
     let newThreshold = loadSliderThreshold()
         if newThreshold != sliderVisibilityWidthThreshold { sliderVisibilityWidthThreshold = newThreshold; updateSliderVisibilityForContext() }
     
@@ -282,11 +288,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         stopSlideshow()
         isSlideshowEnabled = false
         
-        // ファイル名を保存（履歴管理用）
-        currentZipFilename = url.lastPathComponent
+    // ファイル名を保存（履歴管理用）
+    currentZipFilename = url.lastPathComponent
         
-        // 読み方向をデフォルトの右綴じ（RTL）にリセット
-        isRightToLeftReading = true
+    // まずはグローバル設定の既定を適用（履歴があれば後で上書き）
+    didRestoreRTLFromHistory = false
+    isRightToLeftReading = loadIsRTL()
         
         // ZIPファイルから画像を読み込む
         if imageManager.loadImages(from: url) {
@@ -536,46 +543,51 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // 表示モード切替アクション
     @objc private func setViewModeAuto(_ sender: NSMenuItem) {
         userPreferredViewMode = .auto
-        sharedDefaults().set("auto", forKey: "defaultViewMode")
         displayCurrentImage()
         updateContextMenuStates()
+    // 履歴を保存（表示モード変更）
+    saveReadingPositionToHistory()
     }
     
     @objc private func setViewModeSingle(_ sender: NSMenuItem) {
         userPreferredViewMode = .single
-        sharedDefaults().set("single", forKey: "defaultViewMode")
         displayCurrentImage()
         updateContextMenuStates()
+    // 履歴を保存（表示モード変更）
+    saveReadingPositionToHistory()
     }
     
     @objc private func setViewModeSpread(_ sender: NSMenuItem) {
         userPreferredViewMode = .spread
-        sharedDefaults().set("spread", forKey: "defaultViewMode")
         displayCurrentImage()
         updateContextMenuStates()
+    // 履歴を保存（表示モード変更）
+    saveReadingPositionToHistory()
     }
     
     // 読み方向切替アクション
     @objc private func setRightToLeft(_ sender: NSMenuItem) {
         isRightToLeftReading = true
-        sharedDefaults().set(isRightToLeftReading, forKey: "isRightToLeftReading")
         
         // UI要素を即座に更新
         applySliderLayoutDirection()
         syncSliderToCurrentPage()
         displayCurrentImage()
         updateContextMenuStates()
+    // 履歴を保存
+    saveReadingPositionToHistory()
     }
     
     @objc private func setLeftToRight(_ sender: NSMenuItem) {
         isRightToLeftReading = false
-        sharedDefaults().set(isRightToLeftReading, forKey: "isRightToLeftReading")
         
         // UI要素を即座に更新
         applySliderLayoutDirection()
         syncSliderToCurrentPage()
         displayCurrentImage()
         updateContextMenuStates()
+    // 履歴を保存
+    saveReadingPositionToHistory()
     }
     
     @objc private func toggleReadingDirection(_ sender: NSMenuItem) {
@@ -586,12 +598,14 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         sender.state = !isRightToLeftReading ? .on : .off
         
         // 設定を保存
-        sharedDefaults().set(isRightToLeftReading, forKey: "isRightToLeftReading")
+    // セッション内のみ反映（永続化しない）
         
         // UI要素を即座に更新
         applySliderLayoutDirection()
         syncSliderToCurrentPage()
         displayCurrentImage()
+    // 履歴を保存
+    saveReadingPositionToHistory()
     }
     
     @objc private func toggleSlideshow(_ sender: NSMenuItem) {
@@ -850,17 +864,17 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         sender.state = isTransitionEnabled ? .on : .off
     }
 
-    // 保存フレーム読み出し/保存（AppSettingsに統一）
+    // 保存フレーム読み出し/保存（共有UserDefaultsに統一）
     private func loadRestoreWindowFrameEnabled() -> Bool {
-        AppSettings.shared.restoreWindowFrameEnabled
+        return sharedDefaults().object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true
     }
     private func loadSavedWindowFrame() -> NSRect? {
-        guard let s = AppSettings.shared.savedWindowFrameString else { return nil }
+        guard let s = sharedDefaults().string(forKey: CZSettingsKeys.savedWindowFrameString) else { return nil }
         return NSRectFromString(s)
     }
     private func saveWindowFrameIfEnabled() {
-        guard AppSettings.shared.restoreWindowFrameEnabled, let win = view.window else { return }
-        AppSettings.shared.savedWindowFrameString = NSStringFromRect(win.frame)
+        guard (sharedDefaults().object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true), let win = view.window else { return }
+        sharedDefaults().set(NSStringFromRect(win.frame), forKey: CZSettingsKeys.savedWindowFrameString)
     }
 
     private func setImageSafely(_ image: NSImage?, toImageView imageView: NSImageView?) {
@@ -1055,7 +1069,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         guard !currentZipFilename.isEmpty else { return }
         
         if let history = readingHistoryManager.loadReadingPosition(filename: currentZipFilename) {
-            print("[ReadingHistory] Restoring position for \(currentZipFilename): page \(history.page), viewMode \(history.viewMode), offset \(history.spreadPairOffset)")
+            print("[ReadingHistory] Restoring position for \(currentZipFilename): page \(history.page), viewMode \(history.viewMode), offset \(history.spreadPairOffset), rtl \(String(describing: history.isRightToLeftReading))")
             
             // ページ位置を復元
             _ = imageManager.goToPage(history.page)
@@ -1063,10 +1077,22 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             // 見開きオフセットを復元
             imageManager.setSpreadPairOffset(history.spreadPairOffset)
             
-            // 表示モードを復元（ユーザー設定より履歴を優先）
-            if AppSettings.ViewModePreference(rawValue: history.viewMode) != nil {
-                userPreferredViewMode = PrefViewMode(rawValue: history.viewMode) ?? .auto
+            // 綴じ方向を復元（履歴にあれば）
+            if let rtl = history.isRightToLeftReading {
+                isRightToLeftReading = rtl
+                didRestoreRTLFromHistory = true
+                applySliderLayoutDirection()
+                syncSliderToCurrentPage()
+                updateContextMenuStates()
             }
+            
+            // 表示モードを履歴から復元（グローバルのデフォルトは変更しない）
+            if let restored = PrefViewMode(rawValue: history.viewMode) {
+                userPreferredViewMode = restored
+                if imageManager.hasImages() { displayCurrentImage() }
+                updateContextMenuStates()
+            }
+            // 表示モードはセッションごとにデフォルトへ初期化するため、履歴からは復元しない
             
             print("[ReadingHistory] Position restored successfully")
         } else {
@@ -1086,7 +1112,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             filename: currentZipFilename,
             page: currentPage,
             viewMode: currentViewMode,
-            spreadPairOffset: currentOffset
+            spreadPairOffset: currentOffset,
+            isRightToLeftReading: isRightToLeftReading
         )
     }
 

@@ -13,6 +13,7 @@ struct FileReadingHistory: Codable {
     let lastAccessDate: Date       // 最終アクセス日時
     let viewMode: String           // 表示モード（"single"/"spread"/"auto"）
     let spreadPairOffset: Int      // 見開きペアリングオフセット
+    let isRightToLeftReading: Bool? // 綴じ方向（nilの場合は履歴なし = 既定に従う）
 }
 
 final class ReadingHistoryManager {
@@ -39,7 +40,7 @@ final class ReadingHistoryManager {
     }
     
     /// ZIPファイルの読書位置を保存
-    func saveReadingPosition(filename: String, page: Int, viewMode: String, spreadPairOffset: Int) {
+    func saveReadingPosition(filename: String, page: Int, viewMode: String, spreadPairOffset: Int, isRightToLeftReading: Bool) {
         guard isEnabled else { return }
         
         let normalizedFilename = normalizeFilename(filename)
@@ -56,7 +57,8 @@ final class ReadingHistoryManager {
             lastPageNumber: page,
             lastAccessDate: Date(),
             viewMode: viewMode,
-            spreadPairOffset: spreadPairOffset
+            spreadPairOffset: spreadPairOffset,
+            isRightToLeftReading: isRightToLeftReading
         )
         histories.insert(newHistory, at: 0)
         
@@ -67,11 +69,11 @@ final class ReadingHistoryManager {
         
         saveAllHistories(histories)
         
-        print("[ReadingHistory] Saved: \(normalizedFilename) page \(page) viewMode \(viewMode) offset \(spreadPairOffset)")
+    print("[ReadingHistory] Saved: \(normalizedFilename) page \(page) viewMode \(viewMode) offset \(spreadPairOffset) rtl \(isRightToLeftReading)")
     }
     
     /// ZIPファイルの前回読書位置を取得
-    func loadReadingPosition(filename: String) -> (page: Int, viewMode: String, spreadPairOffset: Int)? {
+    func loadReadingPosition(filename: String) -> (page: Int, viewMode: String, spreadPairOffset: Int, isRightToLeftReading: Bool?)? {
         guard isEnabled else { return nil }
         
         let normalizedFilename = normalizeFilename(filename)
@@ -80,8 +82,8 @@ final class ReadingHistoryManager {
         let histories = loadAllHistories()
         
         if let history = histories.first(where: { $0.filename == normalizedFilename }) {
-            print("[ReadingHistory] Loaded: \(normalizedFilename) page \(history.lastPageNumber) viewMode \(history.viewMode) offset \(history.spreadPairOffset)")
-            return (page: history.lastPageNumber, viewMode: history.viewMode, spreadPairOffset: history.spreadPairOffset)
+            print("[ReadingHistory] Loaded: \(normalizedFilename) page \(history.lastPageNumber) viewMode \(history.viewMode) offset \(history.spreadPairOffset) rtl \(history.isRightToLeftReading as Any)")
+            return (page: history.lastPageNumber, viewMode: history.viewMode, spreadPairOffset: history.spreadPairOffset, isRightToLeftReading: history.isRightToLeftReading)
         }
         
         return nil
