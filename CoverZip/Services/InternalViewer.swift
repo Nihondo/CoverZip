@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import ApplicationServices
 import QuickLook
 import QuickLookUI
 
@@ -13,26 +14,110 @@ final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
     static let shared = InternalViewer()
 
     private var currentURL: URL?
+    // 埋め込みウィンドウ管理
+    private var embeddedWindows: [NSWindow] = []
+    private var windowKeyMonitors: [Int: [Any]] = [:]
+    private static var didPromptAX = false
 
-    // 公開API: 内蔵ビューアでZIPを表示
+    // 公開API: 内蔵ビューアでZIPを表示（QLPreviewViewを埋め込み）
     func show(url: URL) {
-        currentURL = url
-
         // アプリを前面に
         NSApp.activate(ignoringOtherApps: true)
 
-        guard let panel = QLPreviewPanel.shared() else {
-            // まれにnilの場合があるため安全にフォールバック
-            if let url = currentURL {
-                _ = NSWorkspace.shared.open(url)
-            }
-            return
+        // アクセシビリティ権限を事前チェック（必要ならプロンプト）
+        if !AXIsProcessTrusted() && !Self.didPromptAX {
+            let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+            let options = [key: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+            Self.didPromptAX = true
+            NSLog("[EmbeddedQL] Requested Accessibility permission for CGEvent posting")
         }
 
-        panel.dataSource = self
-        panel.delegate = self
-        panel.makeKeyAndOrderFront(nil)
-        panel.reloadData()
+        // ウィンドウ生成
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 960, height: 720),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = url.lastPathComponent
+        window.center()
+
+        guard let content = window.contentView else { return }
+        // QLPreviewView を生成
+        let pv = QLPreviewView(frame: .zero, style: .normal)
+        if pv == nil {
+            // フォールバック: 共有パネル
+            currentURL = url
+            if let panel = QLPreviewPanel.shared() {
+                panel.dataSource = self
+                panel.delegate = self
+                panel.makeKeyAndOrderFront(nil)
+                panel.reloadData()
+                return
+            } else {
+                _ = NSWorkspace.shared.open(url)
+                return
+            }
+        }
+        guard let previewView = pv else { return }
+
+        previewView.translatesAutoresizingMaskIntoConstraints = false
+        previewView.shouldCloseWithWindow = true
+        previewView.autoresizesSubviews = true
+        content.addSubview(previewView)
+        NSLayoutConstraint.activate([
+            previewView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            previewView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            previewView.topAnchor.constraint(equalTo: content.topAnchor),
+            previewView.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+        ])
+
+        previewView.previewItem = url as NSURL
+        window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(previewView)
+
+        embeddedWindows.append(window)
+
+        // 左右キーでプレビュー内クリックを合成（拡張側のクリック遷移を呼ぶ）
+        let addMonitors: () -> Void = { [weak self, weak window, weak previewView] in
+            guard let self, let window, let previewView else { return }
+            var monitors: [Any] = []
+            if let m1 = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak window, weak previewView] event -> NSEvent? in
+                guard let win = window, win.isKeyWindow, let pv = previewView else { return event }
+                switch Int(event.keyCode) {
+                case 123: // ← 左半分
+                    NSLog("[EmbeddedQL] keyDown ← (code=%d, isKey=%d)", Int(event.keyCode), win.isKeyWindow ? 1 : 0)
+                    Self.synthesizeClick(in: pv, window: win, onLeftHalf: true)
+                    return nil
+                case 124: // → 右半分
+                    NSLog("[EmbeddedQL] keyDown → (code=%d, isKey=%d)", Int(event.keyCode), win.isKeyWindow ? 1 : 0)
+                    Self.synthesizeClick(in: pv, window: win, onLeftHalf: false)
+                    return nil
+                default:
+                    return event
+                }
+            }) { monitors.append(m1) }
+
+            if let m2 = NSEvent.addLocalMonitorForEvents(matching: .keyUp, handler: { event -> NSEvent? in
+                let code = Int(event.keyCode)
+                if code == 123 || code == 124 { return nil }
+                return event
+            }) { monitors.append(m2) }
+
+            self.windowKeyMonitors[window.windowNumber] = monitors
+        }
+
+        addMonitors()
+
+        // ウィンドウクローズ時にクリーンアップ
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] note in
+            guard let self, let win = note.object as? NSWindow else { return }
+            if let monitors = self.windowKeyMonitors.removeValue(forKey: win.windowNumber) {
+                for m in monitors { NSEvent.removeMonitor(m) }
+            }
+            self.embeddedWindows.removeAll { $0 == win }
+        }
     }
 
     // MARK: - QLPreviewPanelDataSource
@@ -41,7 +126,7 @@ final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
     }
 
     func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
-        // NSURLはQLPreviewItemに準拠
+        // 既存API互換のため残すが、現在は未使用
         return currentURL as NSURL?
     }
 
@@ -49,5 +134,56 @@ final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
     func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
         // ここで独自のキーハンドリング等を行いたい場合に拡張
         return false
+    }
+}
+
+// MARK: - Helpers
+private extension InternalViewer {
+    static func synthesizeClick(in previewView: QLPreviewView, window: NSWindow, onLeftHalf: Bool) {
+        let bounds = previewView.bounds
+        guard bounds.width > 1, bounds.height > 1 else { return }
+        let x = onLeftHalf ? bounds.width * 0.25 : bounds.width * 0.75
+        let y = bounds.height * 0.5
+        let pointInView = NSPoint(x: x, y: y)
+        let pointInWindow = previewView.convert(pointInView, to: nil)
+
+    NSLog("[EmbeddedQL] synthesizeClick side=%@ view=(%.1f,%.1f) window=(%.1f,%.1f) bounds=%@", onLeftHalf ? "left" : "right", x, y, pointInWindow.x, pointInWindow.y, NSStringFromRect(bounds))
+
+        func post(_ type: NSEvent.EventType) {
+            if let ev = NSEvent.mouseEvent(
+                with: type,
+                location: pointInWindow,
+                modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 1.0
+            ) {
+                NSLog("[EmbeddedQL] postEvent %@ at window=(%.1f,%.1f)", String(describing: type), pointInWindow.x, pointInWindow.y)
+                NSApp.postEvent(ev, atStart: false)
+            }
+        }
+        post(.leftMouseDown)
+        post(.leftMouseUp)
+
+        // フォールバック: CGEvent（グローバル）
+        guard AXIsProcessTrusted() else {
+            NSLog("[EmbeddedQL] Accessibility not trusted; skip CGEvent posting")
+            return
+        }
+        let screenPoint = window.convertPoint(toScreen: pointInWindow)
+        let totalMaxY = NSScreen.screens.map { $0.frame.maxY }.max() ?? screenPoint.y
+        let cgPoint = CGPoint(x: screenPoint.x, y: totalMaxY - screenPoint.y)
+        NSLog("[EmbeddedQL] CGEvent click at screen=(%.1f,%.1f) (from window=(%.1f,%.1f))", cgPoint.x, cgPoint.y, screenPoint.x, screenPoint.y)
+        if let down = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: cgPoint, mouseButton: .left),
+           let up = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: cgPoint, mouseButton: .left) {
+            down.post(tap: .cghidEventTap)
+            up.post(tap: .cghidEventTap)
+            NSLog("[EmbeddedQL] CGEvent posted (down/up)")
+        } else {
+            NSLog("[EmbeddedQL] CGEvent create failed")
+        }
     }
 }
