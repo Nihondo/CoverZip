@@ -17,7 +17,7 @@ struct CoverZipApp: App {
     }
     
     var body: some Scene {
-        Settings {
+    Settings {
             TabView {
                 RoutingSettingsView()
                     .tabItem {
@@ -35,6 +35,7 @@ struct CoverZipApp: App {
             }
             .frame(minWidth: 500, minHeight: 550)
         }
+        .commands { FileMenuCommands() }
     }
     
     /**

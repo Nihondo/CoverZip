@@ -74,17 +74,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let fullPath = url.path
         let matchResult = KeywordMatcher.checkKeyword(for: fileName, fullPath: fullPath, using: settings)
         
-        // 外部アプリケーションで開く（元のファイルURLを直接使用）
-        if let application = matchResult.matchedApplication {
-            NSLog("外部アプリケーション起動: \(application)")
-            _ = AppLauncher.launchApplication(with: url, applicationName: application)
+        // ルーティング結果に基づいて起動
+        if let application = matchResult.matchedApplication, !application.isEmpty {
+            if application.lowercased() == "internal" {
+                NSLog("内蔵ビューアで表示: internal")
+                InternalViewer.shared.show(url: url)
+                return true
+            } else {
+                NSLog("外部アプリケーション起動: \(application)")
+                _ = AppLauncher.launchApplication(with: url, applicationName: application)
+            }
         } else {
             NSLog("デフォルトアプリケーション起動")
             _ = AppLauncher.launchWithDefaultApplication(zipFileURL: url)
         }
         
-        NSLog("外部アプリケーション起動、CoverZipを終了します")
-        NSApplication.shared.terminate(nil)
+    NSLog("外部アプリケーション起動、CoverZipを終了します")
+    NSApplication.shared.terminate(nil)
         
         return true
     }

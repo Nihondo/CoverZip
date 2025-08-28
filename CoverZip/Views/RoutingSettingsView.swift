@@ -26,6 +26,9 @@ struct RoutingSettingsView: View {
             Text("ZIPファイル名に基づいて適切なアプリケーションを自動起動します")
                 .font(.caption)
                 .foregroundColor(.secondary)
+            Text("application に 'internal' を指定すると内蔵ビューアで開きます")
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
     }
     
@@ -56,7 +59,7 @@ struct RoutingSettingsView: View {
   "keywords": {
     "コミック": {
       "type": "filename",
-      "application": "YourComicViewer.app",
+      "application": "internal",
       "matchMode": "contains"
     },
     "backup_*": {
