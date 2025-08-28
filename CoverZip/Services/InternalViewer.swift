@@ -9,6 +9,17 @@ import AppKit
 import ApplicationServices
 import QuickLook
 import QuickLookUI
+import Foundation
+
+// Fallback shim for shared settings when CZAppGroup/CZSettingsKeys are not visible in this target
+private enum CZShim {
+    static let appGroupID = "group.com.dmng.CoverZip"
+    enum Keys {
+        static let isRightToLeftReading = "isRightToLeftReading"
+        static let defaultViewMode = "defaultViewMode" // "auto" | "single" | "spread"
+        static let pageTransitionEnabled = "pageTransitionEnabled"
+    }
+}
 
 final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     static let shared = InternalViewer()
@@ -21,8 +32,8 @@ final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
 
     // 公開API: 内蔵ビューアでZIPを表示（QLPreviewViewを埋め込み）
     func show(url: URL) {
-        // アプリを前面に
-        NSApp.activate(ignoringOtherApps: true)
+    // アプリを前面に
+    NSApp.activate(ignoringOtherApps: true)
 
         // アクセシビリティ権限を事前チェック（必要ならプロンプト）
         if !AXIsProcessTrusted() && !Self.didPromptAX {
@@ -40,10 +51,10 @@ final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
             backing: .buffered,
             defer: false
         )
-        window.title = url.lastPathComponent
+    window.title = url.lastPathComponent
         window.center()
 
-        guard let content = window.contentView else { return }
+    guard let content = window.contentView else { return }
         // QLPreviewView を生成
         let pv = QLPreviewView(frame: .zero, style: .normal)
         if pv == nil {
@@ -78,6 +89,8 @@ final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
         window.makeFirstResponder(previewView)
 
         embeddedWindows.append(window)
+
+    // コンテキストメニューは拡張側で右クリック/Control-クリックをフックして表示する
 
         // 左右キーでプレビュー内クリックを合成（拡張側のクリック遷移を呼ぶ）
         let addMonitors: () -> Void = { [weak self, weak window, weak previewView] in
@@ -119,6 +132,105 @@ final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
             self.embeddedWindows.removeAll { $0 == win }
         }
     }
+    // 共有UserDefaults
+    func sharedDefaults() -> UserDefaults { UserDefaults(suiteName: CZShim.appGroupID) ?? .standard }
+
+    func makeContextMenu() -> NSMenu {
+        let menu = NSMenu()
+
+        // 読み方向
+    let isRTL = sharedDefaults().object(forKey: CZShim.Keys.isRightToLeftReading) as? Bool ?? true
+        let rightToLeftItem = NSMenuItem(title: "右綴じ", action: #selector(setRightToLeft(_:)), keyEquivalent: "")
+        rightToLeftItem.target = self
+        rightToLeftItem.state = isRTL ? .on : .off
+        menu.addItem(rightToLeftItem)
+
+        let leftToRightItem = NSMenuItem(title: "左綴じ", action: #selector(setLeftToRight(_:)), keyEquivalent: "")
+        leftToRightItem.target = self
+        leftToRightItem.state = !isRTL ? .on : .off
+        menu.addItem(leftToRightItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // 表示モード
+    let currentMode = sharedDefaults().string(forKey: CZShim.Keys.defaultViewMode) ?? "auto"
+        let autoModeItem = NSMenuItem(title: "自動", action: #selector(setViewModeAuto(_:)), keyEquivalent: "")
+        autoModeItem.target = self
+        autoModeItem.state = currentMode == "auto" ? .on : .off
+        menu.addItem(autoModeItem)
+
+        let singleModeItem = NSMenuItem(title: "単ページ", action: #selector(setViewModeSingle(_:)), keyEquivalent: "")
+        singleModeItem.target = self
+        singleModeItem.state = currentMode == "single" ? .on : .off
+        menu.addItem(singleModeItem)
+
+        let spreadModeItem = NSMenuItem(title: "見開き", action: #selector(setViewModeSpread(_:)), keyEquivalent: "")
+        spreadModeItem.target = self
+        spreadModeItem.state = currentMode == "spread" ? .on : .off
+        menu.addItem(spreadModeItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // ページ送りアニメ
+    let transitionEnabled = sharedDefaults().object(forKey: CZShim.Keys.pageTransitionEnabled) as? Bool ?? true
+        let transitionItem = NSMenuItem(title: "ページ送りアニメ", action: #selector(toggleTransition(_:)), keyEquivalent: "")
+        transitionItem.target = self
+        transitionItem.state = transitionEnabled ? .on : .off
+        menu.addItem(transitionItem)
+
+        // スライドショー
+        let slideshowItem = NSMenuItem(title: "スライドショー", action: #selector(toggleSlideshow(_:)), keyEquivalent: "")
+        slideshowItem.target = self
+        // 状態はプレイヤの状態に依存するためオフで開始
+        slideshowItem.state = .off
+        menu.addItem(slideshowItem)
+
+        return menu
+    }
+
+    // MARK: Actions (App側)
+    @objc func setRightToLeft(_ sender: NSMenuItem) {
+    sharedDefaults().set(true, forKey: CZShim.Keys.isRightToLeftReading)
+        sender.state = .on
+        (sender.menu?.item(withTitle: "左綴じ"))?.state = .off
+        // 反映は拡張側に任せる（Shared Defaults参照）
+    }
+
+    @objc func setLeftToRight(_ sender: NSMenuItem) {
+    sharedDefaults().set(false, forKey: CZShim.Keys.isRightToLeftReading)
+        sender.state = .on
+        (sender.menu?.item(withTitle: "右綴じ"))?.state = .off
+    }
+
+    @objc func setViewModeAuto(_ sender: NSMenuItem) {
+    sharedDefaults().set("auto", forKey: CZShim.Keys.defaultViewMode)
+        updateModeStates(sender)
+    }
+    @objc func setViewModeSingle(_ sender: NSMenuItem) {
+    sharedDefaults().set("single", forKey: CZShim.Keys.defaultViewMode)
+        updateModeStates(sender)
+    }
+    @objc func setViewModeSpread(_ sender: NSMenuItem) {
+    sharedDefaults().set("spread", forKey: CZShim.Keys.defaultViewMode)
+        updateModeStates(sender)
+    }
+    private func updateModeStates(_ sender: NSMenuItem) {
+        for t in ["自動","単ページ","見開き"] { sender.menu?.item(withTitle: t)?.state = .off }
+        sender.state = .on
+    }
+
+    @objc func toggleTransition(_ sender: NSMenuItem) {
+    let cur = sharedDefaults().object(forKey: CZShim.Keys.pageTransitionEnabled) as? Bool ?? true
+        let next = !cur
+    sharedDefaults().set(next, forKey: CZShim.Keys.pageTransitionEnabled)
+        sender.state = next ? .on : .off
+    }
+
+    @objc func toggleSlideshow(_ sender: NSMenuItem) {
+        // この場では状態のみ表示を切替。実動作は拡張側/プレビュー側で。
+        sender.state = (sender.state == .on) ? .off : .on
+    }
+
 
     // MARK: - QLPreviewPanelDataSource
     func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int {

@@ -104,6 +104,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 guard let p = self.convertEventPointToView(event) else { return event }
                 // 自ビュー領域内の時は吸収（NSControl上は通す）
                 guard self.view.bounds.contains(p) else { return event }
+                // Control-クリックはコンテキストメニューを表示
+                if event.modifierFlags.contains(.control) {
+                    let menu = self.makeContextMenu()
+                    menu.popUp(positioning: nil, at: p, in: self.view)
+                    return nil
+                }
                 // スライダーなどのNSControl（やそのサブビュー）上のクリックは通す（ただしimageView配下は除外）
                 if self.isPointInsidePassThroughControl(p) {
                     // A案: スライダートラック上クリック時は即時に値を反映してアクション実行（イベントは通す）
@@ -119,6 +125,16 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return event
         }) {
             mouseMonitors.append(down)
+        }
+        // 右クリックで拡張のメニューを確実に表示（QLPreviewView 埋め込みでも有効化）
+        if let rdown = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown, handler: { [weak self] event -> NSEvent? in
+            guard let self else { return event }
+            guard self.view.window != nil, let p = self.convertEventPointToView(event), self.view.bounds.contains(p) else { return event }
+            let menu = self.makeContextMenu()
+            menu.popUp(positioning: nil, at: p, in: self.view)
+            return nil
+        }) {
+            mouseMonitors.append(rdown)
         }
         if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }

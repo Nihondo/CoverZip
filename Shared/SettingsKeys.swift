@@ -11,6 +11,7 @@ public enum CZSettingsKeys {
     public static let alwaysSinglePageForCover = "alwaysSinglePageForCover"
     public static let defaultViewMode = "defaultViewMode" // "auto" | "single" | "spread"
     public static let slideshowInterval = "slideshowInterval"
+    public static let pageTransitionEnabled = "pageTransitionEnabled"
     // Window frame persistence
     public static let restoreWindowFrameEnabled = "restoreWindowFrameEnabled"
     public static let savedWindowFrameString = "savedWindowFrameString"

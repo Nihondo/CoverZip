@@ -4,14 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-CoverZipは、三つの独立した機能を持つmacOSアプリケーションです：
+CoverZipは、四つの独立した機能を持つmacOSアプリケーションです：
 1. **QuickLook Thumbnail Extension** - ZIPファイル内の先頭画像を使用したサムネイル生成
 2. **QuickLook Preview Extension** - ZIPファイル内画像のフルスクリーンプレビューとページング機能
 3. **ZIPファイルルーティングアプリケーション** - ファイル名キーワードマッチングによる外部アプリケーション自動起動
+4. **内蔵ビューア** - QLPreviewViewを使用したメインアプリ内でのZIP画像表示機能
 
 ## アーキテクチャ
 
-### 三つの独立したコンポーネント
+### 四つの独立したコンポーネント
 
 #### 1. QuickLook Thumbnail Extension (`coverZipExtension/`)
 - **ThumbnailProvider.swift** - QuickLookサムネイル拡張機能のエントリーポイント
@@ -43,11 +44,13 @@ CoverZipは、三つの独立した機能を持つmacOSアプリケーション�
   - スライダー表示閾値設定
 
 #### 3. ZIPファイルルーティングアプリケーション (`CoverZip/`)
-- **CoverZipApp.swift (AppDelegate)** - ファイル処理とアプリケーション制御
+- **CoverZipApp.swift + AppDelegate.swift** - ファイル処理とアプリケーション制御
   - 複数のファイル開くメソッド実装（`application:openFile:`, `application:open:urls:`等）
   - ZIPファイル名でのキーワードマッチング実行
+  - "internal"キーワード対応（内蔵ビューア起動）
   - 外部アプリケーション起動後の自動終了機能
   - Settings sceneによるバックグラウンド動作
+  - FileMenuCommands（Cmd+Oでファイル選択）
 
 - **Services/KeywordMatcher.swift** - ファイル名ベースのマッチング
   - ZIPファイル名（拡張子除去）からキーワード抽出
@@ -66,6 +69,22 @@ CoverZipは、三つの独立した機能を持つmacOSアプリケーション�
   - JSON設定ファイルの読み込み・書き込み
   - キーワード→アプリケーション名のマッピング管理
 
+#### 4. 内蔵ビューア (`CoverZip/Services/InternalViewer.swift`)
+- **InternalViewer.swift** - QLPreviewViewを使用した埋め込みビューア
+  - 独立したウィンドウでZIPファイル内画像を表示
+  - QLPreviewViewによるQuickLook Extension機能の活用
+  - キーボード操作（←/→キー）でのページナビゲーション
+  - CGEvent/NSEventによる合成クリック機能
+  - コンテキストメニューによる設定変更（読み方向、表示モード等）
+  - App Group設定との連携
+
+- **Services/FileOpenPanelService.swift** - ファイル選択ダイアログ
+  - NSOpenPanelによるZIPファイル選択
+  - 内蔵ビューアへの直接ルーティング
+
+- **Commands/FileMenuCommands.swift** - メニュー統合
+  - "ZIPを開く..."メニューアイテム（Cmd+O）
+
 ### App Extension制約への対応
 - サンドボックス環境での動作保証
 - メモリ使用量の最適化（8MBバッファ制限）
@@ -74,11 +93,15 @@ CoverZipは、三つの独立した機能を持つmacOSアプリケーション�
 ### プロジェクト構造
 - `CoverZip/` - SwiftUIベースのメインアプリケーション（Settings scene使用）
   - `CoverZipApp.swift` - AppDelegateによるファイル処理制御
+  - `AppDelegate.swift` - ファイルオープン処理とルーティングロジック
   - `Services/` - ビジネスロジック層
     - `KeywordMatcher.swift` - ファイル名マッチング
     - `AppLauncher.swift` - 外部アプリ起動
     - `SettingsFileManager.swift` - 設定ファイル管理
     - `AppSettings.swift` - App Group共有設定
+    - `InternalViewer.swift` - QLPreviewView埋め込みビューア
+    - `FileOpenPanelService.swift` - ファイル選択ダイアログ
+  - `Commands/FileMenuCommands.swift` - メニューコマンド
   - `Models/KeywordSettings.swift` - JSON設定データモデル
 - `coverZipExtension/` - QuickLook Thumbnail Extension
   - `ThumbnailProvider.swift` - サムネイル生成エントリーポイント
@@ -134,9 +157,18 @@ pluginkit -m | grep -i coverzip
 ### 主要な設計パターン
 
 #### 1. アプリケーション起動フロー
+
+**ファイルドロップ/ダブルクリック時:**
 ```
 ZIPファイルドロップ → AppDelegate:application:open:urls: → 
-processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
+processZipFile → KeywordMatcher → "internal"判定 → InternalViewer.show() (継続実行)
+                              → 外部アプリ判定 → AppLauncher → NSApplication.terminate
+```
+
+**メニューから開く時 (Cmd+O):**
+```
+FileMenuCommands → FileOpenPanelService.presentAndOpenZip() → 
+InternalViewer.show() (常に内蔵ビューアで表示)
 ```
 
 #### 2. Extension設定
@@ -158,13 +190,34 @@ processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
 - Cmd+,でアクセス可能な設定ファイル編集ボタン提供
 
 ### 実装のポイント
-1. **責任分離**: 3つのコンポーネント（Thumbnail、Preview、App）の明確な分離
+1. **責任分離**: 4つのコンポーネント（Thumbnail、Preview、App、Internal Viewer）の明確な分離
 2. **純Swift実装**: 外部ライブラリに依存しない軽量設計
 3. **メモリ最適化**: 8MBバッファによる制御されたメモリ使用
-4. **即座終了**: 外部アプリ起動後の自動終了でリソース解放
+4. **柔軟な起動制御**: 外部アプリ起動時は自動終了、内蔵ビューア時は継続実行
 5. **一時ファイル管理**: サンドボックス制約に対応した一時ファイル作成・削除
-6. **App Group共有**: Preview ExtensionとMain Appで設定を共有
+6. **App Group共有**: Extension群とMain Appで設定を共有
 7. **UIレスポンシブ設計**: ウィンドウ幅に応じてUIコンポーネント表示を動的制御
+8. **QLPreview統合**: 内蔵ビューアはQuickLook Extensionの機能をそのまま活用
+9. **キーボードイベント合成**: CGEvent/NSEventによる左右キーナビゲーション
+10. **アクセシビリティ権限**: グローバルイベントポスト用の権限管理
+
+## 内蔵ビューアの技術詳細
+
+### QLPreviewView 埋め込みアーキテクチャ
+- **NSWindowベース**: 独立したウィンドウでQLPreviewViewを埋め込み
+- **フォールバック機構**: QLPreviewView生成失敗時は共有パネル経由で表示
+- **ウィンドウ管理**: 複数ウィンドウ対応とクリーンアップ処理
+
+### キーボードナビゲーション実装
+- **イベントモニター**: NSEvent.addLocalMonitorForEventsでキー入力監視
+- **合成クリック**: CGEventによるグローバルクリックイベント生成
+- **アクセシビリティ**: AXIsProcessTrusted()による権限チェック
+- **フォールバック**: NSApp.postEvent()によるローカルイベント送信
+
+### コンテキストメニュー機能
+- **設定統合**: App Group共有設定の読み書き
+- **動的メニュー**: 現在の設定値に基づく状態表示
+- **即時反映**: UserDefaults変更による設定の即時更新
 
 ## 開発時の注意点
 
@@ -214,18 +267,28 @@ processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
   "keywords": {
     "コミック": {
       "type": "filename",
-      "application": "SimpleComicViewer.app",
+      "application": "internal",
       "matchMode": "contains"
     },
     "manga": {
       "type": "filename",
-      "application": "SimpleComicViewer.app",
+      "application": "internal",
+      "matchMode": "contains"
+    },
+    "comic": {
+      "type": "pathname",
+      "application": "internal",
       "matchMode": "contains"
     },
     "vol*": {
       "type": "filename",
-      "application": "SimpleComicViewer.app",
+      "application": "internal",
       "matchMode": "wildcard"
+    },
+    "viewer": {
+      "type": "filename",
+      "application": "internal",
+      "matchMode": "contains"
     },
     "^backup_\\d+$": {
       "type": "pathname",
@@ -245,6 +308,11 @@ processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
 ### キーワードタイプ
 - **filename**: ZIPファイル名でマッチング（拡張子除く）
 - **pathname**: ZIPファイルのフルパスでマッチング
+
+### アプリケーション指定
+- **"internal"**: 内蔵ビューアで表示（継続実行）
+- **アプリケーション名**: 外部アプリケーションで開く（自動終了）
+- **"Archive Utility.app"等**: macOS標準アプリケーション
 
 ### 設定管理
 - **場所**: `~/Library/Application Support/CoverZip/settings.json`
