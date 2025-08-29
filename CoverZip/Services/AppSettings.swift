@@ -50,6 +50,7 @@ final class AppSettingsWriter: ObservableObject {
             CZSettingsKeys.alwaysSinglePageForCover: true,
             CZSettingsKeys.defaultViewMode: "auto",
             CZSettingsKeys.slideshowInterval: 3.0,
+            CZSettingsKeys.pageTransitionEnabled: true,
             CZSettingsKeys.restoreWindowFrameEnabled: true
         ])
         

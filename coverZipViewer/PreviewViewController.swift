@@ -40,7 +40,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // スライドショー機能
     private var slideshowTimer: Timer?
     private var isSlideshowEnabled: Bool = false
-    // ページ切替トランジション（既定ON）
+    // ページ切替トランジション（共有設定でON/OFF）
     private var isTransitionEnabled: Bool = true
     // リサイズ監視のためのオブザーバ
     private var windowObservers: [NSObjectProtocol] = []
@@ -73,6 +73,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private enum PrefViewMode: String { case auto, single, spread }
     private func loadDefaultViewMode() -> PrefViewMode { PrefViewMode(rawValue: sharedDefaults().string(forKey: CZSettingsKeys.defaultViewMode) ?? "auto") ?? .auto }
     private func loadSlideshowInterval() -> Double { sharedDefaults().object(forKey: CZSettingsKeys.slideshowInterval) as? Double ?? 3.0 }
+    private func loadTransitionEnabled() -> Bool { sharedDefaults().object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true }
     
     override var nibName: NSNib.Name? {
         return NSNib.Name("PreviewViewController")
@@ -89,6 +90,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     sliderVisibilityWidthThreshold = loadSliderThreshold()
     // ユーザー設定の表示モードを初期ロード
     userPreferredViewMode = loadDefaultViewMode()
+    // ページ送りアニメの初期状態を共有設定からロード
+    isTransitionEnabled = loadTransitionEnabled()
     NSLog("[DEBUG] Initial userPreferredViewMode loaded: %@", userPreferredViewMode.rawValue)
         setupUI()
         setupGestureRecognizers()
@@ -246,6 +249,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         }
     let newThreshold = loadSliderThreshold()
         if newThreshold != sliderVisibilityWidthThreshold { sliderVisibilityWidthThreshold = newThreshold; updateSliderVisibilityForContext() }
+    // ページ送りアニメ設定の変更を反映
+    let newTransition = loadTransitionEnabled()
+    if newTransition != isTransitionEnabled { isTransitionEnabled = newTransition }
     
     // デフォルト表示モード設定の変更をチェック
     let newViewMode = loadDefaultViewMode()
@@ -575,6 +581,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // 表示モード切替アクション
     @objc private func setViewModeAuto(_ sender: NSMenuItem) {
         userPreferredViewMode = .auto
+        // 共有UserDefaultsへ即時反映
+        sharedDefaults().set("auto", forKey: CZSettingsKeys.defaultViewMode)
         displayCurrentImage()
         updateContextMenuStates()
     // 履歴を保存（表示モード変更）
@@ -583,6 +591,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     @objc private func setViewModeSingle(_ sender: NSMenuItem) {
         userPreferredViewMode = .single
+        sharedDefaults().set("single", forKey: CZSettingsKeys.defaultViewMode)
         displayCurrentImage()
         updateContextMenuStates()
     // 履歴を保存（表示モード変更）
@@ -591,6 +600,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     @objc private func setViewModeSpread(_ sender: NSMenuItem) {
         userPreferredViewMode = .spread
+        sharedDefaults().set("spread", forKey: CZSettingsKeys.defaultViewMode)
         displayCurrentImage()
         updateContextMenuStates()
     // 履歴を保存（表示モード変更）
@@ -600,6 +610,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // 読み方向切替アクション
     @objc private func setRightToLeft(_ sender: NSMenuItem) {
         isRightToLeftReading = true
+        sharedDefaults().set(true, forKey: CZSettingsKeys.isRightToLeftReading)
         
         // UI要素を即座に更新
         applySliderLayoutDirection()
@@ -612,6 +623,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     @objc private func setLeftToRight(_ sender: NSMenuItem) {
         isRightToLeftReading = false
+        sharedDefaults().set(false, forKey: CZSettingsKeys.isRightToLeftReading)
         
         // UI要素を即座に更新
         applySliderLayoutDirection()
@@ -894,6 +906,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     @objc private func toggleTransition(_ sender: NSMenuItem) {
         isTransitionEnabled.toggle()
         sender.state = isTransitionEnabled ? .on : .off
+        // 共有UserDefaultsへ保存（App側メニュー状態とも同期）
+        sharedDefaults().set(isTransitionEnabled, forKey: CZSettingsKeys.pageTransitionEnabled)
     }
 
     // 保存フレーム読み出し/保存（共有UserDefaultsに統一）
