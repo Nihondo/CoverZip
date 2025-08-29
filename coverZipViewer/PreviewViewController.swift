@@ -581,8 +581,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // 表示モード切替アクション
     @objc private func setViewModeAuto(_ sender: NSMenuItem) {
         userPreferredViewMode = .auto
-        // 共有UserDefaultsへ即時反映
-        sharedDefaults().set("auto", forKey: CZSettingsKeys.defaultViewMode)
         displayCurrentImage()
         updateContextMenuStates()
     // 履歴を保存（表示モード変更）
@@ -591,7 +589,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     @objc private func setViewModeSingle(_ sender: NSMenuItem) {
         userPreferredViewMode = .single
-        sharedDefaults().set("single", forKey: CZSettingsKeys.defaultViewMode)
         displayCurrentImage()
         updateContextMenuStates()
     // 履歴を保存（表示モード変更）
@@ -600,7 +597,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     @objc private func setViewModeSpread(_ sender: NSMenuItem) {
         userPreferredViewMode = .spread
-        sharedDefaults().set("spread", forKey: CZSettingsKeys.defaultViewMode)
         displayCurrentImage()
         updateContextMenuStates()
     // 履歴を保存（表示モード変更）
@@ -610,7 +606,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // 読み方向切替アクション
     @objc private func setRightToLeft(_ sender: NSMenuItem) {
         isRightToLeftReading = true
-        sharedDefaults().set(true, forKey: CZSettingsKeys.isRightToLeftReading)
         
         // UI要素を即座に更新
         applySliderLayoutDirection()
@@ -623,7 +618,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     @objc private func setLeftToRight(_ sender: NSMenuItem) {
         isRightToLeftReading = false
-        sharedDefaults().set(false, forKey: CZSettingsKeys.isRightToLeftReading)
         
         // UI要素を即座に更新
         applySliderLayoutDirection()
@@ -906,8 +900,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     @objc private func toggleTransition(_ sender: NSMenuItem) {
         isTransitionEnabled.toggle()
         sender.state = isTransitionEnabled ? .on : .off
-        // 共有UserDefaultsへ保存（App側メニュー状態とも同期）
-        sharedDefaults().set(isTransitionEnabled, forKey: CZSettingsKeys.pageTransitionEnabled)
     }
 
     // 保存フレーム読み出し/保存（共有UserDefaultsに統一）
