@@ -58,8 +58,8 @@
 2) ZIP 展開の制約（`Shared/ZipCore.swift`）
    - method 0/8 のみ、Zip64/暗号化非対応。8MB 固定バッファの伸長が必要なケースがある。
    - 改善にはメモリ安全性（上限/逐次解凍）と後方互換の検討が必要。
-3) 内蔵ビューアの二重実装
-   - `InternalViewer` と `EmbeddedPreviewWindowController` の役割が重複。どちらかへ統一する方針を検討。
+3) 内蔵ビューアの実装整理（対応済み）
+   - 以前は `InternalViewer` と `EmbeddedPreviewWindowController` が重複していたが、`InternalViewer` を正とし `EmbeddedPreviewWindowController` は削除済み。
 4) テンプレコードの整理
    - `coverZipViewer/PreviewProvider.swift` はテンプレ実装。ビルドに不要なら除外/削除検討。
 
@@ -88,4 +88,4 @@
 ---
 更新履歴:
 - 2025-08-29 初版作成
-
+- 2025-08-29 内蔵ビューアの重複解消（EmbeddedPreviewWindowController 削除）
