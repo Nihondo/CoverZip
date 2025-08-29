@@ -1,0 +1,91 @@
+# AGENTS.md — CoverZip リポジトリ向けガードレールと運用指針
+
+本ドキュメントは、エージェント／自動化ツール／新規コントリビュータが本リポジトリで作業する際の前提・禁止事項・変更方針を明文化したものです。安全かつ一貫した変更のために必ず参照してください。
+
+## 目的と範囲
+- 目的: 既存仕様を壊さずに機能追加・改善・保守を行うための共通ルールを提供する。
+- 範囲: アプリ本体 `CoverZip`、Quick Look プレビュー拡張 `coverZipViewer`、サムネイル拡張 `coverZipExtension`、共有ユーティリティ `Shared`。
+
+## プロジェクト構成と役割
+- `CoverZip` (macOS App)
+  - 設定ウィンドウ（SwiftUI）とファイルルーティングの中枢。
+  - エントリ: `CoverZip/CoverZipApp.swift`（設定画面）、`CoverZip/AppDelegate.swift`（ファイルオープン・ルーティング）。
+  - 「ZIPを開く…」メニューは常に内蔵ビューアを使用。
+- `coverZipViewer` (Quick Look プレビュー拡張)
+  - ZIP 内画像の閲覧 UI（単ページ/見開き/自動、右綴じ/左綴じ、ページ送りアニメ、スライドショー、履歴など）。
+  - 主要ファイル: `coverZipViewer/PreviewViewController.swift`、`coverZipViewer/ImageManager.swift`、`coverZipViewer/ReadingHistoryManager.swift`、`coverZipViewer/Base.lproj/PreviewViewController.xib`。
+- `coverZipExtension` (サムネイル拡張)
+  - ZIP の先頭画像からサムネイル生成。
+  - 主要ファイル: `coverZipExtension/ThumbnailProvider.swift`、`coverZipExtension/ZipProcessor.swift`。
+- `Shared`
+  - 共有ユーティリティ群（ZIP 解析、自然順ソート、設定キー定義等）。
+  - 主要ファイル: `Shared/ZipCore.swift`、`Shared/NaturalSort.swift`、`Shared/ImageFileFilter.swift`、`Shared/SettingsKeys.swift`。
+
+## 共有設定と App Group
+- App Group は `Shared/SettingsKeys.swift` の `CZAppGroup.identifier` に定義: `group.com.dmng.CoverZip`。
+- 設定キーは `Shared/SettingsKeys.swift` に集約。アプリ・拡張とも同キー/同グループを利用。
+- 設定 UI/保存: アプリ側は `CoverZip/Views/*` + `CoverZip/Services/AppSettings.swift`。拡張側は `coverZipViewer/Settings.swift`。
+
+## ファイルルーティング仕様（重要）
+- 設定ファイルは `Application Support/CoverZip/settings.json` を最優先し、無ければアプリバンドルの `settings.json`、それも無ければデフォルト（空）を使用（`CoverZip/Models/KeywordSettings.swift`）。
+- 設定スキーマ:
+  - `keywords: { pattern: { type: "filename"|"pathname", application: String, matchMode: "contains"|"wildcard"|"regex" } }`
+  - `default: String`（マッチなし時のアプリ名。`"internal"` 指定で内蔵ビューア）。
+- マッチングは先勝ち。`contains` は大文字小文字無視、`wildcard` は `*`/`?`、`regex` は NSRegularExpression（無効時は contains フォールバック）。
+
+## 内蔵ビューアと拡張の連携
+- アプリ側の内蔵ビューア: `CoverZip/Services/InternalViewer.swift`（`QLPreviewView` をウィンドウに埋め込み）。
+- 左右キー押下でプレビュー領域の左右半分へマウスクリックを合成し、拡張側のページ送りを駆動。
+- コンテキストメニュー項目（読み方向/表示モード/アニメ等）は共有 UserDefaults を介して同期。
+
+## 実装ポリシー（変更方針）
+- 変更は最小限・局所的・既存スタイルに合わせる。無関係な最適化や一括リネームは禁止。
+- 仕様の単一責務を維持（ルーティングは App、画像表示は Viewer、ZIP 処理は Shared）。
+- 共有キーや App Group を変更しない。必要なら合意の上で全ターゲット整合を取る。
+- ログは既存の `NSLog` を用い、過剰出力は避ける（デバッグ時のみ詳細）。
+
+## 禁止・注意事項（Danger Zone）
+- App Group（`group.com.dmng.CoverZip`）や `CZSettingsKeys` の値を勝手に変更しない。
+- Info.plist / Entitlements の権限・グループ設定を勝手に変更しない。
+- ZIP コア（`Shared/ZipCore.swift`）を外部ライブラリに置換しない（合意がある場合を除く）。
+- 共有設定の保存先を勝手に移動しない（UserDefaults/App Group 前提）。
+- 破壊的コマンド（大規模削除・全体リフォーマット）を行わない。
+
+## 既知の課題・改善候補（要合意）
+1) 外部アプリ解決ロジック（`CoverZip/Services/AppLauncher.swift`）
+   - 現状 `urlForApplication(withBundleIdentifier:)` にアプリ名を渡しており、名前→バンドルIDでは解決できないケースがある。
+   - 改善案: `NSWorkspace.shared.fullPath(forApplication:)` を優先、もしくは設定側でバンドル ID を許容する。
+2) ZIP 展開の制約（`Shared/ZipCore.swift`）
+   - method 0/8 のみ、Zip64/暗号化非対応。8MB 固定バッファの伸長が必要なケースがある。
+   - 改善にはメモリ安全性（上限/逐次解凍）と後方互換の検討が必要。
+3) 内蔵ビューアの二重実装
+   - `InternalViewer` と `EmbeddedPreviewWindowController` の役割が重複。どちらかへ統一する方針を検討。
+4) テンプレコードの整理
+   - `coverZipViewer/PreviewProvider.swift` はテンプレ実装。ビルドに不要なら除外/削除検討。
+
+## テスト・検証の要点
+- ルーティング: 複数の ZIP 名/パスで `contains`/`wildcard`/`regex` の動作を確認。`internal` 指定で内蔵ビューアに遷移すること。
+- 内蔵ビューア: 左右クリック/キーでページ送り、右綴じ/左綴じ、単/見開き/自動の切り替え、スライドショー動作。
+- 履歴: ZIP ごとの最終ページ・表示モード・綴じ方向・見開き補正が復元されること（App Group の UserDefaults に保存）。
+- サムネイル: Finder でのサムネイル生成（異常系もログ確認）。
+
+## Codex/Coding Agent 向け運用
+- 複雑・複数工程の変更は `update_plan` を使って段階を明示。
+- ファイル変更は `apply_patch` のみ使用。不要な再読込を避ける。
+- この環境は通常 `workspace-write`/ネットワーク制限/`on-request` 承認。外部ネットワークや危険操作は事前に確認。
+- テストやビルドが可能な場合、変更箇所に限定した検証を優先（不要な全体実行は避ける）。
+
+## コーディングスタイル
+- 既存の Swift スタイルに合わせる（意味のある命名、1文字変数回避、過剰な内蔵コメントは控える）。
+- ドキュメントは必要最小限を更新（仕様変更時は本書/README/コメントいずれかへ反映）。
+- ライセンス/ヘッダの追加は指示がある場合のみ。
+
+## ビルド・動作の目安
+- Xcode 14+（macOS 13+ 推奨）。Targets: `CoverZip`, `coverZipViewer`, `coverZipExtension`。
+- App/Extensions の Entitlements に同一 App Group を設定。
+- 初回起動時、`CoverZip` は `settings.json` のデフォルト生成を試みる（Application Support）。
+
+---
+更新履歴:
+- 2025-08-29 初版作成
+
