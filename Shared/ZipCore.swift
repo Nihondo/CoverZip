@@ -51,6 +51,33 @@ public enum CZZip {
         return imageEntries(from: url).first?.imageData
     }
 
+    /// Read the first image data with an optional early pick rule.
+    /// - Parameters:
+    ///   - url: ZIP file URL
+    ///   - isZeroPaddedFirstPreferred: If true, pick a file whose basename contains a zero-padded "1"
+    ///     token (e.g. 01, 001, ...), even when it doesn't start the basename (e.g. "image001").
+    ///     This performs an early pick without sorting when such a file exists; otherwise falls back
+    ///     to the natural-sort first image.
+    /// - Returns: Image data if found; otherwise nil.
+    public static func firstImageData(from url: URL, isZeroPaddedFirstPreferred: Bool) -> Data? {
+        do { return firstImageData(from: try Data(contentsOf: url), isZeroPaddedFirstPreferred: isZeroPaddedFirstPreferred) }
+        catch { NSLog("CZZip read error: \(error)"); return nil }
+    }
+
+    /// Read the first image data with an optional early pick rule from raw ZIP data.
+    public static func firstImageData(from data: Data, isZeroPaddedFirstPreferred: Bool) -> Data? {
+        guard let cdOffset = findCentralDirectoryOffset(in: data) else { return nil }
+        let entries = parseCentralDirectory(data: data, offset: cdOffset)
+        let imageEntries = entries.filter { ImageFileFilter.isImagePath($0.filename) }
+
+        if isZeroPaddedFirstPreferred, let candidate = imageEntries.first(where: { isZeroPaddedOneFilename($0.filename) }) {
+            return extractFileData(data: data, entry: candidate)
+        }
+
+        // Fallback to natural-sort first
+        return CZZip.imageEntries(from: data).first?.imageData
+    }
+
     // MARK: - Low-level ZIP helpers
 
     private static func findCentralDirectoryOffset(in data: Data) -> Int? {
@@ -144,6 +171,29 @@ public enum CZZip {
             )
             if decompressedSize > 0 { return Data(bytes: buffer, count: decompressedSize) }
             return nil
+        }
+    }
+
+    /// Detects filenames like "01.jpg", "001.png", "0001.tif", and also variants such as
+    /// "image001.jpg" as early-first candidates.
+    /// The rule checks the basename (without extension) and returns true when it contains
+    /// a token matching one or more zeros followed by a single '1', and that token is bounded
+    /// by non-digits or string boundaries.
+    /// Examples: "01", "001", "001-cover", "image001" => true; "1", "011", "0012" => false
+    private static func isZeroPaddedOneFilename(_ path: String) -> Bool {
+        let last = (path as NSString).lastPathComponent
+        let base = (last as NSString).deletingPathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Regex: (?:^|\D)0+1(?:\D|$)
+        // At least one leading zero before '1'; non-digit or end must follow the '1'.
+        // Also requires a non-digit or start before the zeros to avoid being inside a longer number.
+        do {
+            let re = try NSRegularExpression(pattern: "(?:^|\\D)0+1(?:\\D|$)", options: [])
+            let range = NSRange(location: 0, length: (base as NSString).length)
+            return re.firstMatch(in: base, options: [], range: range) != nil
+        } catch {
+            // Fallback: simple check without regex
+            if base.contains("001") || base.contains("01") { return true }
+            return false
         }
     }
 }

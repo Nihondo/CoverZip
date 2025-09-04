@@ -22,6 +22,17 @@ class ZipProcessor {
     static func extractFirstImageFromZip(at url: URL) -> Data? {
         return CZZip.firstImageData(from: url)
     }
+
+    /**
+     * ZIPファイルから最初の画像ファイルを抽出する（ゼロ埋め"1"優先の早期判定オプション）
+     *
+     * @param url ZIPファイルのURL
+     * @param isZeroPaddedFirstPreferred 先頭判定としてベース名が 01/001/0001... に一致する最初の画像を優先する
+     * @return 画像データ（見つからない場合はnil）
+     */
+    static func extractFirstImageFromZip(at url: URL, isZeroPaddedFirstPreferred: Bool) -> Data? {
+        return CZZip.firstImageData(from: url, isZeroPaddedFirstPreferred: isZeroPaddedFirstPreferred)
+    }
     
     /**
      * ZIPファイルから全ての画像ファイルを抽出する
