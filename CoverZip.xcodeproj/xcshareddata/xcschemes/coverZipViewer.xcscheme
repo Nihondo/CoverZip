@@ -55,7 +55,7 @@
       shouldAutocreateTestPlan = "YES">
    </TestAction>
    <LaunchAction
-      buildConfiguration = "Release"
+      buildConfiguration = "Debug"
       selectedDebuggerIdentifier = ""
       selectedLauncherIdentifier = "Xcode.IDEFoundation.Launcher.PosixSpawn"
       launchStyle = "0"
@@ -66,6 +66,7 @@
       allowLocationSimulation = "YES">
       <PathRunnable
          runnableDebuggingMode = "0"
+         BundleIdentifier = "com.apple.quicklook.QuickLookSimulator"
          FilePath = "/System/Library/Frameworks/QuickLookUI.framework/Versions/A/Resources/Quick Look Simulator.app">
       </PathRunnable>
       <MacroExpansion>

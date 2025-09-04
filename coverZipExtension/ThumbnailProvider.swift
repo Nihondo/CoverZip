@@ -8,6 +8,7 @@
 import QuickLookThumbnailing
 import Foundation
 import AppKit
+import ImageIO
 
 class ThumbnailProvider: QLThumbnailProvider {
     
@@ -27,18 +28,29 @@ class ThumbnailProvider: QLThumbnailProvider {
             return
         }
         
-        guard let image = NSImage(data: imageData) else {
-            handler(nil, NSError(domain: "CoverZipError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create image from data"]))
+        // CGImageSource を用いたサムネイル生成（フルデコードを回避し高速化）
+        let targetMaxPixels = max(1, Int(ceil(max(request.maximumSize.width, request.maximumSize.height) * request.scale)))
+        let cfOptions: CFDictionary = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: targetMaxPixels,
+            kCGImageSourceShouldCache: false
+        ] as CFDictionary
+
+        guard let src = CGImageSourceCreateWithData(imageData as CFData, nil),
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(src, 0, cfOptions) ?? CGImageSourceCreateImageAtIndex(src, 0, nil) else {
+            handler(nil, NSError(domain: "CoverZipError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create CGImage from data"]))
             return
         }
         
         // デバッグ情報を出力
         NSLog("DEBUG: request.maximumSize = \(request.maximumSize)")
         NSLog("DEBUG: request.scale = \(request.scale)")
-        NSLog("DEBUG: image.size = \(image.size)")
+        NSLog("DEBUG: cgImage.size(px) = \(cgImage.width)x\(cgImage.height)")
         
         // 縦横比を維持したサムネイルを生成
-        let thumbnailSize = calculateThumbnailSize(for: image.size, maxSize: request.maximumSize)
+        let cgImageSize = NSSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
+        let thumbnailSize = calculateThumbnailSize(for: cgImageSize, maxSize: request.maximumSize)
         NSLog("DEBUG: calculated thumbnailSize = \(thumbnailSize)")
         
         let reply = QLThumbnailReply(contextSize: thumbnailSize, currentContextDrawing: { () -> Bool in
@@ -47,8 +59,10 @@ class ThumbnailProvider: QLThumbnailProvider {
             NSBezierPath(rect: NSRect(origin: .zero, size: thumbnailSize)).fill()
             
             // 画像を適切にスケーリングして中央に配置して描画
-            let imageRect = self.calculateScaledImageRect(imageSize: image.size, canvasSize: thumbnailSize)
-            image.draw(in: imageRect)
+            let imageRect = self.calculateScaledImageRect(imageSize: cgImageSize, canvasSize: thumbnailSize)
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            ctx.interpolationQuality = .high
+            ctx.draw(cgImage, in: imageRect)
             
             return true
         })

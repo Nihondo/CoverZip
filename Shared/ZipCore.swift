@@ -42,7 +42,7 @@ public enum CZZip {
 
     /// Read all image entries from a ZIP file URL
     public static func imageEntries(from url: URL) -> [CZImageEntry] {
-        do { return imageEntries(from: try Data(contentsOf: url)) }
+        do { return imageEntries(from: try Data(contentsOf: url, options: [.mappedIfSafe])) }
         catch { NSLog("CZZip read error: \(error)"); return [] }
     }
 
@@ -60,7 +60,7 @@ public enum CZZip {
     ///     to the natural-sort first image.
     /// - Returns: Image data if found; otherwise nil.
     public static func firstImageData(from url: URL, isZeroPaddedFirstPreferred: Bool) -> Data? {
-        do { return firstImageData(from: try Data(contentsOf: url), isZeroPaddedFirstPreferred: isZeroPaddedFirstPreferred) }
+        do { return firstImageData(from: try Data(contentsOf: url, options: [.mappedIfSafe]), isZeroPaddedFirstPreferred: isZeroPaddedFirstPreferred) }
         catch { NSLog("CZZip read error: \(error)"); return nil }
     }
 
@@ -74,8 +74,11 @@ public enum CZZip {
             return extractFileData(data: data, entry: candidate)
         }
 
-        // Fallback to natural-sort first
-        return CZZip.imageEntries(from: data).first?.imageData
+        // Fallback: decide the first entry by natural sort (filenames only), then extract just that file.
+        if let entry = firstImageEntryByNaturalOrder(entries: imageEntries) {
+            return extractFileData(data: data, entry: entry)
+        }
+        return nil
     }
 
     // MARK: - Low-level ZIP helpers
@@ -172,6 +175,16 @@ public enum CZZip {
             if decompressedSize > 0 { return Data(bytes: buffer, count: decompressedSize) }
             return nil
         }
+    }
+
+    /// Returns the first image entry by NaturalSort on lastPathComponent, without extracting data.
+    private static func firstImageEntryByNaturalOrder(entries: [CZZipEntry]) -> CZZipEntry? {
+        return entries
+            .sorted { a, b in
+                NaturalSort.lessFilename((a.filename as NSString).lastPathComponent,
+                                          (b.filename as NSString).lastPathComponent)
+            }
+            .first
     }
 
     /// Detects filenames like "01.jpg", "001.png", "0001.tif", and also variants such as
