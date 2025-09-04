@@ -50,6 +50,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var didRestoreRTLFromHistory: Bool = false
     // 履歴から表示モードを復元済みか（既定で上書きしないためのフラグ）
     private var didRestoreViewModeFromHistory: Bool = false
+    // 読み込みインジケータ
+    private var loadingIndicator: NSProgressIndicator?
     
     // 表示モード
     enum ViewMode {
@@ -95,6 +97,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     NSLog("[DEBUG] Initial userPreferredViewMode loaded: %@", userPreferredViewMode.rawValue)
         setupUI()
         setupGestureRecognizers()
+        // 初期状態ではインジケータは表示しない
     }
 
     override func viewWillAppear() {
@@ -234,6 +237,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         pendingSingleClick = nil
         // スライドショーのクリーンアップ
         stopSlideshow()
+        // ローディングインジケータ停止
+        hideLoadingIndicator()
     }
     
     override func viewDidAppear() {
@@ -267,7 +272,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // ホストにサイズ希望を伝える（可能なら）
         updatePreferredContentSizeIfNeeded()
     // 表示コンテキストに応じてスライダー可視性を更新
-    updateSliderVisibilityForContext()
+        updateSliderVisibilityForContext()
+        // 読み込み状態に応じてインジケータを更新
+        updateLoadingIndicator()
 
         // リサイズ完了時にサイズを保存
         if let win = view.window {
@@ -283,6 +290,16 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 self?.updateImageManagerDisplaySize()
             }
             windowObservers.append(resizeObserver)
+            
+            // 画像リストの全読み込み完了通知（初回は高速表示→後で全件に差し替え）
+            let reloadObserver = NotificationCenter.default.addObserver(forName: .czImageManagerDidLoadAll, object: imageManager, queue: .main) { [weak self] _ in
+                guard let self else { return }
+                self.syncSliderToCurrentPage()
+                self.updateSliderLimits()
+                self.displayCurrentImage()
+                self.hideLoadingIndicator()
+            }
+            windowObservers.append(reloadObserver)
         }
         
         // 初期表示サイズを設定
@@ -348,12 +365,49 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 // 初期ロード時に隣接画像を先読み
                 imageManager.preloadAdjacentImages()
                 updateSliderLimits()
+                // 先頭のみ即表示→全件読み込み中であればインジケータ表示
+                updateLoadingIndicator()
             }
         } else {
             // 画像が見つからない場合の処理
             await MainActor.run {
                 displayNoImagesMessage()
             }
+        }
+    }
+
+    // MARK: - Loading Indicator
+    private func ensureLoadingIndicator() {
+        guard loadingIndicator == nil else { return }
+        let spinner = NSProgressIndicator()
+        spinner.style = .spinning
+        spinner.controlSize = .regular
+        spinner.isDisplayedWhenStopped = false
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(spinner)
+        NSLayoutConstraint.activate([
+            spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+        loadingIndicator = spinner
+    }
+
+    private func showLoadingIndicator() {
+        ensureLoadingIndicator()
+        loadingIndicator?.isHidden = false
+        loadingIndicator?.startAnimation(nil)
+    }
+
+    private func hideLoadingIndicator() {
+        loadingIndicator?.stopAnimation(nil)
+        loadingIndicator?.isHidden = true
+    }
+
+    private func updateLoadingIndicator() {
+        if imageManager.isLoadingAll {
+            showLoadingIndicator()
+        } else {
+            hideLoadingIndicator()
         }
     }
     

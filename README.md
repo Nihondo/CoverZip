@@ -13,7 +13,7 @@ CoverZipは、三つの独立した機能を持つmacOSアプリケーション�
 - **純Swift実装**: 標準のFoundationとCompressionフレームワークのみを使用
 - **App Extension対応**: macOS QuickLook Thumbnail Extensionとして実装
 - **軽量**: 外部ライブラリに依存しない軽量な実装
-- **先頭画像の早期判定(オプション)**: ベース名が `01` / `001` / `0001` … で始まる画像を優先して先頭とみなす機能（`ZipProcessor.extractFirstImageFromZip(at:isZeroPaddedFirstPreferred:)` / `CZZip.firstImageData(from:isZeroPaddedFirstPreferred:)`）
+- **先頭画像の早期判定(オプション)**: 表紙らしい名前（`cover`/`front`/`表紙`/`00*`）を優先し、次いで0埋め1（`01`/`001`/`image001` など）を採用。したがって連番が混在する場合は `000` 系を `001` より優先して表紙と判断。`ZipProcessor.extractFirstImageFromZip(at:options:)` / `CZZip.firstImageData(from:options:)` を利用（例: `[.preferCoverLike, .preferZeroPaddedOne]`）。
 
 ### QuickLook Preview Extension
 - **フルスクリーンプレビュー**: ZIPファイル内のすべての画像をフルスクリーンで表示

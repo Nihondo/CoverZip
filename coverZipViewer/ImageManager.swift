@@ -40,6 +40,8 @@ class ImageManager {
     private var targetDisplaySize: NSSize = NSSize.zero
     // デコードキャッシュ方針（設定から取得、デフォルトは .deferred）
     private var decodeCachePolicy: CZImageDecodeCachePolicy { AppSettings.shared.imageDecodeCachePolicy }
+    // 全画像のバックグラウンド読み込み中かどうか
+    private(set) var isLoadingAll: Bool = false
     
     /**
      * 表示対象サイズを設定（パフォーマンス最適化用）
@@ -64,12 +66,45 @@ class ImageManager {
      * @return 読み込み成功時はtrue、失敗時はfalse
      */
     func loadImages(from url: URL) -> Bool {
-        imageEntries = extractAllImagesFromZip(at: url)
-        currentIndex = 0
-        imageCache.removeAll()
-        resizedImageCache.removeAll()
-        setupMemoryPressureMonitoring()
-        return !imageEntries.isEmpty
+        // Fast-first: pick initial image using heuristics, then load the rest asynchronously.
+        let opts: CZFirstImageOptions = [.preferZeroPaddedOne, .preferCoverLike]
+        if let first = CZZip.firstImageEntry(from: url, options: opts) {
+            // Set quick-first state
+            self.imageEntries = [ImageEntry(filename: first.filename, imageData: first.imageData)]
+            self.currentIndex = 0
+            self.imageCache.removeAll()
+            self.resizedImageCache.removeAll()
+            setupMemoryPressureMonitoring()
+            self.isLoadingAll = true
+
+            // Async load all images
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self else { return }
+                var all = CZZip.imageEntries(from: url).map { ImageEntry(filename: $0.filename, imageData: $0.imageData) }
+                // Ensure the heuristically chosen first stays at index 0 after full load
+                if let idx = all.firstIndex(where: { $0.filename == first.filename }), idx != 0 {
+                    let chosen = all.remove(at: idx)
+                    all.insert(chosen, at: 0)
+                }
+                DispatchQueue.main.async {
+                    // Replace entries and notify UI
+                    self.imageEntries = all
+                    self.currentIndex = min(self.currentIndex, max(0, self.imageEntries.count - 1))
+                    self.preloadAdjacentImages()
+                    self.isLoadingAll = false
+                    NotificationCenter.default.post(name: .czImageManagerDidLoadAll, object: self)
+                }
+            }
+            return true
+        } else {
+            // Fallback: legacy full load
+            imageEntries = extractAllImagesFromZip(at: url)
+            currentIndex = 0
+            imageCache.removeAll()
+            resizedImageCache.removeAll()
+            setupMemoryPressureMonitoring()
+            return !imageEntries.isEmpty
+        }
     }
     
     /**
@@ -526,4 +561,9 @@ extension ImageManager {
         }
         return NSImage(data: data) // フォールバック
     }
+}
+
+// MARK: - Notifications
+extension Notification.Name {
+    static let czImageManagerDidLoadAll = Notification.Name("CZImageManagerDidLoadAll")
 }

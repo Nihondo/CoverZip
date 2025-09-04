@@ -19,6 +19,16 @@ public struct CZImageEntry {
     public let imageData: Data
 }
 
+/// Options to influence how the first image is picked from a ZIP.
+public struct CZFirstImageOptions: OptionSet {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+    /// Prefer filenames containing a zero-padded "1" token (e.g. 01, 001, image001) and stop early when found.
+    public static let preferZeroPaddedOne = CZFirstImageOptions(rawValue: 1 << 0)
+    /// Prefer filenames that look like a cover (e.g. contains "cover", "front", "表紙", or leading 00/000/0000).
+    public static let preferCoverLike = CZFirstImageOptions(rawValue: 1 << 1)
+}
+
 public enum CZZip {
     /// Read all image entries from ZIP data (sorted naturally by filename)
     public static func imageEntries(from data: Data) -> [CZImageEntry] {
@@ -64,6 +74,64 @@ public enum CZZip {
         catch { NSLog("CZZip read error: \(error)"); return nil }
     }
 
+    /// Read the first image data with option flags (heuristics + natural order fallback).
+    public static func firstImageData(from url: URL, options: CZFirstImageOptions) -> Data? {
+        do { return firstImageData(from: try Data(contentsOf: url, options: [.mappedIfSafe]), options: options) }
+        catch { NSLog("CZZip read error: \(error)"); return nil }
+    }
+
+    /// Read the first image data with option flags from raw ZIP data.
+    public static func firstImageData(from data: Data, options: CZFirstImageOptions) -> Data? {
+        guard let cdOffset = findCentralDirectoryOffset(in: data) else { return nil }
+        let entries = parseCentralDirectory(data: data, offset: cdOffset)
+        let imageEntries = entries.filter { ImageFileFilter.isImagePath($0.filename) }
+
+        // 1) Prefer cover-like names first (e.g., "cover", "front", "表紙", or leading 00/000/0000)
+        if options.contains(.preferCoverLike) {
+            if let best = bestCoverLikeEntry(from: imageEntries) {
+                return extractFileData(data: data, entry: best)
+            }
+        }
+
+        // 2) Otherwise, prefer zero-padded "1" (e.g., 01, 001, image001)
+        if options.contains(.preferZeroPaddedOne), let cand = imageEntries.first(where: { isZeroPaddedOneFilename($0.filename) }) {
+            return extractFileData(data: data, entry: cand)
+        }
+
+        // 3) Fallback: one-pass minimum by NaturalSort (no full sort)
+        if let entry = firstImageEntryByNaturalOrderLinear(entries: imageEntries) {
+            return extractFileData(data: data, entry: entry)
+        }
+        return nil
+    }
+
+    /// Read the first image entry (filename + data) with option flags.
+    public static func firstImageEntry(from url: URL, options: CZFirstImageOptions) -> CZImageEntry? {
+        do { return firstImageEntry(from: try Data(contentsOf: url, options: [.mappedIfSafe]), options: options) }
+        catch { NSLog("CZZip read error: \(error)"); return nil }
+    }
+
+    /// Read the first image entry (filename + data) with option flags from raw data.
+    public static func firstImageEntry(from data: Data, options: CZFirstImageOptions) -> CZImageEntry? {
+        guard let cdOffset = findCentralDirectoryOffset(in: data) else { return nil }
+        let entries = parseCentralDirectory(data: data, offset: cdOffset)
+        let images = entries.filter { ImageFileFilter.isImagePath($0.filename) }
+
+        // Choose candidate entry according to options (cover-like has priority over zero-padded "1")
+        var candidate: CZZipEntry?
+        if options.contains(.preferCoverLike) {
+            candidate = bestCoverLikeEntry(from: images)
+        }
+        if candidate == nil, options.contains(.preferZeroPaddedOne) {
+            candidate = images.first(where: { isZeroPaddedOneFilename($0.filename) })
+        }
+        if candidate == nil {
+            candidate = firstImageEntryByNaturalOrderLinear(entries: images)
+        }
+        guard let entry = candidate, let dataOut = extractFileData(data: data, entry: entry) else { return nil }
+        return CZImageEntry(filename: entry.filename, imageData: dataOut)
+    }
+
     /// Read the first image data with an optional early pick rule from raw ZIP data.
     public static func firstImageData(from data: Data, isZeroPaddedFirstPreferred: Bool) -> Data? {
         guard let cdOffset = findCentralDirectoryOffset(in: data) else { return nil }
@@ -75,7 +143,7 @@ public enum CZZip {
         }
 
         // Fallback: decide the first entry by natural sort (filenames only), then extract just that file.
-        if let entry = firstImageEntryByNaturalOrder(entries: imageEntries) {
+        if let entry = firstImageEntryByNaturalOrderLinear(entries: imageEntries) {
             return extractFileData(data: data, entry: entry)
         }
         return nil
@@ -177,14 +245,16 @@ public enum CZZip {
         }
     }
 
-    /// Returns the first image entry by NaturalSort on lastPathComponent, without extracting data.
-    private static func firstImageEntryByNaturalOrder(entries: [CZZipEntry]) -> CZZipEntry? {
-        return entries
-            .sorted { a, b in
-                NaturalSort.lessFilename((a.filename as NSString).lastPathComponent,
-                                          (b.filename as NSString).lastPathComponent)
+    /// Returns the first image entry by NaturalSort on lastPathComponent, without allocating a sorted array.
+    private static func firstImageEntryByNaturalOrderLinear(entries: [CZZipEntry]) -> CZZipEntry? {
+        guard var best = entries.first else { return nil }
+        for e in entries.dropFirst() {
+            if NaturalSort.lessFilename((e.filename as NSString).lastPathComponent,
+                                        (best.filename as NSString).lastPathComponent) {
+                best = e
             }
-            .first
+        }
+        return best
     }
 
     /// Detects filenames like "01.jpg", "001.png", "0001.tif", and also variants such as
@@ -208,5 +278,55 @@ public enum CZZip {
             if base.contains("001") || base.contains("01") { return true }
             return false
         }
+    }
+
+    // MARK: - Cover-like scoring
+    /// Pick the most cover-like entry by a simple scoring heuristic.
+    /// If multiple entries tie, pick the natural-order minimum among them.
+    private static func bestCoverLikeEntry(from entries: [CZZipEntry]) -> CZZipEntry? {
+        var best: CZZipEntry? = nil
+        var bestScore = 0
+        for e in entries {
+            let s = coverLikeScore(for: e.filename)
+            if s > 0 {
+                if best == nil || s > bestScore || (s == bestScore && NaturalSort.lessFilename((e.filename as NSString).lastPathComponent,
+                                                                                               (best!.filename as NSString).lastPathComponent)) {
+                    best = e
+                    bestScore = s
+                }
+            }
+        }
+        return best
+    }
+
+    /// Score filenames that look like a cover: contains keywords like "cover", "front", "表紙",
+    /// or basename equals/starts with multiple zeros (e.g. "00", "000", "0000", "000-cover").
+    /// Stronger hints yield higher scores.
+    private static func coverLikeScore(for path: String) -> Int {
+        let last = (path as NSString).lastPathComponent
+        let base = (last as NSString).deletingPathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = base.lowercased()
+        var score = 0
+
+        // Strong keywords
+        if lower.contains("cover") { score += 100 }
+        if lower.contains("front") { score += 80 }
+        if base.contains("表紙") { score += 100 }
+
+        // Leading zeros like 00, 000, 0000 (but not a longer number like 0012 which is page 12)
+        do {
+            // (?:^|\D)0{2,}(?:\D|$) : 2+ zeros at token boundary, followed by non-digit or end
+            // This matches "000", "image_000", "p-000" but not "0001" or "page0001"
+            let re = try NSRegularExpression(pattern: "(?:^|\\D)0{2,}(?:\\D|$)", options: [])
+            let range = NSRange(location: 0, length: (base as NSString).length)
+            if re.firstMatch(in: base, options: [], range: range) != nil { score += 60 }
+        } catch {
+            if lower.hasPrefix("00") || lower.contains("_00") || lower.contains("-00") { score += 60 }
+        }
+
+        // Reuse zero-padded "1" hint as a weaker cover signal (many archives label 001 as cover)
+        if isZeroPaddedOneFilename(path) { score += 50 }
+
+        return score
     }
 }

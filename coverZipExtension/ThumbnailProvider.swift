@@ -22,8 +22,9 @@ class ThumbnailProvider: QLThumbnailProvider {
     override func provideThumbnail(for request: QLFileThumbnailRequest, _ handler: @escaping (QLThumbnailReply?, Error?) -> Void) {
         
         // ZIPファイルから最初の画像を抽出してサムネイルを生成
-        // 先頭判定の早期化（01/001/... や image001 などの0埋め1を優先）を有効化
-        guard let imageData = ZipProcessor.extractFirstImageFromZip(at: request.fileURL, isZeroPaddedFirstPreferred: true) else {
+        // 先頭判定のヒューリスティクスを有効化（0埋め1優先 + 表紙らしさ優先）
+        let opts: CZFirstImageOptions = [.preferZeroPaddedOne, .preferCoverLike]
+        guard let imageData = ZipProcessor.extractFirstImageFromZip(at: request.fileURL, options: opts) else {
             handler(nil, NSError(domain: "CoverZipError", code: 1, userInfo: [NSLocalizedDescriptionKey: "No image found in ZIP file"]))
             return
         }

@@ -33,6 +33,17 @@ class ZipProcessor {
     static func extractFirstImageFromZip(at url: URL, isZeroPaddedFirstPreferred: Bool) -> Data? {
         return CZZip.firstImageData(from: url, isZeroPaddedFirstPreferred: isZeroPaddedFirstPreferred)
     }
+
+    /**
+     * オプション指定で先頭画像を抽出する（ヒューリスティクス+自然順フォールバック）
+     *
+     * @param url ZIPファイルのURL
+     * @param options 先頭判定オプション（例: [.preferZeroPaddedOne, .preferCoverLike]）
+     * @return 画像データ（見つからない場合はnil）
+     */
+    static func extractFirstImageFromZip(at url: URL, options: CZFirstImageOptions) -> Data? {
+        return CZZip.firstImageData(from: url, options: options)
+    }
     
     /**
      * ZIPファイルから全ての画像ファイルを抽出する
