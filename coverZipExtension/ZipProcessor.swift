@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import CoreGraphics
 
 /**
  * ZIPファイルの処理を担当するクラス
@@ -43,6 +44,14 @@ class ZipProcessor {
      */
     static func extractFirstImageFromZip(at url: URL, options: CZFirstImageOptions) -> Data? {
         return CZZip.firstImageData(from: url, options: options)
+    }
+
+    /**
+     * ストリーミング展開 + ImageIO増分デコードでサムネイル(CGImage)を生成
+     * - 優先: 表紙らしさ > 0埋め1 > 自然順
+     */
+    static func extractFirstImageThumbnail(at url: URL, options: CZFirstImageOptions, maxPixel: Int) -> CGImage? {
+        return CZZip.firstImageThumbnail(from: url, options: options, maxPixel: maxPixel)
     }
     
     /**

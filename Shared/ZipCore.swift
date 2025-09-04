@@ -5,6 +5,8 @@
 
 import Foundation
 import Compression
+import ImageIO
+import Darwin
 
 public struct CZZipEntry {
     public let filename: String
@@ -130,6 +132,144 @@ public enum CZZip {
         }
         guard let entry = candidate, let dataOut = extractFileData(data: data, entry: entry) else { return nil }
         return CZImageEntry(filename: entry.filename, imageData: dataOut)
+    }
+
+    // MARK: - Streaming thumbnail generation (partial inflate + ImageIO incremental)
+
+    /// Create a thumbnail CGImage for the first image using streaming inflate when compressed.
+    /// This avoids full in-memory decompression for large images by attempting incremental decoding
+    /// and stopping as soon as a thumbnail becomes available.
+    public static func firstImageThumbnail(from url: URL, options: CZFirstImageOptions, maxPixel: Int) -> CGImage? {
+        do { return firstImageThumbnail(from: try Data(contentsOf: url, options: [.mappedIfSafe]), options: options, maxPixel: maxPixel) }
+        catch { NSLog("CZZip read error: \(error)"); return nil }
+    }
+
+    public static func firstImageThumbnail(from data: Data, options: CZFirstImageOptions, maxPixel: Int) -> CGImage? {
+        guard let cdOffset = findCentralDirectoryOffset(in: data) else { return nil }
+        let entries = parseCentralDirectory(data: data, offset: cdOffset)
+        let images = entries.filter { ImageFileFilter.isImagePath($0.filename) }
+        guard !images.isEmpty else { return nil }
+
+        // Choose candidate entry (cover-like priority)
+        var candidate: CZZipEntry? = nil
+        if options.contains(.preferCoverLike) { candidate = bestCoverLikeEntry(from: images) }
+        if candidate == nil, options.contains(.preferZeroPaddedOne) {
+            candidate = images.first(where: { isZeroPaddedOneFilename($0.filename) })
+        }
+        if candidate == nil { candidate = firstImageEntryByNaturalOrderLinear(entries: images) }
+        guard let entry = candidate else { return nil }
+
+        return createThumbnail(for: entry, in: data, maxPixel: maxPixel)
+    }
+
+    // MARK: - Internal helpers for streaming thumbnail
+    private static func createThumbnail(for entry: CZZipEntry, in zipData: Data, maxPixel: Int) -> CGImage? {
+        guard let info = localFileInfo(in: zipData, entry: entry) else { return nil }
+        let compMethod = info.method
+        let compSlice = zipData.subdata(in: info.fileDataOffset..<(info.fileDataOffset + info.compressedSize))
+        if compMethod == 0 {
+            return thumbnailFromImageData(compSlice as CFData, maxPixel: maxPixel, isFinal: true)
+        }
+        if compMethod == 8 {
+            return inflateToThumbnail(compressed: compSlice, maxPixel: maxPixel)
+        }
+        return nil
+    }
+
+    /// Return method/fileDataOffset/compressedSize from local header, resolving data descriptor when needed.
+    private static func localFileInfo(in data: Data, entry: CZZipEntry) -> (method: UInt16, fileDataOffset: Int, compressedSize: Int)? {
+        let off = entry.localHeaderOffset
+        guard off + 30 <= data.count else { return nil }
+        // Verify local header signature
+        let expected: [UInt8] = [0x50, 0x4b, 0x03, 0x04]
+        if !data.subdata(in: off..<(off+4)).elementsEqual(expected) { return nil }
+        let fnLen = Int(data.subdata(in: off+26..<(off+28)).withUnsafeBytes { $0.load(as: UInt16.self) })
+        let exLen = Int(data.subdata(in: off+28..<(off+30)).withUnsafeBytes { $0.load(as: UInt16.self) })
+        let method = data.subdata(in: off+8..<(off+10)).withUnsafeBytes { $0.load(as: UInt16.self) }
+        let fileDataOffset = off + 30 + fnLen + exLen
+        // Use size from central directory when data descriptor is used
+        let useCompressedSize: Int = (entry.generalPurposeFlag & 0x0008) != 0 ? entry.compressedSize : Int(data.subdata(in: off+18..<(off+22)).withUnsafeBytes { $0.load(as: UInt32.self) })
+        guard useCompressedSize > 0, fileDataOffset + useCompressedSize <= data.count else { return nil }
+        return (method, fileDataOffset, useCompressedSize)
+    }
+
+    private static func thumbnailFromImageData(_ imgData: CFData, maxPixel: Int, isFinal: Bool) -> CGImage? {
+        guard let src = CGImageSourceCreateWithData(imgData, nil) else { return nil }
+        let opts: CFDictionary = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixel),
+            kCGImageSourceShouldCache: false
+        ] as CFDictionary
+        if let th = CGImageSourceCreateThumbnailAtIndex(src, 0, opts) { return th }
+        // Try incremental source for partial data usage
+        let inc1 = CGImageSourceCreateIncremental(nil)
+        CGImageSourceUpdateData(inc1, imgData, isFinal)
+        return CGImageSourceCreateThumbnailAtIndex(inc1, 0, opts)
+    }
+
+    /// Stream-inflate DEFLATE-compressed image and attempt incremental thumbnail creation.
+    private static func inflateToThumbnail(compressed comp: Data, maxPixel: Int) -> CGImage? {
+        let streamPtr = UnsafeMutablePointer<compression_stream>.allocate(capacity: 1)
+        defer { streamPtr.deallocate() }
+        memset(streamPtr, 0, MemoryLayout<compression_stream>.size)
+        var status = compression_stream_init(streamPtr, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB)
+        guard status == COMPRESSION_STATUS_OK else { return nil }
+        defer { compression_stream_destroy(streamPtr) }
+
+        let dstCap = 64 * 1024
+        let dstBuf = UnsafeMutablePointer<UInt8>.allocate(capacity: dstCap)
+        defer { dstBuf.deallocate() }
+
+        guard let outData = CFDataCreateMutable(nil, 0) else { return nil }
+        let inc = CGImageSourceCreateIncremental(nil)
+        let thumbOpts: CFDictionary = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixel),
+            kCGImageSourceShouldCache: false
+        ] as CFDictionary
+
+        var producedThumb: CGImage? = nil
+
+        comp.withUnsafeBytes { rawBuf in
+            guard let srcBase = rawBuf.bindMemory(to: UInt8.self).baseAddress else { return }
+            streamPtr.pointee.src_ptr = srcBase
+            streamPtr.pointee.src_size = comp.count
+            streamPtr.pointee.dst_ptr = dstBuf
+            streamPtr.pointee.dst_size = dstCap
+
+            while status == COMPRESSION_STATUS_OK {
+                status = compression_stream_process(streamPtr, Int32(0))
+                let written = dstCap - streamPtr.pointee.dst_size
+                if written > 0 {
+                    CFDataAppendBytes(outData, dstBuf, written)
+                    streamPtr.pointee.dst_ptr = dstBuf
+                    streamPtr.pointee.dst_size = dstCap
+
+                    // Update incremental source and try to build a thumbnail.
+                    CGImageSourceUpdateData(inc, outData, false)
+                    if producedThumb == nil, let th = CGImageSourceCreateThumbnailAtIndex(inc, 0, thumbOpts) {
+                        producedThumb = th
+                        break
+                    }
+                }
+
+                if status == COMPRESSION_STATUS_END { break }
+                if status == COMPRESSION_STATUS_ERROR { break }
+                if streamPtr.pointee.src_size == 0 && status == COMPRESSION_STATUS_OK {
+                    // No more input but not ended; break to avoid infinite loop
+                    break
+                }
+            }
+        }
+
+        if let th = producedThumb { return th }
+        // Final attempt with full (or partial) data finalized
+        CGImageSourceUpdateData(inc, outData, true)
+        if let th = CGImageSourceCreateThumbnailAtIndex(inc, 0, thumbOpts) { return th }
+        // As a last fallback, create full image (may be heavy)
+        return CGImageSourceCreateImageAtIndex(inc, 0, nil)
     }
 
     /// Read the first image data with an optional early pick rule from raw ZIP data.

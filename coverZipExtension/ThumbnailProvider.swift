@@ -21,31 +21,42 @@ class ThumbnailProvider: QLThumbnailProvider {
      */
     override func provideThumbnail(for request: QLFileThumbnailRequest, _ handler: @escaping (QLThumbnailReply?, Error?) -> Void) {
         
-        // ZIPファイルから最初の画像を抽出してサムネイルを生成
-        // 先頭判定のヒューリスティクスを有効化（0埋め1優先 + 表紙らしさ優先）
-        let opts: CZFirstImageOptions = [.preferZeroPaddedOne, .preferCoverLike]
+        // サムネイルサイズ（実ピクセル）
+        let targetMaxPixels = max(1, Int(ceil(max(request.maximumSize.width, request.maximumSize.height) * request.scale)))
+
+        // 1) ストリーミング展開 + 増分デコードで早期サムネイル生成を試みる
+        let opts: CZFirstImageOptions = [.preferCoverLike, .preferZeroPaddedOne]
+        if let cgImage = ZipProcessor.extractFirstImageThumbnail(at: request.fileURL, options: opts, maxPixel: targetMaxPixels) {
+            let reply = QLThumbnailReply(contextSize: request.maximumSize, currentContextDrawing: { () -> Bool in
+                NSColor.white.setFill()
+                NSBezierPath(rect: NSRect(origin: .zero, size: request.maximumSize)).fill()
+                let imageRect = self.calculateScaledImageRect(imageSize: NSSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height)), canvasSize: request.maximumSize)
+                NSGraphicsContext.current?.cgContext.draw(cgImage, in: imageRect)
+                return true
+            })
+            handler(reply, nil)
+            return
+        }
+
+        // 2) フォールバック: 従来の抽出→サムネイル生成
         guard let imageData = ZipProcessor.extractFirstImageFromZip(at: request.fileURL, options: opts) else {
             handler(nil, NSError(domain: "CoverZipError", code: 1, userInfo: [NSLocalizedDescriptionKey: "No image found in ZIP file"]))
             return
         }
-        
-        // CGImageSource を用いたサムネイル生成（フルデコードを回避し高速化）
-        let targetMaxPixels = max(1, Int(ceil(max(request.maximumSize.width, request.maximumSize.height) * request.scale)))
         let cfOptions = CZImageIOOptionsBuilder.buildThumbnailOptions(maxPixels: targetMaxPixels, cachePolicy: .noCache)
-
         guard let src = CGImageSourceCreateWithData(imageData as CFData, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(src, 0, cfOptions) ?? CGImageSourceCreateImageAtIndex(src, 0, CZImageIOOptionsBuilder.buildDecodeOptions(cachePolicy: .noCache)) else {
-            handler(nil, NSError(domain: "CoverZipError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create CGImage from data"]))
+              let cgFallback = CGImageSourceCreateThumbnailAtIndex(src, 0, cfOptions) ?? CGImageSourceCreateImageAtIndex(src, 0, CZImageIOOptionsBuilder.buildDecodeOptions(cachePolicy: .noCache)) else {
+            handler(nil, NSError(domain: "CoverZipError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create CGImage from data (fallback)"]))
             return
         }
         
         // デバッグ情報を出力
         NSLog("DEBUG: request.maximumSize = \(request.maximumSize)")
         NSLog("DEBUG: request.scale = \(request.scale)")
-        NSLog("DEBUG: cgImage.size(px) = \(cgImage.width)x\(cgImage.height)")
+        NSLog("DEBUG: cgImage.size(px) = \(cgFallback.width)x\(cgFallback.height)")
         
         // 縦横比を維持したサムネイルを生成
-        let cgImageSize = NSSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
+        let cgImageSize = NSSize(width: CGFloat(cgFallback.width), height: CGFloat(cgFallback.height))
         let thumbnailSize = calculateThumbnailSize(for: cgImageSize, maxSize: request.maximumSize)
         NSLog("DEBUG: calculated thumbnailSize = \(thumbnailSize)")
         
@@ -58,7 +69,7 @@ class ThumbnailProvider: QLThumbnailProvider {
             let imageRect = self.calculateScaledImageRect(imageSize: cgImageSize, canvasSize: thumbnailSize)
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             ctx.interpolationQuality = .high
-            ctx.draw(cgImage, in: imageRect)
+            ctx.draw(cgFallback, in: imageRect)
             
             return true
         })
