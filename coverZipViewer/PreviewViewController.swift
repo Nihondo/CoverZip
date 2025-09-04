@@ -561,6 +561,29 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         slideshowItem.target = self
         slideshowItem.state = isSlideshowEnabled ? .on : .off
         menu.addItem(slideshowItem)
+
+        // デコードキャッシュ方針（プレビュー表示のパフォーマンス最適化）
+        let cacheMenuItem = NSMenuItem(title: "画像デコードキャッシュ", action: nil, keyEquivalent: "")
+        let cacheMenu = NSMenu()
+        let policy = AppSettings.shared.imageDecodeCachePolicy
+        let noCache = NSMenuItem(title: "しない（最小メモリ）", action: #selector(setDecodeCacheNoCache(_:)), keyEquivalent: "")
+        noCache.target = self
+        noCache.state = policy == .noCache ? .on : .off
+        cacheMenu.addItem(noCache)
+
+        let deferred = NSMenuItem(title: "遅延（推奨）", action: #selector(setDecodeCacheDeferred(_:)), keyEquivalent: "")
+        deferred.target = self
+        deferred.state = policy == .deferred ? .on : .off
+        cacheMenu.addItem(deferred)
+
+        let immediate = NSMenuItem(title: "即時（最速/メモリ多め）", action: #selector(setDecodeCacheImmediate(_:)), keyEquivalent: "")
+        immediate.target = self
+        immediate.state = policy == .immediate ? .on : .off
+        cacheMenu.addItem(immediate)
+
+        cacheMenuItem.submenu = cacheMenu
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(cacheMenuItem)
         
         return menu
     }
@@ -654,6 +677,26 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         }
         // チェックマークを更新
         sender.state = isSlideshowEnabled ? .on : .off
+    }
+
+    // MARK: - Decode cache policy actions
+    @objc private func setDecodeCacheNoCache(_ sender: NSMenuItem) {
+        AppSettings.shared.imageDecodeCachePolicy = .noCache
+        imageManager.clearCache()
+        displayCurrentImage()
+        updateContextMenuStates()
+    }
+    @objc private func setDecodeCacheDeferred(_ sender: NSMenuItem) {
+        AppSettings.shared.imageDecodeCachePolicy = .deferred
+        imageManager.clearCache()
+        displayCurrentImage()
+        updateContextMenuStates()
+    }
+    @objc private func setDecodeCacheImmediate(_ sender: NSMenuItem) {
+        AppSettings.shared.imageDecodeCachePolicy = .immediate
+        imageManager.clearCache()
+        displayCurrentImage()
+        updateContextMenuStates()
     }
     
     private func startSlideshow() {

@@ -17,12 +17,36 @@ struct PreviewSettingsView: View {
                 headerSection
                 readingDirectionSection
                 displayModeSection
+                decodeCacheSection
                 slideshowSection
                 windowSection
             }
             .padding()
         }
         .frame(minWidth: 450, minHeight: 500)
+    }
+
+    private var decodeCacheSection: some View {
+        GroupBox(label: sectionLabel("画像デコードキャッシュ", systemImage: "memorychip")) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    Text("方針:")
+                    Picker("", selection: Binding(
+                        get: { settings.imageDecodeCachePolicy },
+                        set: { settings.imageDecodeCachePolicy = $0 }
+                    )) {
+                        Text("しない").tag(CZImageDecodeCachePolicy.noCache)
+                        Text("遅延（推奨）").tag(CZImageDecodeCachePolicy.deferred)
+                        Text("即時（最速/メモリ多め）").tag(CZImageDecodeCachePolicy.immediate)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                Text("プレビュー拡張のデコードキャッシュ方針を切り替えます。遅延は初回だけデコードし、以降は再デコードを避けて滑らかに表示します。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.top, 4)
+        }
     }
     
     private var headerSection: some View {

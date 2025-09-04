@@ -37,6 +37,11 @@ final class AppSettingsWriter: ObservableObject {
         didSet { defaults.set(restoreWindowFrameEnabled, forKey: CZSettingsKeys.restoreWindowFrameEnabled) }
     }
 
+    // プレビュー拡張の画像デコードキャッシュ方針
+    @Published var imageDecodeCachePolicy: CZImageDecodeCachePolicy = .deferred {
+        didSet { defaults.set(imageDecodeCachePolicy.rawValue, forKey: CZSettingsKeys.imageDecodeCachePolicy) }
+    }
+
     private init() {
     if let shared = UserDefaults(suiteName: CZAppGroup.identifier) {
             self.defaults = shared
@@ -51,7 +56,8 @@ final class AppSettingsWriter: ObservableObject {
             CZSettingsKeys.defaultViewMode: "auto",
             CZSettingsKeys.slideshowInterval: 3.0,
             CZSettingsKeys.pageTransitionEnabled: true,
-            CZSettingsKeys.restoreWindowFrameEnabled: true
+            CZSettingsKeys.restoreWindowFrameEnabled: true,
+            CZSettingsKeys.imageDecodeCachePolicy: CZImageDecodeCachePolicy.deferred.rawValue
         ])
         
         // Load current values from UserDefaults
@@ -70,6 +76,8 @@ final class AppSettingsWriter: ObservableObject {
         alwaysSinglePageForCover = defaults.object(forKey: CZSettingsKeys.alwaysSinglePageForCover) as? Bool ?? true
         slideshowInterval = defaults.object(forKey: CZSettingsKeys.slideshowInterval) as? Double ?? 3.0
         restoreWindowFrameEnabled = defaults.object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true
+        let rawPolicy = defaults.string(forKey: CZSettingsKeys.imageDecodeCachePolicy) ?? CZImageDecodeCachePolicy.deferred.rawValue
+        imageDecodeCachePolicy = CZImageDecodeCachePolicy(rawValue: rawPolicy) ?? .deferred
         
     let rawViewMode = defaults.string(forKey: CZSettingsKeys.defaultViewMode) ?? "auto"
         defaultViewMode = ViewModePreference(rawValue: rawViewMode) ?? .auto

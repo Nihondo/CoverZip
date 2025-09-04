@@ -18,6 +18,8 @@ public enum CZSettingsKeys {
     // Reading history
     public static let readingHistoryEnabled = "readingHistoryEnabled"
     public static let readingHistoryData = "readingHistoryData"
+    // Image decode/cache policy for preview extension ("noCache" | "deferred" | "immediate")
+    public static let imageDecodeCachePolicy = "imageDecodeCachePolicy"
 }
 
 public enum CZAppGroup {

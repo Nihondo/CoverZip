@@ -7,6 +7,7 @@
 
 import Foundation
 import AppKit
+import ImageIO
 // Shared utilities are provided in Shared/* files
 
 /**
@@ -37,6 +38,8 @@ class ImageManager {
     private var resizedImageCache: [String: NSImage] = [:]
     private let maxResizedCacheSize: Int = 20
     private var targetDisplaySize: NSSize = NSSize.zero
+    // デコードキャッシュ方針（設定から取得、デフォルトは .deferred）
+    private var decodeCachePolicy: CZImageDecodeCachePolicy { AppSettings.shared.imageDecodeCachePolicy }
     
     /**
      * 表示対象サイズを設定（パフォーマンス最適化用）
@@ -84,7 +87,7 @@ class ImageManager {
         }
         
         let imageData = imageEntries[currentIndex].imageData
-        guard let image = NSImage(data: imageData) else {
+        guard let image = decodeImage(data: imageData) else {
             return nil
         }
         
@@ -187,7 +190,7 @@ class ImageManager {
         
         // 画像データから新規作成
         let imageData = imageEntries[index].imageData
-        guard let image = NSImage(data: imageData) else {
+        guard let image = decodeImage(data: imageData) else {
             return nil
         }
         
@@ -508,4 +511,19 @@ class ImageManager {
      * @return 全ての画像ファイルのエントリ配列
      */
     // ZIPのローレベル処理はShared側（CZZip）へ移管済み
+}
+
+// MARK: - Image decode helper
+extension ImageManager {
+    /// ImageIOを用いてNSImageへデコード（キャッシュ方針は設定に追従）
+    private func decodeImage(data: Data) -> NSImage? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else {
+            return NSImage(data: data) // フォールバック
+        }
+        let options = CZImageIOOptionsBuilder.buildDecodeOptions(cachePolicy: decodeCachePolicy)
+        if let cg = CGImageSourceCreateImageAtIndex(src, 0, options) {
+            return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+        }
+        return NSImage(data: data) // フォールバック
+    }
 }

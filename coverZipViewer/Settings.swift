@@ -29,7 +29,8 @@ final class AppSettings {
             CZSettingsKeys.slideshowInterval: 3.0,
             CZSettingsKeys.pageTransitionEnabled: true,
             CZSettingsKeys.restoreWindowFrameEnabled: true,
-            CZSettingsKeys.readingHistoryEnabled: true
+            CZSettingsKeys.readingHistoryEnabled: true,
+            CZSettingsKeys.imageDecodeCachePolicy: CZImageDecodeCachePolicy.deferred.rawValue
         ])
     }
 
@@ -88,5 +89,14 @@ final class AppSettings {
     var readingHistoryEnabled: Bool {
         get { defaults.object(forKey: CZSettingsKeys.readingHistoryEnabled) as? Bool ?? true }
         set { defaults.set(newValue, forKey: CZSettingsKeys.readingHistoryEnabled) }
+    }
+
+    // MARK: - Image decode cache policy (Preview Extension)
+    var imageDecodeCachePolicy: CZImageDecodeCachePolicy {
+        get {
+            let raw = defaults.string(forKey: CZSettingsKeys.imageDecodeCachePolicy) ?? CZImageDecodeCachePolicy.deferred.rawValue
+            return CZImageDecodeCachePolicy(rawValue: raw) ?? .deferred
+        }
+        set { defaults.set(newValue.rawValue, forKey: CZSettingsKeys.imageDecodeCachePolicy) }
     }
 }
