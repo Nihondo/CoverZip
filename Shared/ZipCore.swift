@@ -230,8 +230,6 @@ public enum CZZip {
             kCGImageSourceShouldCache: false
         ] as CFDictionary
 
-        var producedThumb: CGImage? = nil
-
         comp.withUnsafeBytes { rawBuf in
             guard let srcBase = rawBuf.bindMemory(to: UInt8.self).baseAddress else { return }
             streamPtr.pointee.src_ptr = srcBase
@@ -246,13 +244,8 @@ public enum CZZip {
                     CFDataAppendBytes(outData, dstBuf, written)
                     streamPtr.pointee.dst_ptr = dstBuf
                     streamPtr.pointee.dst_size = dstCap
-
-                    // Update incremental source and try to build a thumbnail.
+                    // Update incremental source with partial data (do not finalize; continue streaming)
                     CGImageSourceUpdateData(inc, outData, false)
-                    if producedThumb == nil, let th = CGImageSourceCreateThumbnailAtIndex(inc, 0, thumbOpts) {
-                        producedThumb = th
-                        break
-                    }
                 }
 
                 if status == COMPRESSION_STATUS_END { break }
@@ -264,8 +257,7 @@ public enum CZZip {
             }
         }
 
-        if let th = producedThumb { return th }
-        // Final attempt with full (or partial) data finalized
+        // Finalize and build thumbnail from full data
         CGImageSourceUpdateData(inc, outData, true)
         if let th = CGImageSourceCreateThumbnailAtIndex(inc, 0, thumbOpts) { return th }
         // As a last fallback, create full image (may be heavy)

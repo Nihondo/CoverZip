@@ -27,11 +27,13 @@ class ThumbnailProvider: QLThumbnailProvider {
         // 1) ストリーミング展開 + 増分デコードで早期サムネイル生成を試みる
         let opts: CZFirstImageOptions = [.preferCoverLike, .preferZeroPaddedOne]
         if let cgImage = ZipProcessor.extractFirstImageThumbnail(at: request.fileURL, options: opts, maxPixel: targetMaxPixels) {
-            let reply = QLThumbnailReply(contextSize: request.maximumSize, currentContextDrawing: { () -> Bool in
-                NSColor.white.setFill()
-                NSBezierPath(rect: NSRect(origin: .zero, size: request.maximumSize)).fill()
-                let imageRect = self.calculateScaledImageRect(imageSize: NSSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height)), canvasSize: request.maximumSize)
-                NSGraphicsContext.current?.cgContext.draw(cgImage, in: imageRect)
+            let cgSize = NSSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
+            let thumbSize = calculateThumbnailSize(for: cgSize, maxSize: request.maximumSize)
+            let reply = QLThumbnailReply(contextSize: thumbSize, currentContextDrawing: { () -> Bool in
+                let imageRect = self.calculateScaledImageRect(imageSize: cgSize, canvasSize: thumbSize)
+                guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+                ctx.interpolationQuality = .high
+                ctx.draw(cgImage, in: imageRect)
                 return true
             })
             handler(reply, nil)
@@ -61,16 +63,11 @@ class ThumbnailProvider: QLThumbnailProvider {
         NSLog("DEBUG: calculated thumbnailSize = \(thumbnailSize)")
         
         let reply = QLThumbnailReply(contextSize: thumbnailSize, currentContextDrawing: { () -> Bool in
-            // 背景を白で塗りつぶす
-            NSColor.white.setFill()
-            NSBezierPath(rect: NSRect(origin: .zero, size: thumbnailSize)).fill()
-            
-            // 画像を適切にスケーリングして中央に配置して描画
+            // 画像を適切にスケーリングして中央に配置して描画（背景は透明）
             let imageRect = self.calculateScaledImageRect(imageSize: cgImageSize, canvasSize: thumbnailSize)
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             ctx.interpolationQuality = .high
             ctx.draw(cgFallback, in: imageRect)
-            
             return true
         })
         
