@@ -30,15 +30,10 @@ class ThumbnailProvider: QLThumbnailProvider {
         
         // CGImageSource を用いたサムネイル生成（フルデコードを回避し高速化）
         let targetMaxPixels = max(1, Int(ceil(max(request.maximumSize.width, request.maximumSize.height) * request.scale)))
-        let cfOptions: CFDictionary = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: targetMaxPixels,
-            kCGImageSourceShouldCache: false
-        ] as CFDictionary
+        let cfOptions = ImageIOOptionsBuilder.buildThumbnailOptions(maxPixels: targetMaxPixels, cachePolicy: .noCache)
 
         guard let src = CGImageSourceCreateWithData(imageData as CFData, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(src, 0, cfOptions) ?? CGImageSourceCreateImageAtIndex(src, 0, nil) else {
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(src, 0, cfOptions) ?? CGImageSourceCreateImageAtIndex(src, 0, ImageIOOptionsBuilder.buildDecodeOptions(cachePolicy: .noCache)) else {
             handler(nil, NSError(domain: "CoverZipError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create CGImage from data"]))
             return
         }
@@ -130,5 +125,51 @@ class ThumbnailProvider: QLThumbnailProvider {
         let y = (canvasSize.height - scaledHeight) / 2
         
         return NSRect(x: x, y: y, width: scaledWidth, height: scaledHeight)
+    }
+}
+
+// MARK: - ImageIO options helper
+
+/// 画像デコードのキャッシュ挙動を制御するためのヘルパ
+private enum ImageDecodeCachePolicy {
+    /// キャッシュしない（QuickLook拡張向け、省メモリ）
+    case noCache
+    /// キャッシュは許可するが即時デコードはしない（必要時にデコード）
+    case deferred
+    /// 即時デコードしてキャッシュ（繰り返し描画が多い場合向け）
+    case immediate
+}
+
+private enum ImageIOOptionsBuilder {
+    /// サムネイル生成向けのオプション辞書を生成
+    static func buildThumbnailOptions(maxPixels: Int, cachePolicy: ImageDecodeCachePolicy) -> CFDictionary {
+        var dict: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixels
+        ]
+        applyCachePolicy(cachePolicy, into: &dict)
+        return dict as CFDictionary
+    }
+
+    /// 通常の `CGImageSourceCreateImageAtIndex` 用オプション辞書
+    static func buildDecodeOptions(cachePolicy: ImageDecodeCachePolicy) -> CFDictionary? {
+        var dict: [CFString: Any] = [:]
+        applyCachePolicy(cachePolicy, into: &dict)
+        return dict as CFDictionary
+    }
+
+    private static func applyCachePolicy(_ policy: ImageDecodeCachePolicy, into dict: inout [CFString: Any]) {
+        switch policy {
+        case .noCache:
+            dict[kCGImageSourceShouldCache] = false
+            dict[kCGImageSourceShouldCacheImmediately] = false
+        case .deferred:
+            dict[kCGImageSourceShouldCache] = true
+            dict[kCGImageSourceShouldCacheImmediately] = false
+        case .immediate:
+            dict[kCGImageSourceShouldCache] = true
+            dict[kCGImageSourceShouldCacheImmediately] = true
+        }
     }
 }
