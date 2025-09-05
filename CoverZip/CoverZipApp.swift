@@ -35,7 +35,12 @@ struct CoverZipApp: App {
             }
             .frame(minWidth: 500, minHeight: 550)
         }
-        .commands { FileMenuCommands() }
+        .commands {
+            FileMenuCommands()
+            #if DEBUG
+            DebugMenuCommands()
+            #endif
+        }
     }
     
     /**

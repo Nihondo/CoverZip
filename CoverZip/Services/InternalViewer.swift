@@ -14,16 +14,34 @@ import Foundation
 final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     static let shared = InternalViewer()
 
+    // セーフ入力モード（イベントモニタ/合成クリックを無効化）
+    static var isSafeInputModeEnabled: Bool = true
+
     private var currentURL: URL?
+    // QLPreviewView 用にプレビューアイテムを強参照保持
+    fileprivate var currentPreviewItem: QLPreviewItem?
     // 埋め込みウィンドウ管理
-    private var embeddedWindows: [NSWindow] = []
-    private var windowKeyMonitors: [Int: [Any]] = [:]
+    fileprivate var embeddedWindows: [NSWindow] = []
+    fileprivate var windowKeyMonitors: [Int: [Any]] = [:]
+    // ウィンドウライフサイクル管理（強参照保持）
+    fileprivate var windowDelegates: [Int: WindowLifecycleDelegate] = [:]
+    // クローズ進行中のウィンドウ番号を追跡し、入力処理を止める
+    fileprivate var closingWindows: Set<Int> = []
+    // QLPreviewPanel のクローズ監視
+    private var panelCloseObservers: [Int: NSObjectProtocol] = [:]
     private static var didPromptAX = false
 
     // 公開API: 内蔵ビューアでZIPを表示（QLPreviewViewを埋め込み）
     func show(url: URL) {
     // アプリを前面に
     NSApp.activate(ignoringOtherApps: true)
+
+        // セーフ入力モードではスモークテスト経路をそのまま使用
+        if Self.isSafeInputModeEnabled {
+            // スモークテスト経路 + キー監視のみ有効化
+            QLPreviewSmokeTest.openQuickLookWindow(url: url, enableKeyMonitors: true)
+            return
+        }
 
         // アクセシビリティ権限を事前チェック（必要ならプロンプト）
         if !AXIsProcessTrusted() && !Self.didPromptAX {
@@ -55,6 +73,17 @@ final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
                 panel.delegate = self
                 panel.makeKeyAndOrderFront(nil)
                 panel.reloadData()
+                // パネルクローズ時にデリゲート/データソースを確実に解除
+                let token = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: panel, queue: .main) { [weak self] note in
+                    guard let self, let p = note.object as? QLPreviewPanel else { return }
+                    if p.dataSource === self { p.dataSource = nil }
+                    if p.delegate === self { p.delegate = nil }
+                    self.currentURL = nil
+                    if let t = self.panelCloseObservers.removeValue(forKey: p.windowNumber) {
+                        NotificationCenter.default.removeObserver(t)
+                    }
+                }
+                panelCloseObservers[panel.windowNumber] = token
                 return
             } else {
                 _ = NSWorkspace.shared.open(url)
@@ -64,6 +93,7 @@ final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
         guard let previewView = pv else { return }
 
         previewView.translatesAutoresizingMaskIntoConstraints = false
+        // OS に解放を任せる（前段で無害化を済ませる）
         previewView.shouldCloseWithWindow = true
         previewView.autoresizesSubviews = true
         content.addSubview(previewView)
@@ -74,20 +104,23 @@ final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
             previewView.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
 
-        previewView.previewItem = url as NSURL
+        let item = url as NSURL
+        currentPreviewItem = item
+        previewView.previewItem = item
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(previewView)
 
         embeddedWindows.append(window)
 
-    // コンテキストメニューは拡張側で右クリック/Control-クリックをフックして表示する
+        // コンテキストメニューは拡張側で右クリック/Control-クリックをフックして表示する
 
         // 左右キーでプレビュー内クリックを合成（拡張側のクリック遷移を呼ぶ）
         let addMonitors: () -> Void = { [weak self, weak window, weak previewView] in
             guard let self, let window, let previewView else { return }
             var monitors: [Any] = []
-            if let m1 = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak window, weak previewView] event -> NSEvent? in
-                guard let win = window, win.isKeyWindow, let pv = previewView else { return event }
+            if let m1 = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self, weak window, weak previewView] event -> NSEvent? in
+                guard let self, let win = window, win.isKeyWindow, let pv = previewView else { return event }
+                if self.closingWindows.contains(win.windowNumber) { return nil }
                 switch Int(event.keyCode) {
                 case 123: // ← 左半分
                     NSLog("[EmbeddedQL] keyDown ← (code=%d, isKey=%d)", Int(event.keyCode), win.isKeyWindow ? 1 : 0)
@@ -111,16 +144,14 @@ final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
             self.windowKeyMonitors[window.windowNumber] = monitors
         }
 
-        addMonitors()
-
-        // ウィンドウクローズ時にクリーンアップ
-        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] note in
-            guard let self, let win = note.object as? NSWindow else { return }
-            if let monitors = self.windowKeyMonitors.removeValue(forKey: win.windowNumber) {
-                for m in monitors { NSEvent.removeMonitor(m) }
-            }
-            self.embeddedWindows.removeAll { $0 == win }
+        if !Self.isSafeInputModeEnabled {
+            addMonitors()
         }
+
+        // ウィンドウデリゲートで安全なクローズ処理を統括
+        let delegate = WindowLifecycleDelegate(owner: self, window: window, previewView: previewView)
+        window.delegate = delegate
+        windowDelegates[window.windowNumber] = delegate
     }
     // 共有UserDefaults（App Group 統一）
     func sharedDefaults() -> UserDefaults { UserDefaults(suiteName: CZAppGroup.identifier) ?? .standard }
@@ -251,8 +282,8 @@ private extension InternalViewer {
 
     NSLog("[EmbeddedQL] synthesizeClick side=%@ view=(%.1f,%.1f) window=(%.1f,%.1f) bounds=%@", onLeftHalf ? "left" : "right", x, y, pointInWindow.x, pointInWindow.y, NSStringFromRect(bounds))
 
-        func post(_ type: NSEvent.EventType) {
-            if let ev = NSEvent.mouseEvent(
+        func deliver(_ type: NSEvent.EventType) {
+            guard let ev = NSEvent.mouseEvent(
                 with: type,
                 location: pointInWindow,
                 modifierFlags: [],
@@ -262,30 +293,60 @@ private extension InternalViewer {
                 eventNumber: 0,
                 clickCount: 1,
                 pressure: 1.0
-            ) {
-                NSLog("[EmbeddedQL] postEvent %@ at window=(%.1f,%.1f)", String(describing: type), pointInWindow.x, pointInWindow.y)
-                NSApp.postEvent(ev, atStart: false)
+            ) else { return }
+            if type == .leftMouseDown {
+                NSLog("[EmbeddedQL] direct mouseDown at window=(%.1f,%.1f)", pointInWindow.x, pointInWindow.y)
+                previewView.mouseDown(with: ev)
+            } else if type == .leftMouseUp {
+                NSLog("[EmbeddedQL] direct mouseUp at window=(%.1f,%.1f)", pointInWindow.x, pointInWindow.y)
+                previewView.mouseUp(with: ev)
             }
         }
-        post(.leftMouseDown)
-        post(.leftMouseUp)
+        deliver(.leftMouseDown)
+        deliver(.leftMouseUp)
+    }
+}
 
-        // フォールバック: CGEvent（グローバル）
-        guard AXIsProcessTrusted() else {
-            NSLog("[EmbeddedQL] Accessibility not trusted; skip CGEvent posting")
-            return
-        }
-        let screenPoint = window.convertPoint(toScreen: pointInWindow)
-        let totalMaxY = NSScreen.screens.map { $0.frame.maxY }.max() ?? screenPoint.y
-        let cgPoint = CGPoint(x: screenPoint.x, y: totalMaxY - screenPoint.y)
-        NSLog("[EmbeddedQL] CGEvent click at screen=(%.1f,%.1f) (from window=(%.1f,%.1f))", cgPoint.x, cgPoint.y, screenPoint.x, screenPoint.y)
-        if let down = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: cgPoint, mouseButton: .left),
-           let up = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: cgPoint, mouseButton: .left) {
-            down.post(tap: .cghidEventTap)
-            up.post(tap: .cghidEventTap)
-            NSLog("[EmbeddedQL] CGEvent posted (down/up)")
+// MARK: - Window Lifecycle
+private final class WindowLifecycleDelegate: NSObject, NSWindowDelegate {
+    private weak var owner: InternalViewer?
+    private weak var window: NSWindow?
+    private weak var previewView: QLPreviewView?
+
+    init(owner: InternalViewer, window: NSWindow, previewView: QLPreviewView) {
+        self.owner = owner
+        self.window = window
+        self.previewView = previewView
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard let owner, let win = window else { return true }
+        // セーフモード時は入力系の変更を最小化（OS挙動に寄せる）
+        if InternalViewer.isSafeInputModeEnabled {
+            _ = win.makeFirstResponder(nil)
+            if let monitors = owner.windowKeyMonitors.removeValue(forKey: win.windowNumber) {
+                for m in monitors { NSEvent.removeMonitor(m) }
+            }
         } else {
-            NSLog("[EmbeddedQL] CGEvent create failed")
+            // 従来の無害化
+            owner.closingWindows.insert(win.windowNumber)
+            _ = win.makeFirstResponder(nil)
+            if let monitors = owner.windowKeyMonitors.removeValue(forKey: win.windowNumber) {
+                for m in monitors { NSEvent.removeMonitor(m) }
+            }
+            NSApp.discardEvents(
+                matching: [.leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp, .mouseMoved, .flagsChanged, .keyDown, .keyUp],
+                before: nil
+            )
         }
+        return true
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let owner, let win = window else { return }
+        // 管理参照から除去（クリーンアップのみ）
+        owner.embeddedWindows.removeAll { $0 == win }
+        owner.windowDelegates.removeValue(forKey: win.windowNumber)
+        owner.closingWindows.remove(win.windowNumber)
     }
 }
