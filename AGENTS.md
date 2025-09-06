@@ -93,3 +93,4 @@
 - 2025-08-29 初版作成
 - 2025-08-29 内蔵ビューアの重複解消（EmbeddedPreviewWindowController 削除）
 - 2025-09-06 QLPreviewSmokeTest を正式化し `QLPreviewInputDriver` として採用
+- 2025-09-06 内蔵ビューアの入力経路を `QLPreviewInputDriver` に統一（セーフ入力モード分岐を廃止）

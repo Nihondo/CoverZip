@@ -72,9 +72,8 @@ enum QLPreviewInputDriver {
             ])
             previewView.previewItem = url as NSURL
 
-            var forwarderRef: KeyForwardingView?
+            let forwarderRef = addKeyForwarder(window: window, previewView: previewView)
             if enableKeyMonitors {
-                forwarderRef = addKeyForwarder(window: window, previewView: previewView)
                 addKeyMonitors(window: window, previewView: previewView)
             }
 
@@ -99,6 +98,20 @@ enum QLPreviewInputDriver {
                     NotificationCenter.default.removeObserver(obs)
                 }
             }
+        }
+    }
+
+    /// 既存ウィンドウに入力フォワーダを取り付ける（埋め込み用）
+    /// - Note: 内蔵ビューアの埋め込み `QLPreviewView` に対して矢印キー→クリック合成を提供する。
+    static func attachInputForwarder(to window: NSWindow, previewView: QLPreviewView) {
+        guard let forwarder = addKeyForwarder(window: window, previewView: previewView) else { return }
+        // キー化後に改めて First Responder をセット（QL が奪うのを防ぐ）
+        DispatchQueue.main.async { window.makeFirstResponder(forwarder) }
+        let obs = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { _ in
+            window.makeFirstResponder(forwarder)
+        }
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
+            NotificationCenter.default.removeObserver(obs)
         }
     }
 

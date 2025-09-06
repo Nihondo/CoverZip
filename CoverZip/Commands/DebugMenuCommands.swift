@@ -14,13 +14,6 @@ struct DebugMenuCommands: Commands {
             Button("QuickLook 入力ドライバテスト…") {
                 QLPreviewInputDriver.presentAndOpen()
             }
-            Divider()
-            Toggle(isOn: Binding<Bool>(
-                get: { InternalViewer.isSafeInputModeEnabled },
-                set: { InternalViewer.isSafeInputModeEnabled = $0 }
-            )) {
-                Text("内蔵ビューア: セーフ入力モード")
-            }
         }
     }
 }
