@@ -22,6 +22,8 @@ enum QLPreviewInputDriver {
     private static var retainedWindows: [NSWindow] = []
     // ローカルイベントモニタは廃止（フォワーダ方式に一本化）
     private static var didPromptAX: Bool = false
+    /// コンテキストメニュー供給（アプリ側で設定）
+    static var contextMenuProvider: (() -> NSMenu)?
     
     /// アクセシビリティ権限を確認し、必要なら一度だけプロンプトを表示
     /// - Returns: 権限が有効なら true
@@ -153,7 +155,13 @@ enum QLPreviewInputDriver {
         required init?(coder: NSCoder) { nil }
         override var acceptsFirstResponder: Bool { true }
         override var isOpaque: Bool { false }
-        override func hitTest(_ point: NSPoint) -> NSView? { nil } // マウスは下のビューへ通す
+        // 左クリックはプレビューへ通し、右クリック/Control-クリックは自分で受ける
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard let ev = NSApp.currentEvent else { return nil }
+            if ev.type == .rightMouseDown { return self }
+            if ev.type == .leftMouseDown && ev.modifierFlags.contains(.control) { return self }
+            return nil
+        }
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let win = self.window { DispatchQueue.main.async { win.makeFirstResponder(self) } }
@@ -165,6 +173,9 @@ enum QLPreviewInputDriver {
             case 124: handler(false) // → 右半分クリック
             default: super.keyDown(with: event)
             }
+        }
+        override func menu(for event: NSEvent) -> NSMenu? {
+            return QLPreviewInputDriver.contextMenuProvider?()
         }
     }
 

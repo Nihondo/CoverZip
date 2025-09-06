@@ -16,6 +16,11 @@ final class InternalViewer: NSObject {
     func show(url: URL) {
         // アプリを前面に
         NSApp.activate(ignoringOtherApps: true)
+        // 右クリックのメニューをアプリ側から供給
+        QLPreviewInputDriver.contextMenuProvider = { [weak self] in
+            guard let self else { return NSMenu() }
+            return self.makeContextMenu()
+        }
         // 正式経路: 入力ドライバの単体ウィンドウを開く
         QLPreviewInputDriver.openQuickLookWindow(url: url)
     }
