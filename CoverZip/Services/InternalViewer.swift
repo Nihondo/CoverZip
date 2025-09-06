@@ -17,7 +17,7 @@ final class InternalViewer: NSObject {
         // アプリを前面に
         NSApp.activate(ignoringOtherApps: true)
         // 正式経路: 入力ドライバの単体ウィンドウを開く
-        QLPreviewInputDriver.openQuickLookWindow(url: url, enableKeyMonitors: true)
+        QLPreviewInputDriver.openQuickLookWindow(url: url)
     }
     // 共有UserDefaults（App Group 統一）
     func sharedDefaults() -> UserDefaults { UserDefaults(suiteName: CZAppGroup.identifier) ?? .standard }
