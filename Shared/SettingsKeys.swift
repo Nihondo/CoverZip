@@ -26,3 +26,9 @@ public enum CZAppGroup {
     /// Must match the App Group in entitlements for both App and Extensions
     public static let identifier: String = "group.com.dmng.CoverZip"
 }
+
+// Distributed notifications used to sync settings across App and Extensions
+public enum CZDistributedNotifications {
+    // Post this when App-side settings have changed and should be reflected in extensions
+    public static let settingsChanged = Notification.Name("com.dmng.CoverZip.settingsChanged")
+}

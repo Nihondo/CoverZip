@@ -44,6 +44,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var isTransitionEnabled: Bool = true
     // リサイズ監視のためのオブザーバ
     private var windowObservers: [NSObjectProtocol] = []
+    // 分散通知（App→Extension設定同期）用オブザーバ
+    private var distributedObservers: [NSObjectProtocol] = []
     // セッション中にユーザーがウィンドウをリサイズしたか
     private var hasUserResizedWindow: Bool = false
     // 履歴から綴じ方向を復元済みか（既定で上書きしないためのフラグ）
@@ -233,6 +235,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 通知クリーンアップ
         for o in windowObservers { NotificationCenter.default.removeObserver(o) }
         windowObservers.removeAll()
+        for d in distributedObservers { DistributedNotificationCenter.default().removeObserver(d) }
+        distributedObservers.removeAll()
         for m in mouseMonitors { NSEvent.removeMonitor(m) }
         mouseMonitors.removeAll()
         pendingSingleClick?.cancel()
@@ -311,6 +315,31 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         
         // 初期表示サイズを設定
         updateImageManagerDisplaySize()
+
+        // アプリ側の設定変更を反映（Distributed Notification 経由）
+        let distObs = DistributedNotificationCenter.default().addObserver(forName: CZDistributedNotifications.settingsChanged, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            // 最新設定を共有UserDefaultsから再取得
+            let newRTL = self.loadIsRTL()
+            if newRTL != self.isRightToLeftReading {
+                self.isRightToLeftReading = newRTL
+                self.applySliderLayoutDirection()
+                self.syncSliderToCurrentPage()
+            }
+            let newTransition = self.loadTransitionEnabled()
+            if newTransition != self.isTransitionEnabled { self.isTransitionEnabled = newTransition }
+            let newViewMode = self.loadDefaultViewMode()
+            if newViewMode != self.userPreferredViewMode {
+                self.userPreferredViewMode = newViewMode
+            }
+            // 表示更新
+            if self.imageManager.hasImages() {
+                self.displayCurrentImage()
+            }
+            // メニュー状態を更新
+            self.updateContextMenuStates()
+        }
+        distributedObservers.append(distObs)
     }
 
     override func viewDidLayout() {

@@ -86,25 +86,30 @@ final class InternalViewer: NSObject {
         sender.state = .on
         (sender.menu?.item(withTitle: "左綴じ"))?.state = .off
         // 反映は拡張側に任せる（Shared Defaults参照）
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
 
     @objc func setLeftToRight(_ sender: NSMenuItem) {
         sharedDefaults().set(false, forKey: CZSettingsKeys.isRightToLeftReading)
         sender.state = .on
         (sender.menu?.item(withTitle: "右綴じ"))?.state = .off
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
 
     @objc func setViewModeAuto(_ sender: NSMenuItem) {
         sharedDefaults().set("auto", forKey: CZSettingsKeys.defaultViewMode)
         updateModeStates(sender)
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
     @objc func setViewModeSingle(_ sender: NSMenuItem) {
         sharedDefaults().set("single", forKey: CZSettingsKeys.defaultViewMode)
         updateModeStates(sender)
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
     @objc func setViewModeSpread(_ sender: NSMenuItem) {
         sharedDefaults().set("spread", forKey: CZSettingsKeys.defaultViewMode)
         updateModeStates(sender)
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
     private func updateModeStates(_ sender: NSMenuItem) {
         for t in ["自動","単ページ","見開き"] { sender.menu?.item(withTitle: t)?.state = .off }
@@ -116,6 +121,7 @@ final class InternalViewer: NSObject {
         let next = !cur
         sharedDefaults().set(next, forKey: CZSettingsKeys.pageTransitionEnabled)
         sender.state = next ? .on : .off
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
 
     @objc func toggleSlideshow(_ sender: NSMenuItem) {
