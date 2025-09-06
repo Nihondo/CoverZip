@@ -6,6 +6,7 @@
 //  - First Responder 専用のフォワーダビューで左右キーを受け取り、
 //    プレビュー領域左右半分へのクリック（ダウン/アップ）を合成してページ送りを駆動
 //  - 入力はフォワーダビュー経由に統一（ローカルイベントモニタは廃止）。
+//  - クリック注入は CGEvent を使用（アクセシビリティ権限が必要）。
 //  - ウィンドウクローズは OS の標準挙動に委ね、独自破棄は行わない。
 //
 
@@ -20,6 +21,22 @@ enum QLPreviewInputDriver {
     /// テスト用ウィンドウを保持（早期解放を防ぐ）
     private static var retainedWindows: [NSWindow] = []
     // ローカルイベントモニタは廃止（フォワーダ方式に一本化）
+    private static var didPromptAX: Bool = false
+    
+    /// アクセシビリティ権限を確認し、必要なら一度だけプロンプトを表示
+    /// - Returns: 権限が有効なら true
+    @discardableResult
+    private static func ensureAccessibilityPermission() -> Bool {
+        if AXIsProcessTrusted() { return true }
+        if !didPromptAX {
+            let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+            let options = [key: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+            didPromptAX = true
+            NSLog("[QLInputDriver] Requested Accessibility permission for CGEvent posting")
+        }
+        return AXIsProcessTrusted()
+    }
 
     /// オープンパネルを出して ZIP を選択し、最小構成の QLPreviewView ウィンドウを開く
     /// - Note: 開発メニューや動作確認用のユーティリティ。
@@ -160,7 +177,10 @@ enum QLPreviewInputDriver {
         let pointInWindow = previewView.convert(pointInView, to: nil)
 
         // CGEvent（リモートレイヤ越しに確実にイベントを届ける）
-        if AXIsProcessTrusted() {
+        guard ensureAccessibilityPermission() else {
+            NSLog("[QLInputDriver] Cannot synthesize click: Accessibility permission not granted")
+            return
+        }
             let screenPoint = window.convertPoint(toScreen: pointInWindow)
             let totalMaxY = NSScreen.screens.map { $0.frame.maxY }.max() ?? screenPoint.y
             let cgPoint = CGPoint(x: screenPoint.x, y: totalMaxY - screenPoint.y)
@@ -169,7 +189,6 @@ enum QLPreviewInputDriver {
                 down.post(tap: .cghidEventTap)
                 up.post(tap: .cghidEventTap)
             }
-        }
     }
 }
 
