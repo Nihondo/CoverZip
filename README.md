@@ -95,6 +95,11 @@ xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUI
   - Page Up/Down: 5ページずつ移動
   - Escape: プレビューを閉じる
 
+### アプリ内プレビュー（内蔵ビューア）
+- アプリ内でも Quick Look のプレビューを使用しています（`QLPreviewView` 埋め込み）。
+- キー入力は専用のフォワーダビューで受け取り、プレビュー領域左右へのクリックを合成してページ移動します。
+- 安定性のため、ウィンドウを閉じる際は OS の標準解放順序に任せ、独自のビュー破棄は行いません（2025-09 変更）。
+
 ### ZIPファイルルーティング機能
 1. CoverZipにZIPファイルをドロップまたは関連付けで開く
 2. ファイル名に基づいてキーワードマッチングが実行

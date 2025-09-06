@@ -35,7 +35,9 @@
 
 ## 内蔵ビューアと拡張の連携
 - アプリ側の内蔵ビューア: `CoverZip/Services/InternalViewer.swift`（`QLPreviewView` をウィンドウに埋め込み）。
-- 左右キー押下でプレビュー領域の左右半分へマウスクリックを合成し、拡張側のページ送りを駆動。
+- キー入力処理は `KeyForwardingView`（First Responder 専用の薄いビュー）で受け取り、プレビュー領域の左右半分への左クリック（ダウン/アップ）を合成してページ送りを駆動（`QLPreviewSmokeTest` 実装を流用）。
+- `QLPreviewView` 自体を First Responder にしない（クローズ時の解放競合を回避）。
+- クローズ時は OS の標準解放順序（`shouldCloseWithWindow = true`）に委ね、独自のビュー破棄は行わない。
 - コンテキストメニュー項目（読み方向/表示モード/アニメ等）は共有 UserDefaults を介して同期。
 
 ## 実装ポリシー（変更方針）
@@ -59,7 +61,8 @@
    - method 0/8 のみ、Zip64/暗号化非対応。8MB 固定バッファの伸長が必要なケースがある。
    - 改善にはメモリ安全性（上限/逐次解凍）と後方互換の検討が必要。
 3) 内蔵ビューアの実装整理（対応済み）
-   - 以前は `InternalViewer` と `EmbeddedPreviewWindowController` が重複していたが、`InternalViewer` を正とし `EmbeddedPreviewWindowController` は削除済み。
+- 以前は `InternalViewer` と `EmbeddedPreviewWindowController` が重複していたが、`InternalViewer` を正とし `EmbeddedPreviewWindowController` は削除済み。
+- 2025-09: QL クローズ時の EXC_BAD_ACCESS 対策として、First Responder をフォワーダビューに固定し、イベントモニタ/CGEvent 依存を削減。安定構成を既定化。
 4) テンプレコードの整理
    - `coverZipViewer/PreviewProvider.swift` はテンプレ実装。ビルドに不要なら除外/削除検討。
 
