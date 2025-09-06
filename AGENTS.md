@@ -35,7 +35,7 @@
 
 ## 内蔵ビューアと拡張の連携
 - アプリ側の内蔵ビューア: `CoverZip/Services/InternalViewer.swift`（`QLPreviewView` をウィンドウに埋め込み）。
-- キー入力処理は `KeyForwardingView`（First Responder 専用の薄いビュー）で受け取り、プレビュー領域の左右半分への左クリック（ダウン/アップ）を合成してページ送りを駆動（`QLPreviewSmokeTest` 実装を流用）。
+- キー入力処理は `KeyForwardingView`（First Responder 専用の薄いビュー）で受け取り、プレビュー領域の左右半分への左クリック（ダウン/アップ）を合成してページ送りを駆動（正式: `QLPreviewInputDriver`）。
 - `QLPreviewView` 自体を First Responder にしない（クローズ時の解放競合を回避）。
 - クローズ時は OS の標準解放順序（`shouldCloseWithWindow = true`）に委ね、独自のビュー破棄は行わない。
 - コンテキストメニュー項目（読み方向/表示モード/アニメ等）は共有 UserDefaults を介して同期。
@@ -92,3 +92,4 @@
 更新履歴:
 - 2025-08-29 初版作成
 - 2025-08-29 内蔵ビューアの重複解消（EmbeddedPreviewWindowController 削除）
+- 2025-09-06 QLPreviewSmokeTest を正式化し `QLPreviewInputDriver` として採用

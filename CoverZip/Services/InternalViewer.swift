@@ -38,8 +38,8 @@ final class InternalViewer: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
 
         // セーフ入力モードではスモークテスト経路をそのまま使用
         if Self.isSafeInputModeEnabled {
-            // スモークテスト経路 + キー監視のみ有効化
-            QLPreviewSmokeTest.openQuickLookWindow(url: url, enableKeyMonitors: true)
+            // セーフ入力モード: 入力ドライバの単体ウィンドウ経路を使用
+            QLPreviewInputDriver.openQuickLookWindow(url: url, enableKeyMonitors: true)
             return
         }
 

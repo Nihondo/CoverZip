@@ -11,8 +11,8 @@ import SwiftUI
 struct DebugMenuCommands: Commands {
     var body: some Commands {
         CommandMenu("開発") {
-            Button("QuickLook スモークテスト…") {
-                QLPreviewSmokeTest.presentAndOpen()
+            Button("QuickLook 入力ドライバテスト…") {
+                QLPreviewInputDriver.presentAndOpen()
             }
             Divider()
             Toggle(isOn: Binding<Bool>(
