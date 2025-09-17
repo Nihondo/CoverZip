@@ -13,6 +13,7 @@
   - 「ZIPを開く…」メニューは常に内蔵ビューアを使用。
 - `coverZipViewer` (Quick Look プレビュー拡張)
   - ZIP 内画像の閲覧 UI（単ページ/見開き/自動、右綴じ/左綴じ、ページ送りアニメ、スライドショー、履歴など）。
+  - 操作方法: マウスクリック、キーボード、スクロールホイール対応。
   - 主要ファイル: `coverZipViewer/PreviewViewController.swift`、`coverZipViewer/ImageManager.swift`、`coverZipViewer/ReadingHistoryManager.swift`、`coverZipViewer/Base.lproj/PreviewViewController.xib`。
 - `coverZipExtension` (サムネイル拡張)
   - ZIP の先頭画像からサムネイル生成。
@@ -68,7 +69,7 @@
 
 ## テスト・検証の要点
 - ルーティング: 複数の ZIP 名/パスで `contains`/`wildcard`/`regex` の動作を確認。`internal` 指定で内蔵ビューアに遷移すること。
-- 内蔵ビューア: 左右クリック/キーでページ送り、右綴じ/左綴じ、単/見開き/自動の切り替え、スライドショー動作。
+- 内蔵ビューア: 左右クリック/キー/スクロールホイールでページ送り、右綴じ/左綴じ、単/見開き/自動の切り替え、スライドショー動作。
 - 履歴: ZIP ごとの最終ページ・表示モード・綴じ方向・見開き補正が復元されること（App Group の UserDefaults に保存）。
 - サムネイル: Finder でのサムネイル生成（異常系もログ確認）。
 
@@ -94,3 +95,4 @@
 - 2025-08-29 内蔵ビューアの重複解消（EmbeddedPreviewWindowController 削除）
 - 2025-09-06 QLPreviewSmokeTest を正式化し `QLPreviewInputDriver` として採用
 - 2025-09-06 内蔵ビューアの入力経路を `QLPreviewInputDriver` に統一（セーフ入力モード分岐を廃止）
+- 2025-09-17 Preview Extension にマウスホイールスクロール対応を追加

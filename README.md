@@ -88,6 +88,7 @@ xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUI
 
 #### プレビュー操作方法
 - **ページ移動**: 画面の左右をクリック、または矢印キーで移動
+- **マウスホイール**: 上下スクロールでページ送り/戻し（読書方向設定に対応）
 - **スライダー操作**: ページスライダーをクリック・ドラッグで任意のページへジャンプ
 - **キーボード操作**:
   - 左右矢印キー: ページ移動（読書方向設定に応じて動作）
@@ -251,7 +252,7 @@ processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
 #### Preview Extension UI
 - NSViewControllerベースのフルUI制御
 - ページスライダー・ページ番号表示
-- マウス/キーボード操作対応
+- マウス/キーボード/スクロールホイール操作対応
 - RTL読書方向（右から左）対応
 - レスポンシブUIデザイン
 
