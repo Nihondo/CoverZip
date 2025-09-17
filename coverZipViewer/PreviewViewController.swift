@@ -57,6 +57,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var loadingIndicator: NSProgressIndicator?
     // 全件読み込み完了後に適用する予定のページ（ヒューリスティクス先頭表示→履歴ページへ移動のため）
     private var pendingRestorePage: Int?
+
+    // マウスホイールスクロール管理
+    private var scrollAccumulator: CGFloat = 0.0
+    private let scrollThreshold: CGFloat = 10.0 // ページ送りに必要な累積量
+    private var lastScrollTime: TimeInterval = 0
+    private let scrollCooldownInterval: TimeInterval = 0.1 // 連続スクロール防止間隔
     
     // 表示モード
     enum ViewMode {
@@ -146,6 +152,27 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return nil
         }) {
             mouseMonitors.append(rdown)
+        }
+        // マウスホイールスクロールでページ送り
+        if let scroll = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: { [weak self] event -> NSEvent? in
+            guard let self else { return event }
+            if self.view.window != nil {
+                // 座標変換に失敗したら安全側でイベントを通す
+                guard let p = self.convertEventPointToView(event) else { return event }
+                // 自ビュー領域内のスクロールのみ処理
+                guard self.view.bounds.contains(p) else { return event }
+                // スライダーなどのNSControl（やそのサブビュー）上のスクロールは通す（ただしimageView配下は除外）
+                if self.isPointInsidePassThroughControl(p) {
+                    return event
+                }
+                // スクロールでページ送り処理を実行
+                if self.handleScrollEvent(event) {
+                    return nil // イベントを吸収
+                }
+            }
+            return event
+        }) {
+            mouseMonitors.append(scroll)
         }
         if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
@@ -1041,6 +1068,84 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             t2.timingFunction = t.timingFunction
             rLayer.add(t2, forKey: "cz_push_r")
         }
+    }
+
+    // MARK: - Mouse Wheel Scroll Handling
+
+    private func handleScrollEvent(_ event: NSEvent) -> Bool {
+        let currentTime = CACurrentMediaTime()
+        let deltaY = event.scrollingDeltaY
+
+        // 横スクロールは無視（縦スクロールのみ処理）
+        guard abs(deltaY) > 0.1 else { return false }
+
+        // 連続スクロール防止のクールダウン時間チェック
+        if currentTime - lastScrollTime < scrollCooldownInterval {
+            return false
+        }
+
+        // スクロール量を累積
+        scrollAccumulator += deltaY
+
+        // 閾値を超えた場合のみページ送りを実行
+        if abs(scrollAccumulator) >= scrollThreshold {
+            let shouldNextPage: Bool
+
+            // スクロール方向と読み方向設定でページ送り方向を決定
+            if isRightToLeftReading {
+                // 右綴じ: 下スクロール(-)=次ページ、上スクロール(+)=前ページ
+                shouldNextPage = scrollAccumulator < 0
+            } else {
+                // 左綴じ: 下スクロール(-)=次ページ、上スクロール(+)=前ページ
+                shouldNextPage = scrollAccumulator < 0
+            }
+
+            // ページ送り実行
+            let didChangePage = performPageNavigation(forward: shouldNextPage)
+
+            if didChangePage {
+                // ページ送りが成功した場合のみ累積量をリセット
+                scrollAccumulator = 0.0
+                lastScrollTime = currentTime
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private func performPageNavigation(forward: Bool) -> Bool {
+        let isSpreadMode = currentViewMode == .spread
+
+        // スライドショー中の手動操作は一時的に停止・再開
+        let wasSlideshow = isSlideshowEnabled
+        if wasSlideshow { stopSlideshow() }
+
+        let didChange: Bool
+        if forward {
+            didChange = imageManager.nextImage(isSpreadMode: isSpreadMode)
+            if didChange {
+                setViewMode(shouldUseSpreadMode() ? .spread : .single)
+                applyTransition(forward: true)
+                displayCurrentImage()
+                saveReadingPositionToHistory()
+            }
+        } else {
+            didChange = imageManager.previousImage(isSpreadMode: isSpreadMode)
+            if didChange {
+                setViewMode(shouldUseSpreadMode() ? .spread : .single)
+                applyTransition(forward: false)
+                displayCurrentImage()
+                saveReadingPositionToHistory()
+            }
+        }
+
+        // スライドショーが動いていた場合は再開
+        if wasSlideshow && didChange {
+            startSlideshow()
+        }
+
+        return didChange
     }
 
     // トランジションのON/OFF切替
