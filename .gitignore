@@ -1,7 +1,5 @@
 # OS X
 .DS_Store
-build/*
+
+.*/
 */xcuserdata/*
-.vscode/launch.json
-.build/workspace-state.json
-wiki-ja/*

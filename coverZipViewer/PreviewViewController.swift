@@ -249,35 +249,35 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     override func viewDidAppear() {
         super.viewDidAppear()
-    // Quick LookではFirst Responderを取得しない
+        // Quick LookではFirst Responderを取得しない
         // レイアウト完了後のサイズで初回画像を再フィット
         // 設定の変更を反映
-    let newRTL = loadIsRTL()
+        let newRTL = loadIsRTL()
         if !didRestoreRTLFromHistory && newRTL != isRightToLeftReading {
             isRightToLeftReading = newRTL
             applySliderLayoutDirection()
             syncSliderToCurrentPage()
         }
-    let newThreshold = loadSliderThreshold()
+        let newThreshold = loadSliderThreshold()
         if newThreshold != sliderVisibilityWidthThreshold { sliderVisibilityWidthThreshold = newThreshold; updateSliderVisibilityForContext() }
-    // ページ送りアニメ設定の変更を反映
-    let newTransition = loadTransitionEnabled()
-    if newTransition != isTransitionEnabled { isTransitionEnabled = newTransition }
-    
-    // デフォルト表示モード設定の変更をチェック
-    let newViewMode = loadDefaultViewMode()
-    if !didRestoreViewModeFromHistory && newViewMode != userPreferredViewMode { 
-        userPreferredViewMode = newViewMode
-        // 設定変更時は表示を即座に更新
-        if imageManager.hasImages() { displayCurrentImage() }
-    }
+        // ページ送りアニメ設定の変更を反映
+        let newTransition = loadTransitionEnabled()
+        if newTransition != isTransitionEnabled { isTransitionEnabled = newTransition }
+        
+        // デフォルト表示モード設定の変更をチェック
+        let newViewMode = loadDefaultViewMode()
+        if !didRestoreViewModeFromHistory && newViewMode != userPreferredViewMode {
+            userPreferredViewMode = newViewMode
+            // 設定変更時は表示を即座に更新
+            if imageManager.hasImages() { displayCurrentImage() }
+        }
         if imageManager.hasImages() {
             applyInitialViewModeIfNeeded()
             displayCurrentImage()
         }
         // ホストにサイズ希望を伝える（可能なら）
         updatePreferredContentSizeIfNeeded()
-    // 表示コンテキストに応じてスライダー可視性を更新
+        // 表示コンテキストに応じてスライダー可視性を更新
         updateSliderVisibilityForContext()
         // 読み込み状態に応じてインジケータを更新
         updateLoadingIndicator()
@@ -321,7 +321,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             guard let self else { return }
             // 最新設定を共有UserDefaultsから再取得
             let newRTL = self.loadIsRTL()
-            if newRTL != self.isRightToLeftReading {
+            if !self.didRestoreRTLFromHistory && newRTL != self.isRightToLeftReading {
                 self.isRightToLeftReading = newRTL
                 self.applySliderLayoutDirection()
                 self.syncSliderToCurrentPage()
@@ -329,7 +329,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             let newTransition = self.loadTransitionEnabled()
             if newTransition != self.isTransitionEnabled { self.isTransitionEnabled = newTransition }
             let newViewMode = self.loadDefaultViewMode()
-            if newViewMode != self.userPreferredViewMode {
+            if !self.didRestoreViewModeFromHistory && newViewMode != self.userPreferredViewMode {
                 self.userPreferredViewMode = newViewMode
             }
             // 表示更新
@@ -694,69 +694,75 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // 表示モード切替アクション
     @objc private func setViewModeAuto(_ sender: NSMenuItem) {
         userPreferredViewMode = .auto
+        didRestoreViewModeFromHistory = true
         displayCurrentImage()
         updateContextMenuStates()
-    // 履歴を保存（表示モード変更）
-    saveReadingPositionToHistory()
+        // 履歴を保存（表示モード変更）
+        saveReadingPositionToHistory()
     }
     
     @objc private func setViewModeSingle(_ sender: NSMenuItem) {
         userPreferredViewMode = .single
+        didRestoreViewModeFromHistory = true
         displayCurrentImage()
         updateContextMenuStates()
-    // 履歴を保存（表示モード変更）
-    saveReadingPositionToHistory()
+        // 履歴を保存（表示モード変更）
+        saveReadingPositionToHistory()
     }
     
     @objc private func setViewModeSpread(_ sender: NSMenuItem) {
         userPreferredViewMode = .spread
+        didRestoreViewModeFromHistory = true
         displayCurrentImage()
         updateContextMenuStates()
-    // 履歴を保存（表示モード変更）
-    saveReadingPositionToHistory()
+        // 履歴を保存（表示モード変更）
+        saveReadingPositionToHistory()
     }
     
     // 読み方向切替アクション
     @objc private func setRightToLeft(_ sender: NSMenuItem) {
         isRightToLeftReading = true
+        didRestoreRTLFromHistory = true
         
         // UI要素を即座に更新
         applySliderLayoutDirection()
         syncSliderToCurrentPage()
         displayCurrentImage()
         updateContextMenuStates()
-    // 履歴を保存
-    saveReadingPositionToHistory()
+        // 履歴を保存
+        saveReadingPositionToHistory()
     }
     
     @objc private func setLeftToRight(_ sender: NSMenuItem) {
         isRightToLeftReading = false
+        didRestoreRTLFromHistory = true
         
         // UI要素を即座に更新
         applySliderLayoutDirection()
         syncSliderToCurrentPage()
         displayCurrentImage()
         updateContextMenuStates()
-    // 履歴を保存
-    saveReadingPositionToHistory()
+        // 履歴を保存
+        saveReadingPositionToHistory()
     }
     
     @objc private func toggleReadingDirection(_ sender: NSMenuItem) {
         // 読み方向を切り替え
         isRightToLeftReading.toggle()
+        didRestoreRTLFromHistory = true
         
         // チェックマークを更新（左綴じ時にチェック）
         sender.state = !isRightToLeftReading ? .on : .off
         
         // 設定を保存
-    // セッション内のみ反映（永続化しない）
+        // セッション内のみ反映（永続化しない）
         
         // UI要素を即座に更新
         applySliderLayoutDirection()
         syncSliderToCurrentPage()
         displayCurrentImage()
-    // 履歴を保存
-    saveReadingPositionToHistory()
+        // 履歴を保存
+        saveReadingPositionToHistory()
     }
     
     @objc private func toggleSlideshow(_ sender: NSMenuItem) {
