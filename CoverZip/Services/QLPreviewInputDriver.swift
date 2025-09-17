@@ -24,6 +24,60 @@ enum QLPreviewInputDriver {
     private static var didPromptAX: Bool = false
     /// コンテキストメニュー供給（アプリ側で設定）
     static var contextMenuProvider: (() -> NSMenu)?
+
+    // MARK: - Window Frame Management
+
+    /// 共有UserDefaults（App Group）
+    private static func sharedDefaults() -> UserDefaults {
+        return UserDefaults(suiteName: CZAppGroup.identifier) ?? .standard
+    }
+
+    /// ウィンドウフレーム復元が有効かどうか
+    private static func isRestoreWindowFrameEnabled() -> Bool {
+        return sharedDefaults().object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true
+    }
+
+    /// 保存されたウィンドウフレームを読み込み
+    private static func loadSavedWindowFrame() -> NSRect? {
+        guard isRestoreWindowFrameEnabled(),
+              let frameString = sharedDefaults().string(forKey: CZSettingsKeys.savedWindowFrameString) else {
+            return nil
+        }
+        return NSRectFromString(frameString)
+    }
+
+    /// ウィンドウフレームを保存
+    private static func saveWindowFrame(_ frame: NSRect) {
+        guard isRestoreWindowFrameEnabled() else { return }
+        sharedDefaults().set(NSStringFromRect(frame), forKey: CZSettingsKeys.savedWindowFrameString)
+        NSLog("[QLInputDriver] Saved window frame: %@", NSStringFromRect(frame))
+    }
+
+    /// 適切な初期ウィンドウサイズを計算
+    private static func calculateInitialWindowSize() -> NSSize {
+        // 保存されたサイズがあればそれを使用
+        if let savedFrame = loadSavedWindowFrame() {
+            return savedFrame.size
+        }
+
+        // スクリーンサイズの75%程度の大きさで開く
+        guard let screen = NSScreen.main else {
+            return NSSize(width: 900, height: 650) // フォールバック
+        }
+
+        let visibleFrame = screen.visibleFrame
+        let width = visibleFrame.width * 0.75
+        let height = visibleFrame.height * 0.75
+
+        // 最小サイズ制限
+        let minWidth: CGFloat = 600
+        let minHeight: CGFloat = 400
+
+        return NSSize(
+            width: max(width, minWidth),
+            height: max(height, minHeight)
+        )
+    }
     
     /// アクセシビリティ権限を確認し、必要なら一度だけプロンプトを表示
     /// - Returns: 権限が有効なら true
@@ -57,14 +111,30 @@ enum QLPreviewInputDriver {
     /// - Parameter url: 表示する ZIP の URL
     static func openQuickLookWindow(url: URL) {
         DispatchQueue.main.async {
+            // 保存されたフレームまたは計算された初期サイズを使用
+            let initialSize = calculateInitialWindowSize()
+            let initialFrame: NSRect
+
+            if let savedFrame = loadSavedWindowFrame() {
+                // 保存されたフレーム位置も復元
+                initialFrame = savedFrame
+            } else {
+                // 新規の場合は中央配置で初期サイズを使用
+                initialFrame = NSRect(origin: .zero, size: initialSize)
+            }
+
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 900, height: 650),
+                contentRect: initialFrame,
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
             )
             window.title = "Preview – " + url.lastPathComponent
-            window.center()
+
+            // 保存されたフレームがない場合のみ中央配置
+            if loadSavedWindowFrame() == nil {
+                window.center()
+            }
 
             guard let content = window.contentView else { return }
             guard let previewView = QLPreviewView(frame: .zero, style: .normal) else {
@@ -90,8 +160,31 @@ enum QLPreviewInputDriver {
 
             let forwarderRef = addKeyForwarder(window: window, previewView: previewView)
 
-            // クローズ時に参照を解放
+            // ウィンドウフレーム変更の監視（リサイズ・移動時に保存）
+            let frameObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didResizeNotification,
+                object: window,
+                queue: .main
+            ) { _ in
+                saveWindowFrame(window.frame)
+            }
+
+            let moveObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didMoveNotification,
+                object: window,
+                queue: .main
+            ) { _ in
+                saveWindowFrame(window.frame)
+            }
+
+            // クローズ時に参照を解放＋オブザーバ解除＋最終フレーム保存
             NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { note in
+                // 最終フレームを保存
+                saveWindowFrame(window.frame)
+                // オブザーバ解除
+                NotificationCenter.default.removeObserver(frameObserver)
+                NotificationCenter.default.removeObserver(moveObserver)
+                // 参照解放
                 retainedWindows.removeAll { $0 == window }
             }
 
