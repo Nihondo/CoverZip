@@ -52,6 +52,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var didRestoreRTLFromHistory: Bool = false
     // 履歴から表示モードを復元済みか（既定で上書きしないためのフラグ）
     private var didRestoreViewModeFromHistory: Bool = false
+    private var didLogHostWindowInfo: Bool = false
     // 読み込みインジケータ
     private var loadingIndicator: NSProgressIndicator?
     // 全件読み込み完了後に適用する予定のページ（ヒューリスティクス先頭表示→履歴ページへ移動のため）
@@ -282,8 +283,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 読み込み状態に応じてインジケータを更新
         updateLoadingIndicator()
 
+        NSLog("[DEBUG] Host window class check")
         // リサイズ完了時にサイズを保存
         if let win = view.window {
+            if !didLogHostWindowInfo {
+                didLogHostWindowInfo = true
+                let windowClass = NSStringFromClass(type(of: win))
+                let styleMaskValue = UInt64(win.styleMask.rawValue)
+                NSLog("[DEBUG] Host window class=%@, styleMaskRaw=%llu, styleMask=%@, isKeyWindow=%d", windowClass, styleMaskValue, String(describing: win.styleMask), win.isKeyWindow ? 1 : 0)
+            }
             hasUserResizedWindow = false
             let obs = NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: win, queue: .main) { [weak self] _ in
                 self?.hasUserResizedWindow = true
