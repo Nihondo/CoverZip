@@ -64,6 +64,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var lastScrollTime: TimeInterval = 0
     private let scrollCooldownInterval: TimeInterval = 0.1 // 連続スクロール防止間隔
     
+    // マウスモニター遅延設定用のプロパティ
+    private var mouseMonitorSetupTimer: Timer?
+    private var mouseMonitorSetupAttempts = 0
+    private let maxMouseMonitorSetupAttempts = 10
+    
     // 表示モード
     enum ViewMode {
         case single
@@ -113,143 +118,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     override func viewWillAppear() {
         super.viewWillAppear()
-        // マウスイベントをホスト（Finder）へ渡さないためにローカルモニタで吸収（down/up 両方）
-        if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event -> NSEvent? in
-            guard let self else { return event }
-            if self.view.window != nil {
-                // 座標変換に失敗したら安全側でイベントを通す
-                guard let p = self.convertEventPointToView(event) else { return event }
-                // 自ビュー領域内の時は吸収（NSControl上は通す）
-                guard self.view.bounds.contains(p) else { return event }
-                // Control-クリックはコンテキストメニューを表示
-                if event.modifierFlags.contains(.control) {
-                    let menu = self.makeContextMenu()
-                    menu.popUp(positioning: nil, at: p, in: self.view)
-                    return nil
-                }
-                // スライダーなどのNSControl（やそのサブビュー）上のクリックは通す（ただしimageView配下は除外）
-                if self.isPointInsidePassThroughControl(p) {
-                    // A案: スライダートラック上クリック時は即時に値を反映してアクション実行（イベントは通す）
-                    self.immediatelyJumpSliderIfNeeded(atViewPoint: p)
-                    NSLog("[DEBUG] Mouse down passed through to control")
-                    return event
-                }
-                // 画像エリアのクリックは吸収（ダブルクリック抑止）
-                self.pendingSingleClick?.cancel()
-                self.pendingSingleClick = nil
-                return nil
-            }
-            return event
-        }) {
-            mouseMonitors.append(down)
-        }
-        // 右クリックで拡張のメニューを確実に表示（QLPreviewView 埋め込みでも有効化）
-        if let rdown = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown, handler: { [weak self] event -> NSEvent? in
-            guard let self else { return event }
-            guard self.view.window != nil, let p = self.convertEventPointToView(event), self.view.bounds.contains(p) else { return event }
-            let menu = self.makeContextMenu()
-            menu.popUp(positioning: nil, at: p, in: self.view)
-            return nil
-        }) {
-            mouseMonitors.append(rdown)
-        }
-        // マウスホイールスクロールでページ送り
-        if let scroll = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: { [weak self] event -> NSEvent? in
-            guard let self else { return event }
-            if self.view.window != nil {
-                // 座標変換に失敗したら安全側でイベントを通す
-                guard let p = self.convertEventPointToView(event) else { return event }
-                // 自ビュー領域内のスクロールのみ処理
-                guard self.view.bounds.contains(p) else { return event }
-                // スライダーなどのNSControl（やそのサブビュー）上のスクロールは通す（ただしimageView配下は除外）
-                if self.isPointInsidePassThroughControl(p) {
-                    return event
-                }
-                // スクロールでページ送り処理を実行
-                if self.handleScrollEvent(event) {
-                    return nil // イベントを吸収
-                }
-            }
-            return event
-        }) {
-            mouseMonitors.append(scroll)
-        }
-        if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event -> NSEvent? in
-            guard let self else { return event }
-            if self.view.window != nil {
-                // 座標変換に失敗したら安全側でイベントを通す
-                guard let vPoint = self.convertEventPointToView(event) else { return event }
-                // 自ビュー領域外はホストに渡す
-                guard self.view.bounds.contains(vPoint) else { return event }
-                // スライダーなどのNSControl（やそのサブビュー）上のクリックは通す（ただしimageView配下は除外）
-                if self.isPointInsidePassThroughControl(vPoint) { 
-                    NSLog("[DEBUG] Click passed through to control")
-                    return event 
-                }
-                // マウスアップでページめくり処理を実行（画像エリアのみ）
-                let bounds = self.view.bounds
-                let isLeftHalf = vPoint.x < bounds.width / 2
-                let isSpreadMode = self.currentViewMode == .spread
-                
-                NSLog("[DEBUG] Click detected at (%f, %f) in bounds %@, isLeftHalf=%d, isSpreadMode=%d", vPoint.x, vPoint.y, NSStringFromRect(bounds), isLeftHalf, isSpreadMode)
-                
-                // スライドショー中の手動操作は一時的に停止・再開
-                let wasSlideshow = self.isSlideshowEnabled
-                if wasSlideshow { self.stopSlideshow() }
-                
-                if self.isRightToLeftReading {
-                    // 反転: 左=進む、右=戻る
-                    if isLeftHalf {
-                        NSLog("[DEBUG] RTL: Left click - Next page")
-                        if self.imageManager.nextImage(isSpreadMode: isSpreadMode) {
-                            // ViewModeを決定してからアニメ適用
-                            self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
-                            self.applyTransition(forward: true)
-                            self.displayCurrentImage()
-                            // 履歴を自動保存
-                            self.saveReadingPositionToHistory()
-                        }
-                    } else {
-                        NSLog("[DEBUG] RTL: Right click - Previous page")
-                        if self.imageManager.previousImage(isSpreadMode: isSpreadMode) {
-                            self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
-                            self.applyTransition(forward: false)
-                            self.displayCurrentImage()
-                            // 履歴を自動保存
-                            self.saveReadingPositionToHistory()
-                        }
-                    }
-                } else {
-                    // 通常: 左=戻る、右=進む
-                    if isLeftHalf {
-                        NSLog("[DEBUG] LTR: Left click - Previous page")
-                        if self.imageManager.previousImage(isSpreadMode: isSpreadMode) {
-                            self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
-                            self.applyTransition(forward: false)
-                            self.displayCurrentImage()
-                            // 履歴を自動保存
-                            self.saveReadingPositionToHistory()
-                        }
-                    } else {
-                        NSLog("[DEBUG] LTR: Right click - Next page")
-                        if self.imageManager.nextImage(isSpreadMode: isSpreadMode) {
-                            self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
-                            self.applyTransition(forward: true)
-                            self.displayCurrentImage()
-                            // 履歴を自動保存
-                            self.saveReadingPositionToHistory()
-                        }
-                    }
-                }
-                
-                // スライドショーが有効だった場合は再開
-                if wasSlideshow { self.startSlideshow() }
-                return nil // ホストには渡さない
-            }
-            return event
-        }) {
-            mouseMonitors.append(up)
-        }
+        NSLog("[DEBUG] viewWillAppear called, view.window: %@", view.window?.description ?? "nil")
+        
+        // マウスイベントモニターを遅延設定
+        setupMouseMonitorsWithDelay()
     }
 
     override func viewWillDisappear() {
@@ -265,14 +137,293 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         windowObservers.removeAll()
         for d in distributedObservers { DistributedNotificationCenter.default().removeObserver(d) }
         distributedObservers.removeAll()
-        for m in mouseMonitors { NSEvent.removeMonitor(m) }
-        mouseMonitors.removeAll()
-        pendingSingleClick?.cancel()
-        pendingSingleClick = nil
+        // マウスモニタークリーンアップ
+        cleanupMouseMonitors()
         // スライドショーのクリーンアップ
         stopSlideshow()
         // ローディングインジケータ停止
         hideLoadingIndicator()
+    }
+
+    // MARK: - Mouse Monitor Management
+    
+    /// マウスイベントモニターを設定
+    private func setupMouseMonitors() {
+        // 既存のモニターをクリーンアップしてから設定
+        cleanupMouseMonitors()
+        
+        // デバッグログ
+        NSLog("[DEBUG] Setting up mouse monitors. view.window: %@", view.window?.description ?? "nil")
+        
+        // マウスイベントをホスト（Finder）へ渡さないためにローカルモニタで吸収（down/up 両方）
+        if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event -> NSEvent? in
+            guard let self else { return event }
+            
+            // window 状態をより寛容にチェック
+            let hasWindow = self.view.window != nil
+            NSLog("[DEBUG] LeftMouseDown: view.window=%@, event.window=%@", 
+                  self.view.window?.description ?? "nil", 
+                  event.window?.description ?? "nil")
+            
+            // window が nil でも処理を継続（フォールバック）
+            if hasWindow || self.view.superview != nil {
+                // 座標変換を試行、失敗した場合はより寛容なフォールバック
+                if let p = self.convertEventPointToViewRobust(event) {
+                    NSLog("[DEBUG] Converted point: (%f, %f), bounds: %@", p.x, p.y, NSStringFromRect(self.view.bounds))
+                    
+                    // 自ビュー領域内の時は吸収（NSControl上は通す）
+                    guard self.view.bounds.contains(p) else { 
+                        NSLog("[DEBUG] Point outside bounds, passing event")
+                        return event 
+                    }
+                    
+                    // Control-クリックはコンテキストメニューを表示
+                    if event.modifierFlags.contains(.control) {
+                        let menu = self.makeContextMenu()
+                        menu.popUp(positioning: nil, at: p, in: self.view)
+                        return nil
+                    }
+                    
+                    // スライダーなどのNSControl（やそのサブビュー）上のクリックは通す（ただしimageView配下は除外）
+                    if self.isPointInsidePassThroughControl(p) {
+                        self.immediatelyJumpSliderIfNeeded(atViewPoint: p)
+                        NSLog("[DEBUG] Mouse down passed through to control")
+                        return event
+                    }
+                    
+                    // 画像エリアのクリックは吸収（ダブルクリック抑止）
+                    self.pendingSingleClick?.cancel()
+                    self.pendingSingleClick = nil
+                    NSLog("[DEBUG] Mouse down absorbed")
+                    return nil
+                } else {
+                    NSLog("[DEBUG] Coordinate conversion failed, passing event")
+                    return event
+                }
+            }
+            NSLog("[DEBUG] No valid window context, passing event")
+            return event
+        }) {
+            mouseMonitors.append(down)
+            NSLog("[DEBUG] Successfully registered leftMouseDown monitor")
+        } else {
+            NSLog("[ERROR] Failed to register leftMouseDown monitor")
+        }
+        
+        // 右クリックで拡張のメニューを確実に表示（QLPreviewView 埋め込みでも有効化）
+        if let rdown = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown, handler: { [weak self] event -> NSEvent? in
+            guard let self else { return event }
+            
+            NSLog("[DEBUG] RightMouseDown: view.window=%@", self.view.window?.description ?? "nil")
+            
+            // より寛容な window チェック
+            if self.view.window != nil || self.view.superview != nil {
+                if let p = self.convertEventPointToViewRobust(event), self.view.bounds.contains(p) {
+                    let menu = self.makeContextMenu()
+                    menu.popUp(positioning: nil, at: p, in: self.view)
+                    NSLog("[DEBUG] Context menu displayed")
+                    return nil
+                }
+            }
+            return event
+        }) {
+            mouseMonitors.append(rdown)
+            NSLog("[DEBUG] Successfully registered rightMouseDown monitor")
+        } else {
+            NSLog("[ERROR] Failed to register rightMouseDown monitor")
+        }
+        
+        // マウスホイールスクロールでページ送り
+        if let scroll = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: { [weak self] event -> NSEvent? in
+            guard let self else { return event }
+            
+            // より寛容な window チェック
+            if self.view.window != nil || self.view.superview != nil {
+                if let p = self.convertEventPointToViewRobust(event) {
+                    // 自ビュー領域内のスクロールのみ処理
+                    guard self.view.bounds.contains(p) else { return event }
+                    
+                    // スライダーなどのNSControl（やそのサブビュー）上のスクロールは通す
+                    if self.isPointInsidePassThroughControl(p) {
+                        return event
+                    }
+                    
+                    // スクロールでページ送り処理を実行
+                    if self.handleScrollEvent(event) {
+                        NSLog("[DEBUG] Scroll event handled")
+                        return nil // イベントを吸収
+                    }
+                }
+            }
+            return event
+        }) {
+            mouseMonitors.append(scroll)
+            NSLog("[DEBUG] Successfully registered scrollWheel monitor")
+        } else {
+            NSLog("[ERROR] Failed to register scrollWheel monitor")
+        }
+        
+        if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event -> NSEvent? in
+            guard let self else { return event }
+            
+            NSLog("[DEBUG] LeftMouseUp: view.window=%@", self.view.window?.description ?? "nil")
+            
+            // より寛容な window チェック
+            if self.view.window != nil || self.view.superview != nil {
+                if let vPoint = self.convertEventPointToViewRobust(event) {
+                    NSLog("[DEBUG] MouseUp at (%f, %f), bounds: %@", vPoint.x, vPoint.y, NSStringFromRect(self.view.bounds))
+                    
+                    // 自ビュー領域外はホストに渡す
+                    guard self.view.bounds.contains(vPoint) else { 
+                        NSLog("[DEBUG] MouseUp outside bounds, passing event")
+                        return event 
+                    }
+                    
+                    // スライダーなどのNSControl上のクリックは通す
+                    if self.isPointInsidePassThroughControl(vPoint) { 
+                        NSLog("[DEBUG] MouseUp passed through to control")
+                        return event 
+                    }
+                    
+                    // マウスアップでページめくり処理を実行（画像エリアのみ）
+                    let bounds = self.view.bounds
+                    let isLeftHalf = vPoint.x < bounds.width / 2
+                    let isSpreadMode = self.currentViewMode == .spread
+                    
+                    NSLog("[DEBUG] Page navigation: isLeftHalf=%d, isSpreadMode=%d, isRTL=%d", 
+                          isLeftHalf, isSpreadMode, self.isRightToLeftReading)
+                    
+                    // スライドショー中の手動操作は一時的に停止・再開
+                    let wasSlideshow = self.isSlideshowEnabled
+                    if wasSlideshow { self.stopSlideshow() }
+                    
+                    var navigationHandled = false
+                    
+                    if self.isRightToLeftReading {
+                        // 反転: 左=進む、右=戻る
+                        if isLeftHalf {
+                            NSLog("[DEBUG] RTL: Left click - Next page")
+                            if self.imageManager.nextImage(isSpreadMode: isSpreadMode) {
+                                self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
+                                self.applyTransition(forward: true)
+                                self.displayCurrentImage()
+                                self.saveReadingPositionToHistory()
+                                navigationHandled = true
+                            }
+                        } else {
+                            NSLog("[DEBUG] RTL: Right click - Previous page")
+                            if self.imageManager.previousImage(isSpreadMode: isSpreadMode) {
+                                self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
+                                self.applyTransition(forward: false)
+                                self.displayCurrentImage()
+                                self.saveReadingPositionToHistory()
+                                navigationHandled = true
+                            }
+                        }
+                    } else {
+                        // 通常: 左=戻る、右=進む
+                        if isLeftHalf {
+                            NSLog("[DEBUG] LTR: Left click - Previous page")
+                            if self.imageManager.previousImage(isSpreadMode: isSpreadMode) {
+                                self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
+                                self.applyTransition(forward: false)
+                                self.displayCurrentImage()
+                                self.saveReadingPositionToHistory()
+                                navigationHandled = true
+                            }
+                        } else {
+                            NSLog("[DEBUG] LTR: Right click - Next page")
+                            if self.imageManager.nextImage(isSpreadMode: isSpreadMode) {
+                                self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
+                                self.applyTransition(forward: true)
+                                self.displayCurrentImage()
+                                self.saveReadingPositionToHistory()
+                                navigationHandled = true
+                            }
+                        }
+                    }
+                    
+                    NSLog("[DEBUG] Navigation handled: %d", navigationHandled)
+                    
+                    // スライドショーが有効だった場合は再開
+                    if wasSlideshow { self.startSlideshow() }
+                    return nil // ホストには渡さない
+                } else {
+                    NSLog("[DEBUG] MouseUp coordinate conversion failed, passing event")
+                    return event
+                }
+            }
+            NSLog("[DEBUG] MouseUp no valid window context, passing event")
+            return event
+        }) {
+            mouseMonitors.append(up)
+            NSLog("[DEBUG] Successfully registered leftMouseUp monitor")
+        } else {
+            NSLog("[ERROR] Failed to register leftMouseUp monitor")
+        }
+        
+        NSLog("[DEBUG] Mouse monitor setup complete. Total monitors: %d", mouseMonitors.count)
+    }
+    
+    /// マウスイベントモニターをクリーンアップ
+    private func cleanupMouseMonitors() {
+        NSLog("[DEBUG] Cleaning up mouse monitors. Current count: %d", mouseMonitors.count)
+        
+        for m in mouseMonitors { NSEvent.removeMonitor(m) }
+        mouseMonitors.removeAll()
+        
+        pendingSingleClick?.cancel()
+        pendingSingleClick = nil
+        
+        // 遅延設定タイマーもクリーンアップ
+        mouseMonitorSetupTimer?.invalidate()
+        mouseMonitorSetupTimer = nil
+        mouseMonitorSetupAttempts = 0
+        
+        NSLog("[DEBUG] Mouse monitor cleanup complete")
+    }
+
+    
+    /// マウスモニターを遅延設定（window が利用可能になるまで待機）
+    private func setupMouseMonitorsWithDelay() {
+        // 既存のタイマーをキャンセル
+        mouseMonitorSetupTimer?.invalidate()
+        mouseMonitorSetupTimer = nil
+        mouseMonitorSetupAttempts = 0
+        
+        NSLog("[DEBUG] Starting delayed mouse monitor setup")
+        
+        // 即座に試行
+        if view.window != nil {
+            NSLog("[DEBUG] window available immediately, setting up monitors")
+            setupMouseMonitors()
+            return
+        }
+        
+        // window が利用可能になるまでポーリング
+        mouseMonitorSetupTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] timer in
+            guard let self else {
+                timer.invalidate()
+                return
+            }
+            
+            self.mouseMonitorSetupAttempts += 1
+            NSLog("[DEBUG] Mouse monitor setup attempt %d, view.window: %@", 
+                  self.mouseMonitorSetupAttempts, self.view.window?.description ?? "nil")
+            
+            if self.view.window != nil {
+                NSLog("[DEBUG] window became available, setting up monitors")
+                timer.invalidate()
+                self.mouseMonitorSetupTimer = nil
+                self.setupMouseMonitors()
+            } else if self.mouseMonitorSetupAttempts >= self.maxMouseMonitorSetupAttempts {
+                NSLog("[DEBUG] Max setup attempts reached, proceeding with fallback")
+                timer.invalidate()
+                self.mouseMonitorSetupTimer = nil
+                // フォールバック: window が nil でも設定を試行
+                self.setupMouseMonitors()
+            }
+        }
     }
     
     override func viewDidAppear() {
@@ -411,6 +562,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     */
 
     func preparePreviewOfFile(at url: URL) async throws {
+        NSLog("[DEBUG] preparePreviewOfFile called for: %@", url.lastPathComponent)
+        
+        // ファイル切り替え時にマウスモニターをクリーンアップ
+        cleanupMouseMonitors()
+        
         // 新しいファイルが読み込まれる際にスライドショーをリセット
         stopSlideshow()
         isSlideshowEnabled = false
@@ -444,11 +600,18 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 updateSliderLimits()
                 // 先頭のみ即表示→全件読み込み中であればインジケータ表示
                 updateLoadingIndicator()
+                
+                // マウスモニターを遅延設定（window が確実に利用可能になってから）
+                NSLog("[DEBUG] Scheduling delayed mouse monitor setup")
+                setupMouseMonitorsWithDelay()
             }
         } else {
             // 画像が見つからない場合の処理
             await MainActor.run {
                 displayNoImagesMessage()
+                // 画像なしの場合でもマウスモニターは遅延設定
+                NSLog("[DEBUG] No images found, scheduling delayed mouse monitor setup")
+                setupMouseMonitorsWithDelay()
             }
         }
     }
@@ -1339,6 +1502,29 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let windowPoint = myWin.convertPoint(fromScreen: screenPoint)
         // 3) ビュー座標へ
         let viewPoint = view.convert(windowPoint, from: nil)
+        return viewPoint
+    }
+
+    /// より堅牢な座標変換（フォールバック機能付き）
+    private func convertEventPointToViewRobust(_ event: NSEvent) -> NSPoint? {
+        // 基本的な座標変換を試行
+        if let basicPoint = convertEventPointToView(event) {
+            return basicPoint
+        }
+        
+        // フォールバック1: NSEvent.mouseLocation を直接使用
+        guard let myWin = view.window else { 
+            NSLog("[DEBUG] Fallback failed: view.window is nil")
+            return nil 
+        }
+        
+        let screenPoint = NSEvent.mouseLocation
+        let windowPoint = myWin.convertPoint(fromScreen: screenPoint)
+        let viewPoint = view.convert(windowPoint, from: nil)
+        
+        NSLog("[DEBUG] Fallback coordinate conversion: screen=(%f,%f) -> window=(%f,%f) -> view=(%f,%f)", 
+              screenPoint.x, screenPoint.y, windowPoint.x, windowPoint.y, viewPoint.x, viewPoint.y)
+        
         return viewPoint
     }
 
