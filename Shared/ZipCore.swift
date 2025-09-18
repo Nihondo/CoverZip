@@ -360,20 +360,59 @@ public enum CZZip {
     }
 
     private static func inflateData(_ compressedData: Data) -> Data? {
-        return compressedData.withUnsafeBytes { bytes in
-            let cap = 8 * 1024 * 1024 // 8MB
-            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: cap)
-            defer { buffer.deallocate() }
-            let decompressedSize = compression_decode_buffer(
-                buffer,
-                cap,
-                bytes.bindMemory(to: UInt8.self).baseAddress!,
-                compressedData.count,
-                nil,
-                COMPRESSION_ZLIB
-            )
-            if decompressedSize > 0 { return Data(bytes: buffer, count: decompressedSize) }
-            return nil
+        let streamPtr = UnsafeMutablePointer<compression_stream>.allocate(capacity: 1)
+        defer { streamPtr.deallocate() }
+        memset(streamPtr, 0, MemoryLayout<compression_stream>.size)
+
+        var status = compression_stream_init(streamPtr, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB)
+        guard status == COMPRESSION_STATUS_OK else { return nil }
+        defer { compression_stream_destroy(streamPtr) }
+
+        let chunkSize = 64 * 1024
+        let chunkBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: chunkSize)
+        defer { chunkBuffer.deallocate() }
+
+        guard let outputData = CFDataCreateMutable(nil, 0) else { return nil }
+
+        let finalizeFlag = Int32(COMPRESSION_STREAM_FINALIZE.rawValue)
+        var flags: Int32 = 0
+        var didRequestFinal = false
+
+        return compressedData.withUnsafeBytes { rawBuf -> Data? in
+            guard let srcBase = rawBuf.bindMemory(to: UInt8.self).baseAddress else { return nil }
+
+            streamPtr.pointee.src_ptr = srcBase
+            streamPtr.pointee.src_size = compressedData.count
+            streamPtr.pointee.dst_ptr = chunkBuffer
+            streamPtr.pointee.dst_size = chunkSize
+
+            while true {
+                let previousSrcSize = streamPtr.pointee.src_size
+                status = compression_stream_process(streamPtr, flags)
+
+                let produced = chunkSize - streamPtr.pointee.dst_size
+                if produced > 0 {
+                    CFDataAppendBytes(outputData, chunkBuffer, produced)
+                    streamPtr.pointee.dst_ptr = chunkBuffer
+                    streamPtr.pointee.dst_size = chunkSize
+                }
+
+                switch status {
+                case COMPRESSION_STATUS_OK:
+                    if streamPtr.pointee.src_size == 0 && !didRequestFinal {
+                        flags = finalizeFlag
+                        didRequestFinal = true
+                    } else if streamPtr.pointee.src_size == 0 && didRequestFinal && previousSrcSize == 0 && produced == 0 {
+                        return nil
+                    }
+                case COMPRESSION_STATUS_END:
+                    return Data(referencing: outputData)
+                case COMPRESSION_STATUS_ERROR:
+                    return nil
+                default:
+                    return nil
+                }
+            }
         }
     }
 
