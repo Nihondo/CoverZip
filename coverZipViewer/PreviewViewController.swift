@@ -367,6 +367,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             if !self.didRestoreViewModeFromHistory && newViewMode != self.userPreferredViewMode {
                 self.userPreferredViewMode = newViewMode
             }
+            // 見開きの左右を補正設定の適用
+            let newSpreadOffset = self.sharedDefaults().object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
+            if self.imageManager.getSpreadPairOffset() != newSpreadOffset {
+                self.imageManager.setSpreadPairOffset(newSpreadOffset)
+                self.displayCurrentImage()  // 表示を更新
+            }
             // 表示更新
             if self.imageManager.hasImages() {
                 self.displayCurrentImage()

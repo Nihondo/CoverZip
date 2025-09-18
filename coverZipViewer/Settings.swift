@@ -30,6 +30,7 @@ final class AppSettings {
             CZSettingsKeys.pageTransitionEnabled: true,
             CZSettingsKeys.restoreWindowFrameEnabled: true,
             CZSettingsKeys.readingHistoryEnabled: true,
+            CZSettingsKeys.spreadPairOffset: 0,
             CZSettingsKeys.imageDecodeCachePolicy: CZImageDecodeCachePolicy.deferred.rawValue
         ])
     }

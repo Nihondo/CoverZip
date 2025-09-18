@@ -57,6 +57,7 @@ final class AppSettingsWriter: ObservableObject {
             CZSettingsKeys.slideshowInterval: 3.0,
             CZSettingsKeys.pageTransitionEnabled: true,
             CZSettingsKeys.restoreWindowFrameEnabled: true,
+            CZSettingsKeys.spreadPairOffset: 0,
             CZSettingsKeys.imageDecodeCachePolicy: CZImageDecodeCachePolicy.deferred.rawValue
         ])
         

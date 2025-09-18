@@ -63,6 +63,15 @@ final class InternalViewer: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
+        // 見開きの左右を補正
+        let currentOffset = sharedDefaults().object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
+        let spreadOffsetItem = NSMenuItem(title: "見開きの左右を補正", action: #selector(toggleSpreadPairOffset(_:)), keyEquivalent: "")
+        spreadOffsetItem.target = self
+        spreadOffsetItem.state = currentOffset == 1 ? .on : .off
+        menu.addItem(spreadOffsetItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         // ページ送りアニメ
         let transitionEnabled = sharedDefaults().object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true
         let transitionItem = NSMenuItem(title: "ページ送りアニメ", action: #selector(toggleTransition(_:)), keyEquivalent: "")
@@ -127,6 +136,15 @@ final class InternalViewer: NSObject {
     @objc func toggleSlideshow(_ sender: NSMenuItem) {
         // この場では状態のみ表示を切替。実動作は拡張側/プレビュー側で。
         sender.state = (sender.state == .on) ? .off : .on
+    }
+
+    @objc func toggleSpreadPairOffset(_ sender: NSMenuItem) {
+        let current = sharedDefaults().object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
+        let next = 1 - current  // 0 ↔ 1 をトグル
+        sharedDefaults().set(next, forKey: CZSettingsKeys.spreadPairOffset)
+        sender.state = next == 1 ? .on : .off
+        // Preview Extension側への反映通知
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
 
 

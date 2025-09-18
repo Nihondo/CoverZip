@@ -12,6 +12,7 @@ public enum CZSettingsKeys {
     public static let defaultViewMode = "defaultViewMode" // "auto" | "single" | "spread"
     public static let slideshowInterval = "slideshowInterval"
     public static let pageTransitionEnabled = "pageTransitionEnabled"
+    public static let spreadPairOffset = "spreadPairOffset" // 見開きの左右を補正 (0 or 1)
     // Window frame persistence
     public static let restoreWindowFrameEnabled = "restoreWindowFrameEnabled"
     public static let savedWindowFrameString = "savedWindowFrameString"
