@@ -16,14 +16,55 @@ import QuickLook
 import QuickLookUI
 import UniformTypeIdentifiers
 
+/// 弱参照ラッパー
+private class WeakRef<T: AnyObject> {
+    weak var value: T?
+    init(_ value: T) { self.value = value }
+}
+
 /// Quick Look 埋め込みの入力制御を提供するユーティリティ（正式版）
 enum QLPreviewInputDriver {
     /// テスト用ウィンドウを保持（早期解放を防ぐ）
     private static var retainedWindows: [NSWindow] = []
+    /// KeyForwardingViewの弱参照を保持（Focus復帰用）
+    private static var keyForwarders: [WeakRef<KeyForwardingView>] = []
     // ローカルイベントモニタは廃止（フォワーダ方式に一本化）
     private static var didPromptAX: Bool = false
     /// コンテキストメニュー供給（アプリ側で設定）
     static var contextMenuProvider: (() -> NSMenu)?
+
+    // MARK: - Keyboard Focus Management
+
+    /// KeyForwardingViewにキーボードフォーカスを復帰させる
+    private static func restoreKeyboardFocus() {
+        // 無効な弱参照を削除
+        keyForwarders.removeAll { $0.value == nil }
+
+        // 有効なForwarderにFocusを復帰
+        for weakRef in keyForwarders {
+            if let forwarder = weakRef.value,
+               let window = forwarder.window {
+                window.makeFirstResponder(forwarder)
+                NSLog("[QLInputDriver] Restored keyboard focus to KeyForwardingView")
+                break
+            }
+        }
+    }
+
+    /// スライダー操作完了通知の監視を開始
+    private static func setupSliderNotificationObserver() {
+        DistributedNotificationCenter.default.addObserver(
+            forName: CZDistributedNotifications.sliderOperationCompleted,
+            object: nil,
+            queue: .main
+        ) { _ in
+            NSLog("[QLInputDriver] Received slider operation completed notification")
+            // 少し遅延を入れてFocus復帰（スライダーの処理完了を待つ）
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                restoreKeyboardFocus()
+            }
+        }
+    }
 
     // MARK: - Window Frame Management
 
@@ -136,6 +177,11 @@ enum QLPreviewInputDriver {
                 window.center()
             }
 
+            // スライダー操作完了通知の監視を開始（初回のみ）
+            if keyForwarders.isEmpty {
+                setupSliderNotificationObserver()
+            }
+
             guard let content = window.contentView else { return }
             guard let previewView = QLPreviewView(frame: .zero, style: .normal) else {
                 // 生成失敗時は共有パネルへフォールバック
@@ -239,6 +285,11 @@ enum QLPreviewInputDriver {
             forwarder.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
         window.initialFirstResponder = forwarder
+
+        // KeyForwardingViewの弱参照を登録
+        keyForwarders.append(WeakRef(forwarder))
+        NSLog("[QLInputDriver] Registered KeyForwardingView for focus management")
+
         return forwarder
     }
 

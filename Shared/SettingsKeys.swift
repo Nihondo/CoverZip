@@ -31,4 +31,6 @@ public enum CZAppGroup {
 public enum CZDistributedNotifications {
     // Post this when App-side settings have changed and should be reflected in extensions
     public static let settingsChanged = Notification.Name("com.dmng.CoverZip.settingsChanged")
+    // Post this when slider operation completed in Preview Extension (for keyboard focus restoration)
+    public static let sliderOperationCompleted = Notification.Name("com.dmng.CoverZip.sliderOperationCompleted")
 }

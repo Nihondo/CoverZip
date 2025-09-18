@@ -1273,9 +1273,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             // 履歴を自動保存
             saveReadingPositionToHistory()
         }
-        
+
         // スライドショーが有効だった場合は再開
         if wasSlideshow { startSlideshow() }
+
+        // 内蔵ビューアのキーボードフォーカス復帰のため通知を送信
+        DistributedNotificationCenter.default().post(
+            name: CZDistributedNotifications.sliderOperationCompleted,
+            object: nil
+        )
     }
 
     // 現在ページをスライダー位置へ反映（方向反転対応）
