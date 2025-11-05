@@ -21,6 +21,12 @@ public struct CZImageEntry {
     public let imageData: Data
 }
 
+/// メタデータのみを持つ軽量な画像エントリ情報（遅延ロード用）
+public struct CZImageEntryInfo {
+    public let filename: String
+    public let entry: CZZipEntry
+}
+
 /// Options to influence how the first image is picked from a ZIP.
 public struct CZFirstImageOptions: OptionSet {
     public let rawValue: Int
@@ -56,6 +62,31 @@ public enum CZZip {
     public static func imageEntries(from url: URL) -> [CZImageEntry] {
         do { return imageEntries(from: try Data(contentsOf: url, options: [.mappedIfSafe])) }
         catch { NSLog("CZZip read error: \(error)"); return [] }
+    }
+
+    /// Read all image entry metadata (without loading image data) from ZIP data
+    /// This allows fast enumeration of all images for lazy loading
+    public static func imageEntryInfoList(from data: Data) -> [CZImageEntryInfo] {
+        guard let cdOffset = findCentralDirectoryOffset(in: data) else { return [] }
+        let entries = parseCentralDirectory(data: data, offset: cdOffset)
+        let imageFiles = entries
+            .filter { ImageFileFilter.isImagePath($0.filename) }
+            .sorted { a, b in
+                NaturalSort.lessFilename((a.filename as NSString).lastPathComponent,
+                                          (b.filename as NSString).lastPathComponent)
+            }
+        return imageFiles.map { CZImageEntryInfo(filename: $0.filename, entry: $0) }
+    }
+
+    /// Read all image entry metadata from a ZIP file URL
+    public static func imageEntryInfoList(from url: URL) -> [CZImageEntryInfo] {
+        do { return imageEntryInfoList(from: try Data(contentsOf: url, options: [.mappedIfSafe])) }
+        catch { NSLog("CZZip read error: \(error)"); return [] }
+    }
+
+    /// Extract image data for a specific entry info from ZIP data
+    public static func extractImageData(from zipData: Data, entryInfo: CZImageEntryInfo) -> Data? {
+        return extractFileData(data: zipData, entry: entryInfo.entry)
     }
 
     /// Read the first image data (by natural sort order) from a ZIP file URL
