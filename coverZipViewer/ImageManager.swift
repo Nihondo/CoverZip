@@ -106,12 +106,12 @@ class ImageManager {
     
     /**
      * 見開き用の画像を取得する（左右2ページ）
-     * 
+     *
      * @param isRightToLeft 右から左読み（日本語）の場合はtrue
      * @return (左ページ画像, 右ページ画像)のタプル。片方がない場合はnilが入る
      */
     func getSpreadImages(isRightToLeft: Bool) -> (left: NSImage?, right: NSImage?) {
-        guard !imageEntries.isEmpty else {
+        guard !imageEntryInfos.isEmpty else {
             return (nil, nil)
         }
         
