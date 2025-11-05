@@ -68,20 +68,15 @@ enum QLPreviewInputDriver {
 
     // MARK: - Window Frame Management
 
-    /// 共有UserDefaults（App Group）
-    private static func sharedDefaults() -> UserDefaults {
-        return UserDefaults(suiteName: CZAppGroup.identifier) ?? .standard
-    }
-
     /// ウィンドウフレーム復元が有効かどうか
     private static func isRestoreWindowFrameEnabled() -> Bool {
-        return sharedDefaults().object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true
+        return CZUserDefaults.shared.object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true
     }
 
     /// 保存されたウィンドウフレームを読み込み
     private static func loadSavedWindowFrame() -> NSRect? {
         guard isRestoreWindowFrameEnabled(),
-              let frameString = sharedDefaults().string(forKey: CZSettingsKeys.savedWindowFrameString) else {
+              let frameString = CZUserDefaults.shared.string(forKey: CZSettingsKeys.savedWindowFrameString) else {
             return nil
         }
         return NSRectFromString(frameString)
@@ -90,7 +85,7 @@ enum QLPreviewInputDriver {
     /// ウィンドウフレームを保存
     private static func saveWindowFrame(_ frame: NSRect) {
         guard isRestoreWindowFrameEnabled() else { return }
-        sharedDefaults().set(NSStringFromRect(frame), forKey: CZSettingsKeys.savedWindowFrameString)
+        CZUserDefaults.shared.set(NSStringFromRect(frame), forKey: CZSettingsKeys.savedWindowFrameString)
         NSLog("[QLInputDriver] Saved window frame: %@", NSStringFromRect(frame))
     }
 

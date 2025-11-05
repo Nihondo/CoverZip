@@ -27,10 +27,10 @@ class ThumbnailProvider: QLThumbnailProvider {
         // 1) ストリーミング展開 + 増分デコードで早期サムネイル生成を試みる
         let opts: CZFirstImageOptions = [.preferCoverLike, .preferZeroPaddedOne]
         if let cgImage = CZZip.firstImageThumbnail(from: request.fileURL, options: opts, maxPixel: targetMaxPixels) {
-            let cgSize = NSSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
-            let thumbSize = calculateThumbnailSize(for: cgSize, maxSize: request.maximumSize)
+            let cgSize = CGSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
+            let thumbSize = CZImageUtilities.calculateFitSize(for: cgSize, within: request.maximumSize)
             let reply = QLThumbnailReply(contextSize: thumbSize, currentContextDrawing: { () -> Bool in
-                let imageRect = self.calculateScaledImageRect(imageSize: cgSize, canvasSize: thumbSize)
+                let imageRect = CZImageUtilities.calculateCenteredRect(for: cgSize, in: thumbSize)
                 guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
                 ctx.interpolationQuality = .high
                 ctx.draw(cgImage, in: imageRect)
@@ -58,13 +58,13 @@ class ThumbnailProvider: QLThumbnailProvider {
         NSLog("DEBUG: cgImage.size(px) = \(cgFallback.width)x\(cgFallback.height)")
         
         // 縦横比を維持したサムネイルを生成
-        let cgImageSize = NSSize(width: CGFloat(cgFallback.width), height: CGFloat(cgFallback.height))
-        let thumbnailSize = calculateThumbnailSize(for: cgImageSize, maxSize: request.maximumSize)
+        let cgImageSize = CGSize(width: CGFloat(cgFallback.width), height: CGFloat(cgFallback.height))
+        let thumbnailSize = CZImageUtilities.calculateFitSize(for: cgImageSize, within: request.maximumSize)
         NSLog("DEBUG: calculated thumbnailSize = \(thumbnailSize)")
-        
+
         let reply = QLThumbnailReply(contextSize: thumbnailSize, currentContextDrawing: { () -> Bool in
             // 画像を適切にスケーリングして中央に配置して描画（背景は透明）
-            let imageRect = self.calculateScaledImageRect(imageSize: cgImageSize, canvasSize: thumbnailSize)
+            let imageRect = CZImageUtilities.calculateCenteredRect(for: cgImageSize, in: thumbnailSize)
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             ctx.interpolationQuality = .high
             ctx.draw(cgFallback, in: imageRect)
@@ -72,68 +72,6 @@ class ThumbnailProvider: QLThumbnailProvider {
         })
         
         handler(reply, nil)
-    }
-    
-    
-    /**
-     * 画像の縦横比を維持したサムネイルサイズを計算する
-     * 最大サイズの制限内で、元画像の縦横比を保持し、クロップされないよう適切にスケーリングする
-     * 
-     * @param imageSize 元画像のサイズ
-     * @param maxSize 最大許容サイズ
-     * @return 計算されたサムネイルサイズ
-     */
-    private func calculateThumbnailSize(for imageSize: NSSize, maxSize: CGSize) -> CGSize {
-        let imageAspectRatio = imageSize.width / imageSize.height
-        let maxAspectRatio = maxSize.width / maxSize.height
-        
-        var thumbnailWidth: CGFloat
-        var thumbnailHeight: CGFloat
-        
-        if imageAspectRatio > maxAspectRatio {
-            // 画像が最大サイズより横長の場合、幅を基準にスケーリング
-            thumbnailWidth = maxSize.width
-            thumbnailHeight = thumbnailWidth / imageAspectRatio
-        } else {
-            // 画像が最大サイズより縦長または同じ縦横比の場合、高さを基準にスケーリング
-            thumbnailHeight = maxSize.height
-            thumbnailWidth = thumbnailHeight * imageAspectRatio
-        }
-        
-        return CGSize(width: thumbnailWidth, height: thumbnailHeight)
-    }
-    
-    /**
-     * 画像を適切にスケーリングしてキャンバスの中央に配置するための矩形を計算する
-     * 画像の縦横比を維持しながら、キャンバスサイズ内に収まるように縮小する
-     * 
-     * @param imageSize 元画像のサイズ
-     * @param canvasSize キャンバスのサイズ
-     * @return スケーリングされ中央配置された画像の矩形
-     */
-    private func calculateScaledImageRect(imageSize: NSSize, canvasSize: CGSize) -> NSRect {
-        // 画像の縦横比を計算
-        let imageAspectRatio = imageSize.width / imageSize.height
-        let canvasAspectRatio = canvasSize.width / canvasSize.height
-        
-        var scaledWidth: CGFloat
-        var scaledHeight: CGFloat
-        
-        if imageAspectRatio > canvasAspectRatio {
-            // 画像が横長の場合、幅を基準にスケーリング
-            scaledWidth = canvasSize.width
-            scaledHeight = scaledWidth / imageAspectRatio
-        } else {
-            // 画像が縦長または正方形の場合、高さを基準にスケーリング
-            scaledHeight = canvasSize.height
-            scaledWidth = scaledHeight * imageAspectRatio
-        }
-        
-        // 中央配置のための座標を計算
-        let x = (canvasSize.width - scaledWidth) / 2
-        let y = (canvasSize.height - scaledHeight) / 2
-        
-        return NSRect(x: x, y: y, width: scaledWidth, height: scaledHeight)
     }
 }
 
