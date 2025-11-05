@@ -55,8 +55,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var didLogHostWindowInfo: Bool = false
     // 読み込みインジケータ
     private var loadingIndicator: NSProgressIndicator?
-    // 全件読み込み完了後に適用する予定のページ（ヒューリスティクス先頭表示→履歴ページへ移動のため）
-    private var pendingRestorePage: Int?
 
     // マウスホイールスクロール管理
     private var scrollAccumulator: CGFloat = 0.0
@@ -482,21 +480,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 self?.updateImageManagerDisplaySize()
             }
             windowObservers.append(resizeObserver)
-            
-            // 画像リストの全読み込み完了通知（初回は高速表示→後で全件に差し替え）
-            let reloadObserver = NotificationCenter.default.addObserver(forName: .czImageManagerDidLoadAll, object: imageManager, queue: .main) { [weak self] _ in
-                guard let self else { return }
-                // 履歴ページが保留されていれば、ここで反映
-                if let target = self.pendingRestorePage {
-                    _ = self.imageManager.goToPage(target)
-                    self.pendingRestorePage = nil
-                }
-                self.updateSliderLimits()
-                self.syncSliderToCurrentPage()
-                self.displayCurrentImage()
-                self.hideLoadingIndicator()
-            }
-            windowObservers.append(reloadObserver)
         }
         
         // 初期表示サイズを設定
@@ -644,11 +627,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
 
     private func updateLoadingIndicator() {
-        if imageManager.isLoadingAll {
-            showLoadingIndicator()
-        } else {
-            hideLoadingIndicator()
-        }
+        // 遅延ロード方式ではローディングインジケータは不要
+        hideLoadingIndicator()
     }
     
     // MARK: - UI Setup
@@ -1586,14 +1566,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         
         if let history = readingHistoryManager.loadReadingPosition(filename: currentZipFilename) {
             NSLog("[ReadingHistory] Restoring position for %@: page %d, viewMode %@, offset %d, rtl %@", currentZipFilename, history.page, history.viewMode, history.spreadPairOffset, history.isRightToLeftReading?.description ?? "nil")
-            
-            // ページ位置を復元（全件読込中は保留し、完了後に適用）
-            if imageManager.isLoadingAll {
-                pendingRestorePage = history.page
-            } else {
-                _ = imageManager.goToPage(history.page)
-            }
-            
+
+            // ページ位置を復元（遅延ロード方式では即座に復元可能）
+            _ = imageManager.goToPage(history.page)
+
             // 見開きオフセットを復元
             imageManager.setSpreadPairOffset(history.spreadPairOffset)
             

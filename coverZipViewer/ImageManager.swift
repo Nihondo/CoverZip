@@ -10,37 +10,32 @@ import AppKit
 import ImageIO
 // Shared utilities are provided in Shared/* files
 
-/**
- * ZIPファイル内の画像エントリを表す構造体
- */
-struct ImageEntry {
-    let filename: String           // ファイル名
-    let imageData: Data           // 画像データ
-}
-
 // ZIPの低レベル処理はShared/ZipCoreに集約
 
 /**
  * プレビュー用の画像管理クラス
  * ZIPファイル内の画像リストを管理し、ページング機能を提供する
+ * 遅延ロードによりメモリ効率と初期表示速度を最適化
  */
 class ImageManager {
-    
-    private var imageEntries: [ImageEntry] = []
+
+    // 遅延ロード用のメタデータとZIPデータ
+    private var imageEntryInfos: [CZImageEntryInfo] = []
+    private var zipData: Data?
     private var currentIndex: Int = 0
     private var imageCache: [Int: NSImage] = [:]
     private let maxCacheSize: Int = 10
     private var memoryPressureObserver: NSObjectProtocol?
     // 見開きの左右組み合わせを1ページ分ずらすためのオフセット（0 or 1）
     private var spreadPairOffset: Int = 0
-    
+
     // リサイズ画像キャッシュ（サイズ別）
     private var resizedImageCache: [String: NSImage] = [:]
     private let maxResizedCacheSize: Int = 20
     private var targetDisplaySize: NSSize = NSSize.zero
     // デコードキャッシュ方針（設定から取得、デフォルトは .deferred）
     private var decodeCachePolicy: CZImageDecodeCachePolicy { AppSettings.shared.imageDecodeCachePolicy }
-    // 全画像のバックグラウンド読み込み中かどうか
+    // 全画像のバックグラウンド読み込み中かどうか（常にfalseになる：遅延ロードのため）
     private(set) var isLoadingAll: Bool = false
     
     /**
@@ -60,74 +55,53 @@ class ImageManager {
     }
     
     /**
-     * ZIPファイルから画像を読み込む
-     * 
+     * ZIPファイルから画像を読み込む（遅延ロード方式）
+     *
+     * メタデータを即座に取得し、画像データは必要時にロード
+     * これにより2ページ目以降へのページ送りが即座に可能になる
+     *
      * @param url ZIPファイルのURL
      * @return 読み込み成功時はtrue、失敗時はfalse
      */
     func loadImages(from url: URL) -> Bool {
-        // Fast-first: pick initial image using heuristics, then load the rest asynchronously.
-        let opts: CZFirstImageOptions = [.preferZeroPaddedOne, .preferCoverLike]
-        if let first = CZZip.firstImageEntry(from: url, options: opts) {
-            // Set quick-first state
-            self.imageEntries = [ImageEntry(filename: first.filename, imageData: first.imageData)]
+        do {
+            // ZIPデータをメモリにマップ（遅延ロード用）
+            let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+            self.zipData = data
+
+            // 画像エントリのメタデータを即座に取得（高速）
+            let entryInfos = CZZip.imageEntryInfoList(from: data)
+            guard !entryInfos.isEmpty else { return false }
+
+            // メタデータを設定（ページ送りが即座に可能になる）
+            self.imageEntryInfos = entryInfos
             self.currentIndex = 0
             self.imageCache.removeAll()
             self.resizedImageCache.removeAll()
             setupMemoryPressureMonitoring()
-            self.isLoadingAll = true
 
-            // Async load all images
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                guard let self else { return }
-                var all = CZZip.imageEntries(from: url).map { ImageEntry(filename: $0.filename, imageData: $0.imageData) }
-                // Ensure the heuristically chosen first stays at index 0 after full load
-                if let idx = all.firstIndex(where: { $0.filename == first.filename }), idx != 0 {
-                    let chosen = all.remove(at: idx)
-                    all.insert(chosen, at: 0)
-                }
-                DispatchQueue.main.async {
-                    // Replace entries and notify UI
-                    self.imageEntries = all
-                    self.currentIndex = min(self.currentIndex, max(0, self.imageEntries.count - 1))
-                    self.preloadAdjacentImages()
-                    self.isLoadingAll = false
-                    NotificationCenter.default.post(name: .czImageManagerDidLoadAll, object: self)
-                }
-            }
+            // 1ページ目を即座にキャッシュ（表示高速化）
+            _ = getImageAtIndex(0)
+
+            // 隣接ページのプリロード
+            preloadAdjacentImages()
+
+            NSLog("[ImageManager] Loaded %d images (lazy mode)", entryInfos.count)
             return true
-        } else {
-            // Fallback: legacy full load
-            imageEntries = extractAllImagesFromZip(at: url)
-            currentIndex = 0
-            imageCache.removeAll()
-            resizedImageCache.removeAll()
-            setupMemoryPressureMonitoring()
-            return !imageEntries.isEmpty
+
+        } catch {
+            NSLog("[ImageManager] Failed to load ZIP: \(error)")
+            return false
         }
     }
     
     /**
      * 現在の画像を取得する
-     * 
+     *
      * @return 現在の画像データ（画像がない場合はnil）
      */
     func getCurrentImage() -> NSImage? {
-        guard !imageEntries.isEmpty, currentIndex >= 0, currentIndex < imageEntries.count else {
-            return nil
-        }
-        
-        if let cachedImage = imageCache[currentIndex] {
-            return cachedImage
-        }
-        
-        let imageData = imageEntries[currentIndex].imageData
-        guard let image = decodeImage(data: imageData) else {
-            return nil
-        }
-        
-        cacheImage(image, at: currentIndex)
-        return image
+        return getImageAtIndex(currentIndex)
     }
     
     /**
@@ -193,16 +167,16 @@ class ImageManager {
     func getSpreadPairOffset() -> Int { spreadPairOffset }
     
     /**
-     * 指定されたインデックスの画像を取得する
-     * 
+     * 指定されたインデックスの画像を取得する（遅延ロード）
+     *
      * @param index 画像のインデックス
      * @return 画像データ（範囲外やエラーの場合はnil）
      */
     private func getImageAtIndex(_ index: Int) -> NSImage? {
-        guard index >= 0, index < imageEntries.count else {
+        guard index >= 0, index < imageEntryInfos.count else {
             return nil
         }
-        
+
         // リサイズキャッシュから確認（ターゲットサイズが設定されている場合）
         if targetDisplaySize.width > 0 && targetDisplaySize.height > 0 {
             let cacheKey = "\(index)_\(Int(targetDisplaySize.width))x\(Int(targetDisplaySize.height))"
@@ -210,7 +184,7 @@ class ImageManager {
                 return resizedImage
             }
         }
-        
+
         // 元画像キャッシュから確認
         if let cachedImage = imageCache[index] {
             // ターゲットサイズが設定されていればリサイズして返す
@@ -222,13 +196,24 @@ class ImageManager {
             }
             return cachedImage
         }
-        
-        // 画像データから新規作成
-        let imageData = imageEntries[index].imageData
-        guard let image = decodeImage(data: imageData) else {
+
+        // ZIPから画像データを遅延ロード
+        guard let zipData = zipData else {
+            NSLog("[ImageManager] ZIP data not available for lazy loading")
             return nil
         }
-        
+
+        let entryInfo = imageEntryInfos[index]
+        guard let imageData = CZZip.extractImageData(from: zipData, entryInfo: entryInfo) else {
+            NSLog("[ImageManager] Failed to extract image at index \(index): \(entryInfo.filename)")
+            return nil
+        }
+
+        guard let image = decodeImage(data: imageData) else {
+            NSLog("[ImageManager] Failed to decode image at index \(index): \(entryInfo.filename)")
+            return nil
+        }
+
         // ターゲットサイズが設定されていればリサイズ
         if targetDisplaySize.width > 0 && targetDisplaySize.height > 0 {
             if let resizedImage = resizeImageForDisplay(image, targetSize: targetDisplaySize) {
@@ -240,68 +225,68 @@ class ImageManager {
                 return resizedImage
             }
         }
-        
+
         cacheImage(image, at: index)
         return image
     }
     
     /**
      * 現在の画像のファイル名を取得する
-     * 
+     *
      * @return 現在の画像のファイル名（画像がない場合は空文字列）
      */
     func getCurrentImageName() -> String {
-        guard !imageEntries.isEmpty, currentIndex >= 0, currentIndex < imageEntries.count else {
+        guard !imageEntryInfos.isEmpty, currentIndex >= 0, currentIndex < imageEntryInfos.count else {
             return ""
         }
-        
-        return imageEntries[currentIndex].filename
+
+        return imageEntryInfos[currentIndex].filename
     }
     
     /**
      * 次の画像に移動する
-     * 
+     *
      * @param isSpreadMode 見開きモードの場合はtrue
      * @return 移動成功時はtrue、移動できない場合はfalse
      */
     func nextImage(isSpreadMode: Bool = false) -> Bool {
-        guard !imageEntries.isEmpty else {
+        guard !imageEntryInfos.isEmpty else {
             return false
         }
-        
+
         if isSpreadMode {
             // 見開きモードでは2ページずつ移動（表紙除く）
             if currentIndex == 0 {
                 // 表紙から2ページ目へ
-                guard currentIndex < imageEntries.count - 1 else { return false }
+                guard currentIndex < imageEntryInfos.count - 1 else { return false }
                 currentIndex = 1
             } else {
                 // 2ページずつ進む
                 let nextIndex = currentIndex + 2
-                guard nextIndex < imageEntries.count else { return false }
+                guard nextIndex < imageEntryInfos.count else { return false }
                 currentIndex = nextIndex
             }
         } else {
             // 単ページモードでは1ページずつ
-            guard currentIndex < imageEntries.count - 1 else { return false }
+            guard currentIndex < imageEntryInfos.count - 1 else { return false }
             currentIndex += 1
         }
-        
+
         preloadAdjacentImages()
         return true
     }
-    
+
     /**
      * 前の画像に移動する
-     * 
+     *
      * @param isSpreadMode 見開きモードの場合はtrue
      * @return 移動成功時はtrue、移動できない場合はfalse
      */
     func previousImage(isSpreadMode: Bool = false) -> Bool {
-        guard !imageEntries.isEmpty, currentIndex > 0 else {
+        guard !imageEntryInfos.isEmpty, currentIndex > 0 else {
             return false
         }
-        
+
         if isSpreadMode {
             // 見開きモードでは2ページずつ移動
             if currentIndex == 1 {
@@ -316,18 +301,18 @@ class ImageManager {
             // 単ページモードでは1ページずつ
             currentIndex -= 1
         }
-        
+
         preloadAdjacentImages()
         return true
     }
-    
+
     /**
      * 画像の総数を取得する
-     * 
+     *
      * @return 画像の総数
      */
     func getImageCount() -> Int {
-        return imageEntries.count
+        return imageEntryInfos.count
     }
     
     /**
@@ -343,21 +328,21 @@ class ImageManager {
     /// - Parameter page: 1...imageCount の範囲内で移動。範囲外は丸め込み。
     /// - Returns: 有効な画像が存在する場合にtrue
     func goToPage(_ page: Int) -> Bool {
-        guard !imageEntries.isEmpty else { return false }
-        let clamped = max(1, min(page, imageEntries.count))
+        guard !imageEntryInfos.isEmpty else { return false }
+        let clamped = max(1, min(page, imageEntryInfos.count))
         let newIndex = clamped - 1
         currentIndex = newIndex
         preloadAdjacentImages()
         return true
     }
-    
+
     /**
      * 画像があるかどうかを確認する
-     * 
+     *
      * @return 画像がある場合はtrue、ない場合はfalse
      */
     func hasImages() -> Bool {
-        return !imageEntries.isEmpty
+        return !imageEntryInfos.isEmpty
     }
     
     /**
@@ -389,24 +374,30 @@ class ImageManager {
     }
     
     func preloadAdjacentImages() {
-        let indicesToLoad = [currentIndex - 1, currentIndex + 1].filter { 
-            $0 >= 0 && $0 < imageEntries.count && imageCache[$0] == nil 
+        let indicesToLoad = [currentIndex - 1, currentIndex + 1].filter {
+            $0 >= 0 && $0 < imageEntryInfos.count && imageCache[$0] == nil
         }
-        
+
         DispatchQueue.global(qos: .background).async { [weak self] in
             for index in indicesToLoad {
                 self?.loadImageAtIndex(index)
             }
         }
     }
-    
+
     private func loadImageAtIndex(_ index: Int) {
-        guard index >= 0, index < imageEntries.count, imageCache[index] == nil else {
+        guard index >= 0, index < imageEntryInfos.count, imageCache[index] == nil else {
             return
         }
-        
-        let imageData = imageEntries[index].imageData
-        if let image = NSImage(data: imageData) {
+
+        guard let zipData = zipData else { return }
+
+        let entryInfo = imageEntryInfos[index]
+        guard let imageData = CZZip.extractImageData(from: zipData, entryInfo: entryInfo) else {
+            return
+        }
+
+        if let image = decodeImage(data: imageData) {
             DispatchQueue.main.async { [weak self] in
                 self?.cacheImage(image, at: index)
             }
@@ -524,28 +515,6 @@ class ImageManager {
     deinit {
         removeMemoryPressureObserver()
     }
-    
-    // MARK: - ZIP Processing Methods
-    
-    /**
-     * ZIPファイルから全ての画像ファイルを抽出する
-     * 
-     * @param url ZIPファイルのURL
-     * @return 画像エントリの配列（見つからない場合は空配列）
-     */
-    private func extractAllImagesFromZip(at url: URL) -> [ImageEntry] {
-        // Delegate to shared ZIP core
-        let coreEntries = CZZip.imageEntries(from: url)
-        return coreEntries.map { ImageEntry(filename: $0.filename, imageData: $0.imageData) }
-    }
-    
-    /**
-     * ZIPファイルデータを解析し、全ての画像ファイルを検索する
-     * 
-     * @param data ZIPファイルのバイナリデータ
-     * @return 全ての画像ファイルのエントリ配列
-     */
-    // ZIPのローレベル処理はShared側（CZZip）へ移管済み
 }
 
 // MARK: - Image decode helper
@@ -561,9 +530,4 @@ extension ImageManager {
         }
         return NSImage(data: data) // フォールバック
     }
-}
-
-// MARK: - Notifications
-extension Notification.Name {
-    static let czImageManagerDidLoadAll = Notification.Name("CZImageManagerDidLoadAll")
 }
