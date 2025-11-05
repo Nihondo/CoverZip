@@ -24,14 +24,12 @@ final class InternalViewer: NSObject {
         // 正式経路: 入力ドライバの単体ウィンドウを開く
         QLPreviewInputDriver.openQuickLookWindow(url: url)
     }
-    // 共有UserDefaults（App Group 統一）
-    func sharedDefaults() -> UserDefaults { UserDefaults(suiteName: CZAppGroup.identifier) ?? .standard }
 
     func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
 
         // 読み方向
-        let isRTL = sharedDefaults().object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
+        let isRTL = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
         let rightToLeftItem = NSMenuItem(title: "右綴じ", action: #selector(setRightToLeft(_:)), keyEquivalent: "")
         rightToLeftItem.target = self
         rightToLeftItem.state = isRTL ? .on : .off
@@ -45,7 +43,7 @@ final class InternalViewer: NSObject {
         menu.addItem(NSMenuItem.separator())
 
         // 表示モード
-        let currentMode = sharedDefaults().string(forKey: CZSettingsKeys.defaultViewMode) ?? "auto"
+        let currentMode = CZUserDefaults.shared.string(forKey: CZSettingsKeys.defaultViewMode) ?? "auto"
         let autoModeItem = NSMenuItem(title: "自動", action: #selector(setViewModeAuto(_:)), keyEquivalent: "")
         autoModeItem.target = self
         autoModeItem.state = currentMode == "auto" ? .on : .off
@@ -64,7 +62,7 @@ final class InternalViewer: NSObject {
         menu.addItem(NSMenuItem.separator())
 
         // 見開きの左右を補正
-        let currentOffset = sharedDefaults().object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
+        let currentOffset = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
         let spreadOffsetItem = NSMenuItem(title: "見開きの左右を補正", action: #selector(toggleSpreadPairOffset(_:)), keyEquivalent: "")
         spreadOffsetItem.target = self
         spreadOffsetItem.state = currentOffset == 1 ? .on : .off
@@ -73,7 +71,7 @@ final class InternalViewer: NSObject {
         menu.addItem(NSMenuItem.separator())
 
         // ページ送りアニメ
-        let transitionEnabled = sharedDefaults().object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true
+        let transitionEnabled = CZUserDefaults.shared.object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true
         let transitionItem = NSMenuItem(title: "ページ送りアニメ", action: #selector(toggleTransition(_:)), keyEquivalent: "")
         transitionItem.target = self
         transitionItem.state = transitionEnabled ? .on : .off
@@ -91,7 +89,7 @@ final class InternalViewer: NSObject {
 
     // MARK: Actions (App側)
     @objc func setRightToLeft(_ sender: NSMenuItem) {
-        sharedDefaults().set(true, forKey: CZSettingsKeys.isRightToLeftReading)
+        CZUserDefaults.shared.set(true, forKey: CZSettingsKeys.isRightToLeftReading)
         sender.state = .on
         (sender.menu?.item(withTitle: "左綴じ"))?.state = .off
         // 反映は拡張側に任せる（Shared Defaults参照）
@@ -99,24 +97,24 @@ final class InternalViewer: NSObject {
     }
 
     @objc func setLeftToRight(_ sender: NSMenuItem) {
-        sharedDefaults().set(false, forKey: CZSettingsKeys.isRightToLeftReading)
+        CZUserDefaults.shared.set(false, forKey: CZSettingsKeys.isRightToLeftReading)
         sender.state = .on
         (sender.menu?.item(withTitle: "右綴じ"))?.state = .off
         DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
 
     @objc func setViewModeAuto(_ sender: NSMenuItem) {
-        sharedDefaults().set("auto", forKey: CZSettingsKeys.defaultViewMode)
+        CZUserDefaults.shared.set("auto", forKey: CZSettingsKeys.defaultViewMode)
         updateModeStates(sender)
         DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
     @objc func setViewModeSingle(_ sender: NSMenuItem) {
-        sharedDefaults().set("single", forKey: CZSettingsKeys.defaultViewMode)
+        CZUserDefaults.shared.set("single", forKey: CZSettingsKeys.defaultViewMode)
         updateModeStates(sender)
         DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
     @objc func setViewModeSpread(_ sender: NSMenuItem) {
-        sharedDefaults().set("spread", forKey: CZSettingsKeys.defaultViewMode)
+        CZUserDefaults.shared.set("spread", forKey: CZSettingsKeys.defaultViewMode)
         updateModeStates(sender)
         DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
@@ -126,9 +124,9 @@ final class InternalViewer: NSObject {
     }
 
     @objc func toggleTransition(_ sender: NSMenuItem) {
-        let cur = sharedDefaults().object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true
+        let cur = CZUserDefaults.shared.object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true
         let next = !cur
-        sharedDefaults().set(next, forKey: CZSettingsKeys.pageTransitionEnabled)
+        CZUserDefaults.shared.set(next, forKey: CZSettingsKeys.pageTransitionEnabled)
         sender.state = next ? .on : .off
         DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
@@ -139,17 +137,11 @@ final class InternalViewer: NSObject {
     }
 
     @objc func toggleSpreadPairOffset(_ sender: NSMenuItem) {
-        let current = sharedDefaults().object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
+        let current = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
         let next = 1 - current  // 0 ↔ 1 をトグル
-        sharedDefaults().set(next, forKey: CZSettingsKeys.spreadPairOffset)
+        CZUserDefaults.shared.set(next, forKey: CZSettingsKeys.spreadPairOffset)
         sender.state = next == 1 ? .on : .off
         // Preview Extension側への反映通知
         DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
     }
-
-
-    // 旧QLPreviewPanel連携は廃止（QLPreviewInputDriverが内部でフォールバックを持つ）
 }
-
-// MARK: - Helpers
-private extension InternalViewer { }

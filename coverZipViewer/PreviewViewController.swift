@@ -81,14 +81,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         return userPreferredViewMode == .auto
     }
 
-    // App Group UserDefaults ヘルパー（共有定義に統一）
-    private func sharedDefaults() -> UserDefaults { UserDefaults(suiteName: CZAppGroup.identifier) ?? .standard }
-    private func loadIsRTL() -> Bool { sharedDefaults().object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true }
-    private func loadSliderThreshold() -> CGFloat { CGFloat(sharedDefaults().object(forKey: CZSettingsKeys.sliderVisibilityWidthThreshold) as? Double ?? 600.0) }
-    private func loadAlwaysSinglePageForCover() -> Bool { sharedDefaults().object(forKey: CZSettingsKeys.alwaysSinglePageForCover) as? Bool ?? true }
-    private func loadDefaultViewMode() -> ViewModePreference { ViewModePreference(rawValue: sharedDefaults().string(forKey: CZSettingsKeys.defaultViewMode) ?? "auto") ?? .auto }
-    private func loadSlideshowInterval() -> Double { sharedDefaults().object(forKey: CZSettingsKeys.slideshowInterval) as? Double ?? 3.0 }
-    private func loadTransitionEnabled() -> Bool { sharedDefaults().object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true }
     
     override var nibName: NSNib.Name? {
         return NSNib.Name("PreviewViewController")
@@ -101,12 +93,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     override func viewDidLoad() {
         super.viewDidLoad()
     // UserDefaultsから設定をロード
-    isRightToLeftReading = loadIsRTL()
-    sliderVisibilityWidthThreshold = loadSliderThreshold()
+    isRightToLeftReading = AppSettings.shared.isRightToLeftReading
+    sliderVisibilityWidthThreshold = CGFloat(AppSettings.shared.sliderVisibilityWidthThreshold)
     // ユーザー設定の表示モードを初期ロード
-    userPreferredViewMode = loadDefaultViewMode()
+    userPreferredViewMode = AppSettings.shared.defaultViewMode
     // ページ送りアニメの初期状態を共有設定からロード
-    isTransitionEnabled = loadTransitionEnabled()
+    isTransitionEnabled = AppSettings.shared.pageTransitionEnabled
     NSLog("[DEBUG] Initial userPreferredViewMode loaded: %@", userPreferredViewMode.rawValue)
         setupUI()
         setupGestureRecognizers()
@@ -428,20 +420,20 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // Quick LookではFirst Responderを取得しない
         // レイアウト完了後のサイズで初回画像を再フィット
         // 設定の変更を反映
-        let newRTL = loadIsRTL()
+        let newRTL = AppSettings.shared.isRightToLeftReading
         if !didRestoreRTLFromHistory && newRTL != isRightToLeftReading {
             isRightToLeftReading = newRTL
             applySliderLayoutDirection()
             syncSliderToCurrentPage()
         }
-        let newThreshold = loadSliderThreshold()
+        let newThreshold = CGFloat(AppSettings.shared.sliderVisibilityWidthThreshold)
         if newThreshold != sliderVisibilityWidthThreshold { sliderVisibilityWidthThreshold = newThreshold; updateSliderVisibilityForContext() }
         // ページ送りアニメ設定の変更を反映
-        let newTransition = loadTransitionEnabled()
+        let newTransition = AppSettings.shared.pageTransitionEnabled
         if newTransition != isTransitionEnabled { isTransitionEnabled = newTransition }
         
         // デフォルト表示モード設定の変更をチェック
-        let newViewMode = loadDefaultViewMode()
+        let newViewMode = AppSettings.shared.defaultViewMode
         if !didRestoreViewModeFromHistory && newViewMode != userPreferredViewMode {
             userPreferredViewMode = newViewMode
             // 設定変更時は表示を即座に更新
@@ -488,15 +480,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let distObs = DistributedNotificationCenter.default().addObserver(forName: CZDistributedNotifications.settingsChanged, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             // 最新設定を共有UserDefaultsから再取得
-            let newRTL = self.loadIsRTL()
+            let newRTL = self.AppSettings.shared.isRightToLeftReading
             if !self.didRestoreRTLFromHistory && newRTL != self.isRightToLeftReading {
                 self.isRightToLeftReading = newRTL
                 self.applySliderLayoutDirection()
                 self.syncSliderToCurrentPage()
             }
-            let newTransition = self.loadTransitionEnabled()
+            let newTransition = self.AppSettings.shared.pageTransitionEnabled
             if newTransition != self.isTransitionEnabled { self.isTransitionEnabled = newTransition }
-            let newViewMode = self.loadDefaultViewMode()
+            let newViewMode = self.AppSettings.shared.defaultViewMode
             if !self.didRestoreViewModeFromHistory && newViewMode != self.userPreferredViewMode {
                 self.userPreferredViewMode = newViewMode
             }
@@ -558,10 +550,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         
     // まずはグローバル設定の既定を適用（履歴があれば後で上書き）
     didRestoreRTLFromHistory = false
-    isRightToLeftReading = loadIsRTL()
+    isRightToLeftReading = AppSettings.shared.isRightToLeftReading
     // 表示モードも既定から開始（履歴があれば後で上書き）
     didRestoreViewModeFromHistory = false
-    userPreferredViewMode = loadDefaultViewMode()
+    userPreferredViewMode = AppSettings.shared.defaultViewMode
     // 新規ファイルごとに初期適用フラグをリセット
     didApplyInitialViewMode = false
         
@@ -982,7 +974,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         guard !isSlideshowEnabled else { return }
         isSlideshowEnabled = true
         
-        let interval = loadSlideshowInterval()
+        let interval = AppSettings.shared.slideshowInterval
         slideshowTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.advanceSlideshow()
         }
@@ -1043,7 +1035,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
     
     private func shouldUseSpreadMode() -> Bool {
-        let alwaysSingleForCover = loadAlwaysSinglePageForCover()
+        let alwaysSingleForCover = AppSettings.shared.alwaysSinglePageForCover
         let isCover = imageManager.isCoverPage()
         
         // 表紙で「常に単ページ表示」が有効な場合は単ページを強制

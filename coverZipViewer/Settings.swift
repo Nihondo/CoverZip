@@ -60,4 +60,14 @@ final class AppSettings {
         get { core.imageDecodeCachePolicy }
         set { core.imageDecodeCachePolicy = newValue }
     }
+
+    var pageTransitionEnabled: Bool {
+        get { core.pageTransitionEnabled }
+        set { core.pageTransitionEnabled = newValue }
+    }
+
+    var spreadPairOffset: Int {
+        get { core.spreadPairOffset }
+        set { core.spreadPairOffset = newValue }
+    }
 }
