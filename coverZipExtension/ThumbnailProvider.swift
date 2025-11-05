@@ -26,7 +26,7 @@ class ThumbnailProvider: QLThumbnailProvider {
 
         // 1) ストリーミング展開 + 増分デコードで早期サムネイル生成を試みる
         let opts: CZFirstImageOptions = [.preferCoverLike, .preferZeroPaddedOne]
-        if let cgImage = ZipProcessor.extractFirstImageThumbnail(at: request.fileURL, options: opts, maxPixel: targetMaxPixels) {
+        if let cgImage = CZZip.firstImageThumbnail(from: request.fileURL, options: opts, maxPixel: targetMaxPixels) {
             let cgSize = NSSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
             let thumbSize = calculateThumbnailSize(for: cgSize, maxSize: request.maximumSize)
             let reply = QLThumbnailReply(contextSize: thumbSize, currentContextDrawing: { () -> Bool in
@@ -41,7 +41,7 @@ class ThumbnailProvider: QLThumbnailProvider {
         }
 
         // 2) フォールバック: 従来の抽出→サムネイル生成
-        guard let imageData = ZipProcessor.extractFirstImageFromZip(at: request.fileURL, options: opts) else {
+        guard let imageData = CZZip.firstImageData(from: request.fileURL, options: opts) else {
             handler(nil, NSError(domain: "CoverZipError", code: 1, userInfo: [NSLocalizedDescriptionKey: "No image found in ZIP file"]))
             return
         }

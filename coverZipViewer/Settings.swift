@@ -2,102 +2,62 @@
 //  Settings.swift
 //  coverZipViewer
 //
-//  Shared settings access via UserDefaults (with optional App Group)
+//  Lightweight wrapper around unified settings for Preview Extension
 //
 
 import Foundation
 
-// Keys and App Group are shared across targets
-
+/// QuickLook Preview Extension用の設定ラッパー
+/// CZSettingsへの簡潔なアクセスを提供
 final class AppSettings {
     static let shared = AppSettings()
 
-    private let defaults: UserDefaults
+    private let core = CZSettings.shared
 
-    private init() {
-        if let shared = UserDefaults(suiteName: CZAppGroup.identifier) {
-            self.defaults = shared
-        } else {
-            self.defaults = .standard
-        }
-        // Register defaults
-        self.defaults.register(defaults: [
-            CZSettingsKeys.isRightToLeftReading: true,
-            CZSettingsKeys.sliderVisibilityWidthThreshold: 600.0,
-            CZSettingsKeys.alwaysSinglePageForCover: true,
-            CZSettingsKeys.defaultViewMode: "auto",
-            CZSettingsKeys.slideshowInterval: 3.0,
-            CZSettingsKeys.pageTransitionEnabled: true,
-            CZSettingsKeys.restoreWindowFrameEnabled: true,
-            CZSettingsKeys.readingHistoryEnabled: true,
-            CZSettingsKeys.spreadPairOffset: 0,
-            CZSettingsKeys.imageDecodeCachePolicy: CZImageDecodeCachePolicy.deferred.rawValue
-        ])
-    }
+    private init() {}
 
     var isRightToLeftReading: Bool {
-    get { defaults.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true }
-    set { defaults.set(newValue, forKey: CZSettingsKeys.isRightToLeftReading) }
+        get { core.isRightToLeftReading }
+        set { core.isRightToLeftReading = newValue }
     }
 
     var sliderVisibilityWidthThreshold: Double {
-    get { defaults.object(forKey: CZSettingsKeys.sliderVisibilityWidthThreshold) as? Double ?? 600.0 }
-    set { defaults.set(newValue, forKey: CZSettingsKeys.sliderVisibilityWidthThreshold) }
+        get { core.sliderVisibilityWidthThreshold }
+        set { core.sliderVisibilityWidthThreshold = newValue }
     }
 
     var alwaysSinglePageForCover: Bool {
-    get { defaults.object(forKey: CZSettingsKeys.alwaysSinglePageForCover) as? Bool ?? true }
-    set { defaults.set(newValue, forKey: CZSettingsKeys.alwaysSinglePageForCover) }
-    }
-
-    enum ViewModePreference: String {
-        case auto
-        case single
-        case spread
+        get { core.alwaysSinglePageForCover }
+        set { core.alwaysSinglePageForCover = newValue }
     }
 
     var defaultViewMode: ViewModePreference {
-        get {
-            let raw = defaults.string(forKey: CZSettingsKeys.defaultViewMode) ?? "auto"
-            return ViewModePreference(rawValue: raw) ?? .auto
-        }
-        set { defaults.set(newValue.rawValue, forKey: CZSettingsKeys.defaultViewMode) }
+        get { core.defaultViewMode }
+        set { core.defaultViewMode = newValue }
     }
 
     var slideshowInterval: Double {
-    get { defaults.object(forKey: CZSettingsKeys.slideshowInterval) as? Double ?? 3.0 }
-    set { defaults.set(newValue, forKey: CZSettingsKeys.slideshowInterval) }
+        get { core.slideshowInterval }
+        set { core.slideshowInterval = newValue }
     }
 
-    // MARK: - Window frame persistence
     var restoreWindowFrameEnabled: Bool {
-    get { defaults.object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true }
-    set { defaults.set(newValue, forKey: CZSettingsKeys.restoreWindowFrameEnabled) }
+        get { core.restoreWindowFrameEnabled }
+        set { core.restoreWindowFrameEnabled = newValue }
     }
 
     var savedWindowFrameString: String? {
-    get { defaults.string(forKey: CZSettingsKeys.savedWindowFrameString) }
-        set {
-            if let v = newValue {
-        defaults.set(v, forKey: CZSettingsKeys.savedWindowFrameString)
-            } else {
-        defaults.removeObject(forKey: CZSettingsKeys.savedWindowFrameString)
-            }
-        }
-    }
-    
-    // MARK: - Reading History
-    var readingHistoryEnabled: Bool {
-        get { defaults.object(forKey: CZSettingsKeys.readingHistoryEnabled) as? Bool ?? true }
-        set { defaults.set(newValue, forKey: CZSettingsKeys.readingHistoryEnabled) }
+        get { core.savedWindowFrameString }
+        set { core.savedWindowFrameString = newValue }
     }
 
-    // MARK: - Image decode cache policy (Preview Extension)
+    var readingHistoryEnabled: Bool {
+        get { core.readingHistoryEnabled }
+        set { core.readingHistoryEnabled = newValue }
+    }
+
     var imageDecodeCachePolicy: CZImageDecodeCachePolicy {
-        get {
-            let raw = defaults.string(forKey: CZSettingsKeys.imageDecodeCachePolicy) ?? CZImageDecodeCachePolicy.deferred.rawValue
-            return CZImageDecodeCachePolicy(rawValue: raw) ?? .deferred
-        }
-        set { defaults.set(newValue.rawValue, forKey: CZSettingsKeys.imageDecodeCachePolicy) }
+        get { core.imageDecodeCachePolicy }
+        set { core.imageDecodeCachePolicy = newValue }
     }
 }

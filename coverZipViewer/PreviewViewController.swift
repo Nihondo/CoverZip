@@ -76,7 +76,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var didApplyInitialViewMode = false
     
     // ユーザー設定管理
-    private var userPreferredViewMode: PrefViewMode = .auto
+    private var userPreferredViewMode: ViewModePreference = .auto
     private var isAutoMode: Bool {
         return userPreferredViewMode == .auto
     }
@@ -86,8 +86,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private func loadIsRTL() -> Bool { sharedDefaults().object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true }
     private func loadSliderThreshold() -> CGFloat { CGFloat(sharedDefaults().object(forKey: CZSettingsKeys.sliderVisibilityWidthThreshold) as? Double ?? 600.0) }
     private func loadAlwaysSinglePageForCover() -> Bool { sharedDefaults().object(forKey: CZSettingsKeys.alwaysSinglePageForCover) as? Bool ?? true }
-    private enum PrefViewMode: String { case auto, single, spread }
-    private func loadDefaultViewMode() -> PrefViewMode { PrefViewMode(rawValue: sharedDefaults().string(forKey: CZSettingsKeys.defaultViewMode) ?? "auto") ?? .auto }
+    private func loadDefaultViewMode() -> ViewModePreference { ViewModePreference(rawValue: sharedDefaults().string(forKey: CZSettingsKeys.defaultViewMode) ?? "auto") ?? .auto }
     private func loadSlideshowInterval() -> Double { sharedDefaults().object(forKey: CZSettingsKeys.slideshowInterval) as? Double ?? 3.0 }
     private func loadTransitionEnabled() -> Bool { sharedDefaults().object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true }
     
@@ -1583,7 +1582,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             }
             
             // 表示モードを履歴から復元（グローバルのデフォルトは変更しない）
-            if let restored = PrefViewMode(rawValue: history.viewMode) {
+            if let restored = ViewModePreference(rawValue: history.viewMode) {
                 userPreferredViewMode = restored
                 didRestoreViewModeFromHistory = true
                 if imageManager.hasImages() { displayCurrentImage() }
