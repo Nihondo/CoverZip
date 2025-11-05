@@ -1,10 +1,11 @@
 # CoverZip
 
-CoverZipは、三つの独立した機能を持つmacOSアプリケーションです：
+CoverZipは、四つの独立した機能を持つmacOSアプリケーションです：
 
 1. **QuickLook Thumbnail Extension** - ZIPファイル内の先頭画像を使用したサムネイル生成
 2. **QuickLook Preview Extension** - ZIPファイル内画像のフルスクリーンプレビューとページング機能
 3. **ZIPファイルルーティングアプリケーション** - ファイル名キーワードマッチングによる外部アプリケーション自動起動
+4. **内蔵ビューア** - アプリ内でQLPreviewViewを使用したZIP画像表示機能
 
 ## 特徴
 
@@ -18,16 +19,30 @@ CoverZipは、三つの独立した機能を持つmacOSアプリケーション�
 ### QuickLook Preview Extension
 - **フルスクリーンプレビュー**: ZIPファイル内のすべての画像をフルスクリーンで表示
 - **ページング機能**: マウスクリック・キーボードでのページ移動
+- **遅延ロード方式**: メタデータを先行取得し、画像データは必要時にロード
+  - 2ページ目以降への高速遷移（全画像読み込み待ちなし）
+  - メモリ効率的なキャッシュ管理（元画像10枚、リサイズ画像20枚）
+  - 隣接ページの自動プリロード
+- **表示モード**: 単ページ/見開き/自動（画像サイズに応じた判定）
 - **ページスライダー**: ページ位置を視覚的に表示・操作
 - **RTL読書対応**: 日本のコミック向け右から左への読書方向
+- **履歴機能**: ZIP別に最終閲覧ページと表示設定を記憶
 - **レスポンシブUI**: ウィンドウ幅に応じてUI要素を動的調整
 - **設定共有**: App Groupによるメインアプリとの設定同期
+
+### 内蔵ビューア機能
+- **QLPreviewView統合**: QuickLook Preview Extensionと同じプレビュー体験
+- **キーボードナビゲーション**: 左右矢印キーでのページ送り（合成クリック方式）
+- **コンテキストメニュー**: 右クリックで表示モード・読書方向の切り替え
+- **複数ウィンドウ対応**: 複数のZIPファイルを同時に表示可能
+- **"internal"キーワード**: 設定ファイルで内蔵ビューアを指定可能
+- **Cmd+O対応**: メニューまたはキーボードショートカットで直接開く
 
 ### ファイルルーティング機能
 - **キーワードマッチング**: ZIPファイル名に基づいた自動アプリケーション起動
 - **JSON設定**: 柔軟なキーワード→アプリケーション マッピング設定
 - **バックグラウンド動作**: 不要なウィンドウ生成なしでの処理
-- **自動終了**: 外部アプリケーション起動後の即座終了
+- **自動終了**: 外部アプリケーション起動後の即座終了（内蔵ビューア使用時は継続）
 
 ## 対応ファイル形式
 
@@ -206,11 +221,18 @@ CoverZip/
 ├── coverZipViewer/             # QuickLook Preview Extension
 │   ├── PreviewProvider.swift   # プレビューエントリーポイント
 │   ├── PreviewViewController.swift # プレビューUI制御（NSViewController）
-│   ├── ImageManager.swift      # 画像管理・ページング制御
+│   ├── ImageManager.swift      # 画像管理・ページング制御（遅延ロード実装）
+│   ├── ReadingHistoryManager.swift # 閲覧履歴管理
 │   ├── Settings.swift          # App Group共有設定
 │   ├── Base.lproj/
 │   │   └── PreviewViewController.xib # UI定義
 │   └── Info.plist              # Extension設定
+├── Shared/                     # 共有ユーティリティ
+│   ├── ZipCore.swift           # 純Swift ZIP処理コア
+│   ├── NaturalSort.swift       # 自然順ソート
+│   ├── ImageFileFilter.swift   # 画像ファイル判定
+│   ├── SettingsKeys.swift      # 共有設定キー
+│   └── ImageIOOptions.swift    # 画像生成オプション
 ├── CoverZipTests/              # Swift Testingベースのユニットテスト
 └── CoverZipUITests/            # UI自動化テスト
 ```
@@ -256,6 +278,13 @@ processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
 - RTL読書方向（右から左）対応
 - レスポンシブUIデザイン
 
+#### 遅延ロード実装
+- **メタデータ先行取得**: `CZZip.imageEntryInfoList()`でファイル名とエントリ情報のみを高速取得
+- **オンデマンドロード**: `CZZip.extractImageData()`で表示時に画像データを抽出
+- **2段階キャッシュ**: 元画像キャッシュ（10枚）とリサイズキャッシュ（20枚）
+- **プリロード戦略**: 隣接ページをバックグラウンドで自動プリロード
+- **自然順ソート**: `NaturalSort.lessFilename()`による数値認識ソート（01.jpg < 02.jpg < 10.jpg）
+
 #### Settings Scene アーキテクチャ
 - WindowGroupの代替としてSettings sceneを使用
 - 不要なウィンドウ生成を回避しバックグラウンド処理に最適化
@@ -265,13 +294,17 @@ processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
 
 ### 責任分離
 - **Thumbnail Extension**: サムネイル生成のみに専念
-- **Preview Extension**: フルスクリーンプレビュー・ページング機能
-- **Main App**: ファイルルーティングのみに専念
-- **共通**: ZipProcessor（純Swift ZIP処理ロジック）、設定管理（App Group）
+- **Preview Extension**: フルスクリーンプレビュー・ページング機能（遅延ロード実装）
+- **Main App**: ファイルルーティングと内蔵ビューア機能
+- **共通**: ZipCore（純Swift ZIP処理ロジック）、NaturalSort、設定管理（App Group）
 
 ### パフォーマンス最適化
+- **遅延ロード方式**: メタデータ先行取得により2ページ目以降への即座遷移を実現
+- **メモリ効率**: 必要な画像のみをロード、2段階キャッシュ管理
+- **プリロード戦略**: 隣接ページをバックグラウンドで先読み
+- **リサイズ最適化**: 表示サイズに最適化された画像をキャッシュ
 - 一時ファイル作成を廃止し、元ファイルを直接使用
-- メモリ効率的な8MBバッファ制限
+- ZIP解析時の8MBバッファ制限
 - 外部アプリ起動後の即座終了でリソース解放
 
 ### 設定管理
