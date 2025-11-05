@@ -20,7 +20,11 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
 
 #### 2. QuickLook Preview Extension (`coverZipViewer/`)
 - **PreviewViewController.swift** - メインのプレビューUI制御（NSViewController）
-- **ImageManager.swift** - 画像管理・ページング制御
+- **ImageManager.swift** - 画像管理・ページング制御（遅延ロード実装）
+  - メタデータ先行取得と必要時画像ロード
+  - 元画像キャッシュ（最大10枚）とリサイズキャッシュ（最大20枚）
+  - 隣接ページのバックグラウンドプリロード
+  - 表示サイズに最適化されたリサイズ処理
 - **ReadingHistoryManager.swift** - ZIP別の閲覧履歴管理（最終ページ、表示設定等）
 - **Settings.swift** - 設定管理（App Group共有）
 - **Base.lproj/PreviewViewController.xib** - UI定義
@@ -113,6 +117,11 @@ InternalViewer.show() (常に内蔵ビューアで表示)
 - **対応圧縮方式**: DEFLATE（方式8）と非圧縮（方式0）
 - **メモリ効率**: 8MBバッファによる制御されたメモリ使用
 - **画像抽出**: 表紙らしい名前の優先判定（cover/front/表紙/00*系）
+- **遅延ロードAPI**:
+  - `imageEntryInfoList(from:)` - メタデータのみを高速取得
+  - `extractImageData(from:entryInfo:)` - 個別の画像データを必要時に抽出
+  - `imageEntries(from:)` - 全画像を一括取得（サムネイル生成等で使用）
+- **自然順ソート**: `NaturalSort.lessFilename()` による数値認識ソート（全APIで一貫）
 
 ### 内蔵ビューアの実装詳細
 
@@ -141,6 +150,14 @@ InternalViewer.show() (常に内蔵ビューアで表示)
 - **スライドショー機能**: 自動ページ送り
 - **操作方法**: マウスクリック、キーボード、スクロールホイール対応
 - **レスポンシブUI**: ウィンドウサイズに応じた UI 要素の動的調整
+
+#### 遅延ロード方式による最適化
+- **メタデータ先行取得**: `CZZip.imageEntryInfoList()` により画像のメタデータを即座に取得
+- **必要時データロード**: 実際の画像データは表示時に `CZZip.extractImageData()` で取得
+- **高速ページ送り**: 2ページ目以降への遷移が即座に可能（全画像読み込み待ちなし）
+- **メモリ効率**: 必要な画像のみをメモリに保持、隣接ページのプリロード実装
+- **リサイズキャッシュ**: 表示サイズに最適化された画像をキャッシュしパフォーマンス向上
+- **自然順ソート一貫性**: メタデータ取得時も `NaturalSort.lessFilename()` で正しくソート
 
 #### 履歴機能
 - **ZIP別履歴**: `ReadingHistoryManager.swift`による個別管理
