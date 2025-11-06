@@ -97,9 +97,9 @@ struct PreviewSettingsView: View {
                         get: { settings.defaultViewMode },
                         set: { settings.defaultViewMode = $0 }
                     )) {
-                        Text("自動").tag(AppSettingsWriter.ViewModePreference.auto)
-                        Text("単ページ").tag(AppSettingsWriter.ViewModePreference.single)
-                        Text("見開き").tag(AppSettingsWriter.ViewModePreference.spread)
+                        Text("自動").tag(ViewModePreference.auto)
+                        Text("単ページ").tag(ViewModePreference.single)
+                        Text("見開き").tag(ViewModePreference.spread)
                     }
                     .pickerStyle(.segmented)
                 }
