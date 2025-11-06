@@ -13,6 +13,18 @@
 		426EFEF12E2670FC00AD23E5 /* QuickLookThumbnailing.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 426EFEF02E2670FC00AD23E5 /* QuickLookThumbnailing.framework */; };
 		426EFEF32E2670FC00AD23E5 /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 426EFEF22E2670FC00AD23E5 /* Quartz.framework */; };
 		426EFEFB2E2670FC00AD23E5 /* coverZipExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 426EFEEE2E2670FC00AD23E5 /* coverZipExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		429EE9EF2EBC1D2D003D0E96 /* UserDefaultsHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9ED2EBC1D2D003D0E96 /* UserDefaultsHelper.swift */; };
+		429EE9F02EBC1D2D003D0E96 /* ImageUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9EB2EBC1D2D003D0E96 /* ImageUtilities.swift */; };
+		429EE9F12EBC1D2D003D0E96 /* ViewModePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9EE2EBC1D2D003D0E96 /* ViewModePreference.swift */; };
+		429EE9F22EBC1D2D003D0E96 /* UnifiedAppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9EC2EBC1D2D003D0E96 /* UnifiedAppSettings.swift */; };
+		429EE9F32EBC1D2D003D0E96 /* UserDefaultsHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9ED2EBC1D2D003D0E96 /* UserDefaultsHelper.swift */; };
+		429EE9F42EBC1D2D003D0E96 /* ImageUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9EB2EBC1D2D003D0E96 /* ImageUtilities.swift */; };
+		429EE9F52EBC1D2D003D0E96 /* ViewModePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9EE2EBC1D2D003D0E96 /* ViewModePreference.swift */; };
+		429EE9F62EBC1D2D003D0E96 /* UnifiedAppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9EC2EBC1D2D003D0E96 /* UnifiedAppSettings.swift */; };
+		429EE9F72EBC1D2D003D0E96 /* UserDefaultsHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9ED2EBC1D2D003D0E96 /* UserDefaultsHelper.swift */; };
+		429EE9F82EBC1D2D003D0E96 /* ImageUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9EB2EBC1D2D003D0E96 /* ImageUtilities.swift */; };
+		429EE9F92EBC1D2D003D0E96 /* ViewModePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9EE2EBC1D2D003D0E96 /* ViewModePreference.swift */; };
+		429EE9FA2EBC1D2D003D0E96 /* UnifiedAppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9EC2EBC1D2D003D0E96 /* UnifiedAppSettings.swift */; };
 		42BCD0BE2E5E18A5007F2065 /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BB2E5E18A5007F2065 /* SettingsKeys.swift */; };
 		42BCD0BF2E5E18A5007F2065 /* ImageFileFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0B92E5E18A5007F2065 /* ImageFileFilter.swift */; };
 		42BCD0C02E5E18A5007F2065 /* NaturalSort.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BA2E5E18A5007F2065 /* NaturalSort.swift */; };
@@ -67,6 +79,10 @@
 		426EFEEE2E2670FC00AD23E5 /* coverZipExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = coverZipExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		426EFEF02E2670FC00AD23E5 /* QuickLookThumbnailing.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuickLookThumbnailing.framework; path = System/Library/Frameworks/QuickLookThumbnailing.framework; sourceTree = SDKROOT; };
 		426EFEF22E2670FC00AD23E5 /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = System/Library/Frameworks/Quartz.framework; sourceTree = SDKROOT; };
+		429EE9EB2EBC1D2D003D0E96 /* ImageUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageUtilities.swift; sourceTree = "<group>"; };
+		429EE9EC2EBC1D2D003D0E96 /* UnifiedAppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedAppSettings.swift; sourceTree = "<group>"; };
+		429EE9ED2EBC1D2D003D0E96 /* UserDefaultsHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaultsHelper.swift; sourceTree = "<group>"; };
+		429EE9EE2EBC1D2D003D0E96 /* ViewModePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModePreference.swift; sourceTree = "<group>"; };
 		42BCD0B92E5E18A5007F2065 /* ImageFileFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageFileFilter.swift; sourceTree = "<group>"; };
 		42BCD0BA2E5E18A5007F2065 /* NaturalSort.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaturalSort.swift; sourceTree = "<group>"; };
 		42BCD0BB2E5E18A5007F2065 /* SettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKeys.swift; sourceTree = "<group>"; };
@@ -187,6 +203,10 @@
 		42BCD0BD2E5E18A5007F2065 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				429EE9EB2EBC1D2D003D0E96 /* ImageUtilities.swift */,
+				429EE9EC2EBC1D2D003D0E96 /* UnifiedAppSettings.swift */,
+				429EE9ED2EBC1D2D003D0E96 /* UserDefaultsHelper.swift */,
+				429EE9EE2EBC1D2D003D0E96 /* ViewModePreference.swift */,
 				4251D87D2E69CF4D00A21728 /* ImageIOOptions.swift */,
 				42BCD0B92E5E18A5007F2065 /* ImageFileFilter.swift */,
 				42BCD0BA2E5E18A5007F2065 /* NaturalSort.swift */,
@@ -344,6 +364,10 @@
 				4251D8802E69CF4D00A21728 /* ImageIOOptions.swift in Sources */,
 				42BCD0C02E5E18A5007F2065 /* NaturalSort.swift in Sources */,
 				42BCD0C12E5E18A5007F2065 /* ZipCore.swift in Sources */,
+				429EE9F72EBC1D2D003D0E96 /* UserDefaultsHelper.swift in Sources */,
+				429EE9F82EBC1D2D003D0E96 /* ImageUtilities.swift in Sources */,
+				429EE9F92EBC1D2D003D0E96 /* ViewModePreference.swift in Sources */,
+				429EE9FA2EBC1D2D003D0E96 /* UnifiedAppSettings.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -354,6 +378,10 @@
 				42BCD0C62E5E18A5007F2065 /* SettingsKeys.swift in Sources */,
 				4251D87F2E69CF4D00A21728 /* ImageIOOptions.swift in Sources */,
 				42BCD0C72E5E18A5007F2065 /* ImageFileFilter.swift in Sources */,
+				429EE9F32EBC1D2D003D0E96 /* UserDefaultsHelper.swift in Sources */,
+				429EE9F42EBC1D2D003D0E96 /* ImageUtilities.swift in Sources */,
+				429EE9F52EBC1D2D003D0E96 /* ViewModePreference.swift in Sources */,
+				429EE9F62EBC1D2D003D0E96 /* UnifiedAppSettings.swift in Sources */,
 				42BCD0C82E5E18A5007F2065 /* NaturalSort.swift in Sources */,
 				42BCD0C92E5E18A5007F2065 /* ZipCore.swift in Sources */,
 			);
@@ -368,6 +396,10 @@
 				42BCD0C32E5E18A5007F2065 /* ImageFileFilter.swift in Sources */,
 				42BCD0C42E5E18A5007F2065 /* NaturalSort.swift in Sources */,
 				42BCD0C52E5E18A5007F2065 /* ZipCore.swift in Sources */,
+				429EE9EF2EBC1D2D003D0E96 /* UserDefaultsHelper.swift in Sources */,
+				429EE9F02EBC1D2D003D0E96 /* ImageUtilities.swift in Sources */,
+				429EE9F12EBC1D2D003D0E96 /* ViewModePreference.swift in Sources */,
+				429EE9F22EBC1D2D003D0E96 /* UnifiedAppSettings.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
