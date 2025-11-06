@@ -480,20 +480,20 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let distObs = DistributedNotificationCenter.default().addObserver(forName: CZDistributedNotifications.settingsChanged, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             // 最新設定を共有UserDefaultsから再取得
-            let newRTL = self.AppSettings.shared.isRightToLeftReading
+            let newRTL = AppSettings.shared.isRightToLeftReading
             if !self.didRestoreRTLFromHistory && newRTL != self.isRightToLeftReading {
                 self.isRightToLeftReading = newRTL
                 self.applySliderLayoutDirection()
                 self.syncSliderToCurrentPage()
             }
-            let newTransition = self.AppSettings.shared.pageTransitionEnabled
+            let newTransition = AppSettings.shared.pageTransitionEnabled
             if newTransition != self.isTransitionEnabled { self.isTransitionEnabled = newTransition }
-            let newViewMode = self.AppSettings.shared.defaultViewMode
+            let newViewMode = AppSettings.shared.defaultViewMode
             if !self.didRestoreViewModeFromHistory && newViewMode != self.userPreferredViewMode {
                 self.userPreferredViewMode = newViewMode
             }
             // 見開きの左右を補正設定の適用
-            let newSpreadOffset = self.sharedDefaults().object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
+            let newSpreadOffset = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
             if self.imageManager.getSpreadPairOffset() != newSpreadOffset {
                 self.imageManager.setSpreadPairOffset(newSpreadOffset)
                 self.displayCurrentImage()  // 表示を更新
@@ -1296,15 +1296,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     // 保存フレーム読み出し/保存（共有UserDefaultsに統一）
     private func loadRestoreWindowFrameEnabled() -> Bool {
-        return sharedDefaults().object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true
+        return CZUserDefaults.shared.object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true
     }
     private func loadSavedWindowFrame() -> NSRect? {
-        guard let s = sharedDefaults().string(forKey: CZSettingsKeys.savedWindowFrameString) else { return nil }
+        guard let s = CZUserDefaults.shared.string(forKey: CZSettingsKeys.savedWindowFrameString) else { return nil }
         return NSRectFromString(s)
     }
     private func saveWindowFrameIfEnabled() {
-        guard (sharedDefaults().object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true), let win = view.window else { return }
-        sharedDefaults().set(NSStringFromRect(win.frame), forKey: CZSettingsKeys.savedWindowFrameString)
+        guard (CZUserDefaults.shared.object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true), let win = view.window else { return }
+        CZUserDefaults.shared.set(NSStringFromRect(win.frame), forKey: CZSettingsKeys.savedWindowFrameString)
     }
 
     private func setImageSafely(_ image: NSImage?, toImageView imageView: NSImageView?) {
