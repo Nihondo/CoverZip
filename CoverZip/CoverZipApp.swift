@@ -48,9 +48,9 @@ struct CoverZipApp: App {
      */
     private func createDefaultSettingsIfNeeded() {
         let settings = KeywordSettings.load()
-        
+
         // デフォルト設定（空）の場合は、サンプル設定を作成
-        if settings.keywords.isEmpty && settings.default.isEmpty {
+        if settings.rules.isEmpty && settings.defaultApplication.isEmpty {
             KeywordSettings.createDefaultSettingsFile()
         }
     }
