@@ -69,7 +69,7 @@ class KeywordMatcher {
     
     /**
      * ファイル名とパス名に対してキーワードマッチングを実行（完全版）
-     * 
+     *
      * @param fileName チェック対象のファイル名（拡張子除去済み）
      * @param fullPath チェック対象のフルパス
      * @param settings JSON設定ファイルのキーワード設定
@@ -77,43 +77,43 @@ class KeywordMatcher {
      */
     static func checkKeyword(for fileName: String, fullPath: String, using settings: KeywordSettings) -> KeywordMatchResult {
         NSLog("ZIPファイルマッチング開始: ファイル名='\(fileName)', フルパス='\(fullPath)'")
-        
-        // 各キーワードをチェック
-        for (keyword, keywordItem) in settings.keywords {
-            NSLog("キーワードチェック: '\(keyword)' (タイプ: \(keywordItem.type))")
-            
+
+        // 各ルールを順番にチェック（配列の順序が優先順位）
+        for rule in settings.rules {
+            NSLog("ルールチェック: '\(rule.keyword)' (タイプ: \(rule.type))")
+
             var isMatch = false
             var matchType: KeywordMatchResult.MatchType = .none
-            
+
             let targetString: String
-            switch keywordItem.type {
+            switch rule.type {
             case .filename:
                 targetString = fileName
                 matchType = .filename
-                
+
             case .pathname:
                 targetString = fullPath
                 matchType = .pathname
             }
-            
+
             // マッチング方式に応じて処理
-            isMatch = performMatch(targetString, keyword: keyword, mode: keywordItem.matchMode)
-            NSLog("\(keywordItem.type == .filename ? "ファイル名" : "パス名")マッチング (\(keywordItem.matchMode)): '\(targetString)' vs '\(keyword)' -> \(isMatch)")
-            
+            isMatch = performMatch(targetString, keyword: rule.keyword, mode: rule.matchMode)
+            NSLog("\(rule.type == .filename ? "ファイル名" : "パス名")マッチング (\(rule.matchMode)): '\(targetString)' vs '\(rule.keyword)' -> \(isMatch)")
+
             if isMatch {
-                NSLog("マッチ成功: '\(keyword)' -> '\(keywordItem.application)' (タイプ: \(matchType))")
+                NSLog("マッチ成功: '\(rule.keyword)' -> '\(rule.application)' (タイプ: \(matchType))")
                 return KeywordMatchResult(
-                    matchedApplication: keywordItem.application,
-                    matchedKeywords: [keyword],
+                    matchedApplication: rule.application,
+                    matchedKeywords: [rule.keyword],
                     matchType: matchType
                 )
             }
         }
-        
+
         // マッチなし - デフォルトアプリケーションを返す
-        NSLog("マッチなし - デフォルトアプリケーション: '\(settings.default)'")
+        NSLog("マッチなし - デフォルトアプリケーション: '\(settings.defaultApplication)'")
         return KeywordMatchResult(
-            matchedApplication: settings.default.isEmpty ? nil : settings.default,
+            matchedApplication: settings.defaultApplication.isEmpty ? nil : settings.defaultApplication,
             matchedKeywords: [],
             matchType: .none
         )
