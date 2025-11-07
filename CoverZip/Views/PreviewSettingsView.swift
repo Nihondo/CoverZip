@@ -48,7 +48,9 @@ struct PreviewSettingsView: View {
     }
 
     private var decodeCacheSection: some View {
-        GroupBox(label: sectionLabel("画像デコードキャッシュ", systemImage: "memorychip")) {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("画像デコードキャッシュ", systemImage: "memorychip")
+
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     Text("方針:")
@@ -66,7 +68,7 @@ struct PreviewSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 4)
+            .padding(.leading, 24)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -83,7 +85,9 @@ struct PreviewSettingsView: View {
     }
     
     private var readingDirectionSection: some View {
-        GroupBox(label: sectionLabel("ページ方向", systemImage: "text.alignright")) {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("ページ方向", systemImage: "text.alignright")
+
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     Text("デフォルトページ方向:")
@@ -100,13 +104,15 @@ struct PreviewSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 4)
+            .padding(.leading, 24)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     private var displayModeSection: some View {
-        GroupBox(label: sectionLabel("表示モード", systemImage: "rectangle.split.2x1")) {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("表示モード", systemImage: "rectangle.split.2x1")
+
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("表紙を常に単ページ表示", isOn: Binding(
                     get: { settings.alwaysSinglePageForCover },
@@ -131,14 +137,16 @@ struct PreviewSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 4)
+            .padding(.leading, 24)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     @available(macOS 13.0, *)
     private var slideshowSection: some View {
-        GroupBox(label: sectionLabel("スライドショー", systemImage: "play.rectangle")) {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("スライドショー", systemImage: "play.rectangle")
+
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("ページ送り間隔:")
@@ -158,13 +166,15 @@ struct PreviewSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 4)
+            .padding(.leading, 24)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     private var windowSection: some View {
-        GroupBox(label: sectionLabel("ウィンドウ設定", systemImage: "macwindow")) {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("ウィンドウ設定", systemImage: "macwindow")
+
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("ウィンドウサイズ・位置を復元", isOn: Binding(
                     get: { settings.restoreWindowFrameEnabled },
@@ -182,7 +192,7 @@ struct PreviewSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 4)
+            .padding(.leading, 24)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
