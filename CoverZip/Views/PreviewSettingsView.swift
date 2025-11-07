@@ -13,12 +13,33 @@ struct PreviewSettingsView: View {
     
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 0) {
                 headerSection
+                    .padding(.bottom, 16)
+
+                Divider()
+                    .padding(.vertical, 8)
+
                 readingDirectionSection
+
+                Divider()
+                    .padding(.vertical, 8)
+
                 displayModeSection
+
+                Divider()
+                    .padding(.vertical, 8)
+
                 decodeCacheSection
+
+                Divider()
+                    .padding(.vertical, 8)
+
                 slideshowSection
+
+                Divider()
+                    .padding(.vertical, 8)
+
                 windowSection
             }
             .padding()
@@ -27,7 +48,9 @@ struct PreviewSettingsView: View {
     }
 
     private var decodeCacheSection: some View {
-        GroupBox(label: sectionLabel("画像デコードキャッシュ", systemImage: "memorychip")) {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("画像デコードキャッシュ", systemImage: "memorychip")
+
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     Text("方針:")
@@ -45,8 +68,9 @@ struct PreviewSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 4)
+            .padding(.leading, 24)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     private var headerSection: some View {
@@ -61,7 +85,9 @@ struct PreviewSettingsView: View {
     }
     
     private var readingDirectionSection: some View {
-        GroupBox(label: sectionLabel("ページ方向", systemImage: "text.alignright")) {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("ページ方向", systemImage: "text.alignright")
+
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     Text("デフォルトページ方向:")
@@ -78,19 +104,22 @@ struct PreviewSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 4)
+            .padding(.leading, 24)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     private var displayModeSection: some View {
-        GroupBox(label: sectionLabel("表示モード", systemImage: "rectangle.split.2x1")) {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("表示モード", systemImage: "rectangle.split.2x1")
+
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("表紙を常に単ページ表示", isOn: Binding(
                     get: { settings.alwaysSinglePageForCover },
                     set: { settings.alwaysSinglePageForCover = $0 }
                 ))
                 .toggleStyle(.switch)
-                
+
                 HStack(spacing: 12) {
                     Text("デフォルト表示モード:")
                     Picker("", selection: Binding(
@@ -103,18 +132,21 @@ struct PreviewSettingsView: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                
+
                 Text("自動モードでは、ウィンドウの縦横比に応じて表示モードを自動選択します")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 4)
+            .padding(.leading, 24)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     @available(macOS 13.0, *)
     private var slideshowSection: some View {
-        GroupBox(label: sectionLabel("スライドショー", systemImage: "play.rectangle")) {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("スライドショー", systemImage: "play.rectangle")
+
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("ページ送り間隔:")
@@ -134,19 +166,22 @@ struct PreviewSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 4)
+            .padding(.leading, 24)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     private var windowSection: some View {
-        GroupBox(label: sectionLabel("ウィンドウ設定", systemImage: "macwindow")) {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("ウィンドウ設定", systemImage: "macwindow")
+
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("ウィンドウサイズ・位置を復元", isOn: Binding(
                     get: { settings.restoreWindowFrameEnabled },
                     set: { settings.restoreWindowFrameEnabled = $0 }
                 ))
                 .toggleStyle(.switch)
-                
+
                 if settings.savedWindowFrameString != nil {
                     Button("保存されたサイズ情報をリセット") {
                         settings.savedWindowFrameString = nil
@@ -157,8 +192,9 @@ struct PreviewSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 4)
+            .padding(.leading, 24)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Helpers
