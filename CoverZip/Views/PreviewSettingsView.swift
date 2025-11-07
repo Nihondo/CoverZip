@@ -13,12 +13,33 @@ struct PreviewSettingsView: View {
     
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 0) {
                 headerSection
+                    .padding(.bottom, 16)
+
+                Divider()
+                    .padding(.vertical, 8)
+
                 readingDirectionSection
+
+                Divider()
+                    .padding(.vertical, 8)
+
                 displayModeSection
+
+                Divider()
+                    .padding(.vertical, 8)
+
                 decodeCacheSection
+
+                Divider()
+                    .padding(.vertical, 8)
+
                 slideshowSection
+
+                Divider()
+                    .padding(.vertical, 8)
+
                 windowSection
             }
             .padding()
@@ -47,6 +68,7 @@ struct PreviewSettingsView: View {
             }
             .padding(.top, 4)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     private var headerSection: some View {
@@ -80,6 +102,7 @@ struct PreviewSettingsView: View {
             }
             .padding(.top, 4)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     private var displayModeSection: some View {
@@ -90,7 +113,7 @@ struct PreviewSettingsView: View {
                     set: { settings.alwaysSinglePageForCover = $0 }
                 ))
                 .toggleStyle(.switch)
-                
+
                 HStack(spacing: 12) {
                     Text("デフォルト表示モード:")
                     Picker("", selection: Binding(
@@ -103,13 +126,14 @@ struct PreviewSettingsView: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                
+
                 Text("自動モードでは、ウィンドウの縦横比に応じて表示モードを自動選択します")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             .padding(.top, 4)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     @available(macOS 13.0, *)
@@ -136,6 +160,7 @@ struct PreviewSettingsView: View {
             }
             .padding(.top, 4)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     private var windowSection: some View {
@@ -146,7 +171,7 @@ struct PreviewSettingsView: View {
                     set: { settings.restoreWindowFrameEnabled = $0 }
                 ))
                 .toggleStyle(.switch)
-                
+
                 if settings.savedWindowFrameString != nil {
                     Button("保存されたサイズ情報をリセット") {
                         settings.savedWindowFrameString = nil
@@ -159,6 +184,7 @@ struct PreviewSettingsView: View {
             }
             .padding(.top, 4)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Helpers
