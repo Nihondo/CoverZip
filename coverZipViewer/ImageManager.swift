@@ -65,6 +65,14 @@ class ImageManager {
         }
     }
 
+    /**
+     * プリロード設定を変更する
+     *
+     * 表示モード（単ページ/見開き）に応じて最適なプリロード範囲を設定
+     * 見開きモードでは広範囲（±4ページ）、単ページでは狭範囲（±3ページ）をプリロード
+     *
+     * @param preference プリロード設定（.single または .spread）
+     */
     func setPreloadPreference(_ preference: PreloadPreference) {
         guard preloadPreference != preference else { return }
         preloadPreference = preference
@@ -175,15 +183,30 @@ class ImageManager {
         return (leftImage, rightImage)
     }
 
-    // 現在の見開きペアリングオフセットをトグル（0<->1）
+    /**
+     * 見開きペアリングオフセットをトグル（0<->1）
+     *
+     * 見開き表示で左右のページ組み合わせを1ページずらすための設定
+     * 例：オフセット0では2-3ページが見開き、オフセット1では1-2ページが見開き
+     */
     func toggleSpreadPairOffset() {
         spreadPairOffset = 1 - spreadPairOffset
     }
 
+    /**
+     * 見開きペアリングオフセットを設定する
+     *
+     * @param value オフセット値（0または1）
+     */
     func setSpreadPairOffset(_ value: Int) {
         spreadPairOffset = (value % 2 + 2) % 2
     }
 
+    /**
+     * 現在の見開きペアリングオフセットを取得する
+     *
+     * @return オフセット値（0または1）
+     */
     func getSpreadPairOffset() -> Int { spreadPairOffset }
     
     /**
@@ -379,17 +402,32 @@ class ImageManager {
     }
     
     // MARK: - Cache Management Methods
-    
+
+    /**
+     * 元画像をキャッシュに追加する
+     *
+     * キャッシュが上限に達している場合は、現在のページから最も離れた画像を削除
+     * 最大キャッシュサイズは10枚に制限
+     *
+     * @param image キャッシュする画像
+     * @param index 画像のインデックス
+     */
     private func cacheImage(_ image: NSImage, at index: Int) {
         if imageCache.count >= maxCacheSize {
             removeOldestCachedImage()
         }
         imageCache[index] = image
     }
-    
+
+    /**
+     * 現在のページから最も離れたキャッシュ画像を削除する
+     *
+     * LRU（Least Recently Used）方式ではなく、現在ページからの距離ベースで削除
+     * これにより、ページ送りの方向に関わらず効率的なキャッシュが維持される
+     */
     private func removeOldestCachedImage() {
         guard !imageCache.isEmpty else { return }
-        
+
         // 現在のインデックスから最も離れているキャッシュを削除
         let farthestIndex = imageCache.keys.max { abs($0 - currentIndex) < abs($1 - currentIndex) }
         if let indexToRemove = farthestIndex {
@@ -397,6 +435,15 @@ class ImageManager {
         }
     }
     
+    /**
+     * 現在のページの隣接画像をプリロードする
+     *
+     * プリロードは2段階で実行される：
+     * 1. Primary段階: 最も近い隣接ページ（見開き時±2、単ページ時±1）
+     * 2. Additional段階: より遠いページ（見開き時±4、単ページ時±3）
+     *
+     * Primary完了後に自動的にAdditional段階が開始される
+     */
     func preloadAdjacentImages() {
         guard hasImages() else { return }
         let plan = buildPreloadPlan()
@@ -405,16 +452,26 @@ class ImageManager {
         schedulePreloadTasks(for: plan.primaryOffsets, cancelOthers: true)
     }
 
+    /**
+     * 指定されたインデックスのプリロードタスクをスケジュールする
+     *
+     * @param indices プリロード対象のインデックス配列
+     * @param cancelOthers trueの場合、対象外の既存タスクをキャンセル
+     */
     private func schedulePreloadTasks(for indices: [Int], cancelOthers: Bool) {
+        // 有効なインデックスのみをフィルタリング（範囲内かつ未キャッシュ）
         let validIndices = indices.filter {
             $0 >= 0 && $0 < imageEntryInfos.count && imageCache[$0] == nil
         }
         NSLog("[ImageManager] Scheduling preload targets=%@ (cancelOthers=%@)", validIndices.description, String(cancelOthers))
+
+        // 不要になったタスクをキャンセル（ページ移動時など）
         if cancelOthers {
             let keepSet = Set(validIndices)
             cancelObsoletePreloadTasks(keeping: keepSet)
         }
 
+        // 各インデックスのプリロードタスクを作成・実行
         for index in validIndices where pendingPreloadTasks[index] == nil {
             let workItem = makePreloadWorkItem(for: index)
             pendingPreloadTasks[index] = workItem
@@ -422,6 +479,14 @@ class ImageManager {
         }
     }
 
+    /**
+     * 不要になったプリロードタスクをキャンセルする
+     *
+     * ページ移動時など、現在位置から離れたページのプリロードタスクを中止する
+     * これにより、無駄なメモリ使用と処理を防ぐ
+     *
+     * @param keepSet 保持するインデックスのセット（これ以外はキャンセル）
+     */
     private func cancelObsoletePreloadTasks(keeping keepSet: Set<Int>) {
         guard !pendingPreloadTasks.isEmpty else { return }
         var removalTargets: [Int] = []
@@ -432,10 +497,20 @@ class ImageManager {
         removalTargets.forEach { pendingPreloadTasks.removeValue(forKey: $0) }
     }
 
+    /**
+     * プリロード用のワークアイテムを作成する
+     *
+     * キャンセル可能なワークアイテムを作成し、バックグラウンドで画像をロード
+     * キャンセルチェックを定期的に行い、不要になった処理を中断できる
+     *
+     * @param index プリロード対象のインデックス
+     * @return キャンセル可能なDispatchWorkItem
+     */
     private func makePreloadWorkItem(for index: Int) -> DispatchWorkItem {
         var workItemReference: DispatchWorkItem?
         let workItem = DispatchWorkItem(qos: .userInitiated) { [weak self] in
             guard let self else { return }
+            // キャンセルチェック用のクロージャ
             let isCancelled: () -> Bool = { workItemReference?.isCancelled ?? true }
             self.loadImageAtIndex(index, isCancelled: isCancelled)
             self.completePreloadTask(for: index, workItem: workItemReference)
@@ -444,16 +519,32 @@ class ImageManager {
         return workItem
     }
 
+    /**
+     * プリロードタスクの完了処理を行う
+     *
+     * タスクを追跡辞書から削除し、次のプリロードチャンクをスケジュールする
+     * 全てのPrimaryタスクが完了すると、自動的にAdditionalチャンクが開始される
+     *
+     * @param index 完了したタスクのインデックス
+     * @param workItem 完了したワークアイテム
+     */
     private func completePreloadTask(for index: Int, workItem: DispatchWorkItem?) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             if let current = self.pendingPreloadTasks[index], let workItem, current === workItem {
                 self.pendingPreloadTasks.removeValue(forKey: index)
             }
+            // 全タスク完了時に次のチャンクをスケジュール
             self.scheduleNextPreloadChunkIfNeeded()
         }
     }
 
+    /**
+     * 次のプリロードチャンクをスケジュールする（必要な場合のみ）
+     *
+     * 全てのプリロードタスクが完了し、追加チャンクが残っている場合に実行
+     * Primary段階（±2）完了後、Additional段階（±4）を自動的に開始
+     */
     private func scheduleNextPreloadChunkIfNeeded() {
         guard pendingPreloadTasks.isEmpty, !pendingPreloadChunks.isEmpty else { return }
         let nextOffsets = pendingPreloadChunks.removeFirst()
@@ -461,6 +552,21 @@ class ImageManager {
         schedulePreloadTasks(for: nextOffsets, cancelOthers: false)
     }
 
+    /**
+     * プリロード計画を構築する
+     *
+     * 表示モードに応じて最適なプリロード範囲を決定
+     *
+     * 【単ページモード】
+     * - Primary: ±1（前後1ページ、計2ページ）
+     * - Additional: ±2, ±3（段階的にプリロード、計4ページ）
+     *
+     * 【見開きモード】
+     * - Primary: ±1〜±2（前後2ページずつ、計4ページ）
+     * - Additional: ±3〜±4（さらに遠いページ、計4ページ）
+     *
+     * @return プリロード計画（Primary段階とAdditional段階のインデックス）
+     */
     private func buildPreloadPlan() -> PreloadPlan {
         switch preloadPreference {
         case .single:
@@ -481,6 +587,15 @@ class ImageManager {
         }
     }
 
+    /**
+     * 指定されたインデックスの画像をバックグラウンドでロードする
+     *
+     * キャンセルチェックを各段階で実行し、不要になった処理を即座に中断
+     * これにより、ページ移動時のレスポンスが向上する
+     *
+     * @param index ロード対象のインデックス
+     * @param isCancelled キャンセル状態をチェックするクロージャ
+     */
     private func loadImageAtIndex(_ index: Int, isCancelled: (() -> Bool)?) {
         guard index >= 0, index < imageEntryInfos.count else { return }
         guard isCancelled?() != true else { return }
@@ -489,14 +604,17 @@ class ImageManager {
         guard let zipData = zipData else { return }
         guard isCancelled?() != true else { return }
 
+        // ZIPから画像データを抽出
         let entryInfo = imageEntryInfos[index]
         guard let imageData = CZZip.extractImageData(from: zipData, entryInfo: entryInfo) else {
             return
         }
         guard isCancelled?() != true else { return }
 
+        // 画像をデコード
         if let image = decodeImage(data: imageData, at: index) {
             guard isCancelled?() != true else { return }
+            // メインスレッドでキャッシュに追加
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 if self.imageCache[index] == nil {
@@ -533,18 +651,30 @@ class ImageManager {
         }
     }
     
+    /**
+     * 全ての画像キャッシュをクリアする
+     *
+     * 現在表示中の画像のみを保持し、それ以外を削除
+     * デコードキャッシュポリシー変更時などに使用
+     */
     func clearCache() {
         let currentImage = imageCache[currentIndex]
         imageCache.removeAll()
         resizedImageCache.removeAll()
         cancelAllBackgroundTasks()
-        
+
         if let image = currentImage {
             imageCache[currentIndex] = image
         }
         NSLog("[ImageManager] All image cache cleared")
     }
 
+    /**
+     * 全てのバックグラウンドタスクをキャンセルする
+     *
+     * プリロードタスクと高解像度差し替えタスクを全て中止
+     * ファイル切り替え時やキャッシュクリア時に使用
+     */
     private func cancelAllBackgroundTasks() {
         for (_, task) in pendingPreloadTasks { task.cancel() }
         pendingPreloadTasks.removeAll()
@@ -635,7 +765,19 @@ enum PreloadPreference {
 }
 // MARK: - Image decode helper
 extension ImageManager {
-    /// ImageIOを用いてNSImageへデコード（キャッシュ方針は設定に追従）
+    /**
+     * ImageIOを用いて画像データをNSImageへデコードする
+     *
+     * デコード戦略：
+     * 1. ダウンサンプリング計画を構築（表示サイズに最適化）
+     * 2. 大きなJPEGの場合、段階的デコード（低解像→高解像）
+     * 3. 通常のダウンサンプリングデコード
+     * 4. フォールバック（通常デコード）
+     *
+     * @param data 画像データ
+     * @param index 画像のインデックス（段階的デコード用）
+     * @return デコードされたNSImage、失敗時はnil
+     */
     private func decodeImage(data: Data, at index: Int?) -> NSImage? {
         guard let src = CGImageSourceCreateWithData(data as CFData, nil) else {
             return NSImage(data: data) // フォールバック
@@ -643,23 +785,36 @@ extension ImageManager {
 
         let plan = buildDownsamplePlan(for: src)
 
+        // 大きなJPEG画像の場合、段階的デコードを使用
         if let plan, let index, shouldUseIncrementalJPEG(for: src, plan: plan) {
             if let preview = decodeIncrementalJPEG(data: data, plan: plan, index: index) {
                 return preview
             }
         }
 
+        // ダウンサンプリングデコード
         if let downsampled = createDownsampledImage(from: src, plan: plan) {
             return NSImage(cgImage: downsampled, size: NSSize(width: downsampled.width, height: downsampled.height))
         }
 
+        // フォールバック：通常デコード
         let options = CZImageIOOptionsBuilder.buildDecodeOptions(cachePolicy: decodeCachePolicy)
         if let cg = CGImageSourceCreateImageAtIndex(src, 0, options) {
             return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
         }
-        return NSImage(data: data) // フォールバック
+        return NSImage(data: data) // 最終フォールバック
     }
 
+    /**
+     * ダウンサンプリングされた画像を生成する
+     *
+     * 表示サイズに合わせて画像を縮小してデコードすることで、
+     * メモリ使用量とデコード時間を大幅に削減
+     *
+     * @param source 画像ソース
+     * @param plan ダウンサンプリング計画
+     * @return ダウンサンプリングされたCGImage
+     */
     private func createDownsampledImage(from source: CGImageSource, plan: DownsamplePlan?) -> CGImage? {
         guard let plan else { return nil }
         let options = CZImageIOOptionsBuilder.buildDownsampleOptions(
@@ -670,7 +825,22 @@ extension ImageManager {
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options)
     }
 
+    /**
+     * 段階的JPEG デコードを実行する
+     *
+     * 大きなJPEG画像を2段階でデコード：
+     * 1. 低解像度プレビュー（データの一部のみを使用）→ 即座に表示
+     * 2. 高解像度画像（全データ）→ バックグラウンドでデコード後に差し替え
+     *
+     * これにより、大きな画像でも即座に表示できる
+     *
+     * @param data 画像データ
+     * @param plan ダウンサンプリング計画
+     * @param index 画像のインデックス（高解像度差し替え用）
+     * @return 低解像度プレビュー画像
+     */
     private func decodeIncrementalJPEG(data: Data, plan: DownsamplePlan, index: Int) -> NSImage? {
+        // 低解像度プレビューの目標サイズ
         let previewMax = max(incrementalPreviewMinPixels, plan.maxPixel / 2)
         let previewSubsample: Int?
         if let originalMax = plan.originalPixelMax {
@@ -679,6 +849,7 @@ extension ImageManager {
             previewSubsample = nil
         }
 
+        // データの一部を使用してプレビューを生成
         let chunkSize = min(max(incrementalPreviewChunkBytes, data.count / 8), data.count)
         let previewData = data.prefix(chunkSize)
         let incremental = CGImageSourceCreateIncremental(nil)
@@ -694,6 +865,7 @@ extension ImageManager {
             return nil
         }
 
+        // 全データを使用する高解像度デコードをバックグラウンドでスケジュール
         if chunkSize < data.count {
             scheduleHighResolutionUpdate(for: index, data: data)
         }
@@ -701,6 +873,17 @@ extension ImageManager {
         return NSImage(cgImage: cgPreview, size: NSSize(width: cgPreview.width, height: cgPreview.height))
     }
 
+    /**
+     * 段階的JPEGデコードを使用すべきかを判定する
+     *
+     * 判定条件：
+     * 1. JPEG形式であること
+     * 2. 元画像サイズが目標サイズの1.5倍以上であること
+     *
+     * @param source 画像ソース
+     * @param plan ダウンサンプリング計画
+     * @return 段階的デコードを使用すべき場合true
+     */
     private func shouldUseIncrementalJPEG(for source: CGImageSource, plan: DownsamplePlan) -> Bool {
         guard let type = CGImageSourceGetType(source) else { return false }
         let isJPEG: Bool
@@ -711,12 +894,24 @@ extension ImageManager {
         }
         guard isJPEG else { return false }
         guard let originalMax = plan.originalPixelMax else { return false }
+        // 元画像が目標サイズの1.5倍以上の場合に段階的デコードを使用
         return originalMax > CGFloat(plan.maxPixel) * 1.5
     }
 
+    /**
+     * 高解像度画像への差し替えをスケジュールする
+     *
+     * 段階的デコードの第2段階として、全データを使用した高解像度画像を
+     * バックグラウンドでデコードし、完了後にキャッシュを更新
+     * 現在表示中のページの場合は、通知を送信してUIを更新
+     *
+     * @param index 画像のインデックス
+     * @param data 完全な画像データ
+     */
     private func scheduleHighResolutionUpdate(for index: Int, data: Data) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            // 既にタスクが存在する場合はスキップ
             guard self.pendingHighResTasks[index] == nil else { return }
             var workItemReference: DispatchWorkItem?
             let workItem = DispatchWorkItem(qos: .userInitiated) { [weak self] in
@@ -725,6 +920,7 @@ extension ImageManager {
                     self.completeHighResTask(for: index)
                     return
                 }
+                // 全データを使用してデコード
                 let incremental = CGImageSourceCreateIncremental(nil)
                 CGImageSourceUpdateData(incremental, data as CFData, true)
                 let options = CZImageIOOptionsBuilder.buildDecodeOptions(cachePolicy: self.decodeCachePolicy)
@@ -739,7 +935,9 @@ extension ImageManager {
                         self.completeHighResTask(for: index)
                         return
                     }
+                    // キャッシュを更新
                     self.cacheImage(finalImage, at: index)
+                    // 現在表示中のページの場合はUIを更新
                     if self.currentIndex == index {
                         NotificationCenter.default.post(name: .imageManagerDidUpdateImage, object: self, userInfo: ["index": index])
                     }
@@ -762,6 +960,15 @@ extension ImageManager {
         }
     }
 
+    /**
+     * ダウンサンプリング計画を構築する
+     *
+     * 画像のメタデータから元サイズを取得し、表示サイズに合わせた
+     * 最適なダウンサンプリング設定を決定
+     *
+     * @param source 画像ソース
+     * @return ダウンサンプリング計画、不要な場合はnil
+     */
     private func buildDownsamplePlan(for source: CGImageSource) -> DownsamplePlan? {
         let targetMax = desiredDisplayMaxPixelLength()
 
@@ -774,20 +981,40 @@ extension ImageManager {
 
         let originalMax = max(width, height)
         let skipThreshold = CGFloat(targetMax) * 1.05
+        // 元画像が目標サイズとほぼ同じ場合はダウンサンプリング不要
         guard originalMax > skipThreshold else { return nil }
 
         let subsample = determineSubsampleFactor(originalMax: originalMax, targetMax: CGFloat(targetMax))
         return DownsamplePlan(maxPixel: targetMax, subsampleFactor: subsample, originalPixelMax: originalMax)
     }
 
+    /**
+     * 表示に必要な最大ピクセル長を計算する
+     *
+     * ウィンドウサイズに基づいて計算し、オーバースキャン率（1.2倍）を適用
+     * これにより、拡大表示時にも十分な画質を確保
+     *
+     * @return 目標最大ピクセル長
+     */
     private func desiredDisplayMaxPixelLength() -> Int {
         if targetDisplaySize.width > 0, targetDisplaySize.height > 0 {
             let maxSide = max(targetDisplaySize.width, targetDisplaySize.height) * downsampleOverscanRatio
             return max(1, Int(ceil(maxSide)))
         }
+        // フォールバック：4K相当
         return fallbackMaxDisplayPixels
     }
 
+    /**
+     * サブサンプルファクターを決定する
+     *
+     * JPEGのサブサンプリング（8x8ブロック単位の間引き）を使用して
+     * 高速なダウンサンプリングを実現
+     *
+     * @param originalMax 元画像の最大辺
+     * @param targetMax 目標最大辺
+     * @return サブサンプルファクター（2, 4, 8）、不要な場合はnil
+     */
     private func determineSubsampleFactor(originalMax: CGFloat, targetMax: CGFloat) -> Int? {
         guard originalMax > targetMax, targetMax > 0 else { return nil }
         let ratio = originalMax / targetMax
@@ -798,17 +1025,39 @@ extension ImageManager {
     }
 }
 
+/**
+ * ダウンサンプリング計画
+ *
+ * 画像デコード時のダウンサンプリング設定を保持
+ */
 private struct DownsamplePlan {
+    /// 目標最大ピクセル長
     let maxPixel: Int
+    /// サブサンプルファクター（2, 4, 8のいずれか）
     let subsampleFactor: Int?
+    /// 元画像の最大辺長
     let originalPixelMax: CGFloat?
 }
 
+/**
+ * プリロード計画
+ *
+ * 段階的プリロードの計画を保持
+ * Primary完了後、順次Additionalチャンクが実行される
+ */
 private struct PreloadPlan {
+    /// Primary段階でプリロードするインデックス（最優先）
     let primaryOffsets: [Int]
+    /// Additional段階でプリロードするインデックスのチャンク（順次実行）
     let additionalChunks: [[Int]]
 }
 
+/**
+ * 通知名の拡張
+ *
+ * ImageManagerからの画像更新通知を定義
+ */
 extension Notification.Name {
+    /// 画像が更新されたことを通知（高解像度差し替え時など）
     static let imageManagerDidUpdateImage = Notification.Name("com.dmng.CoverZip.imageManagerDidUpdateImage")
 }

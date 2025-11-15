@@ -138,8 +138,21 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
 
     // MARK: - Mouse Monitor Management
-    
-    /// マウスイベントモニターを設定
+
+    /**
+     * マウスイベントモニターを設定
+     *
+     * QuickLook環境でページ送りとコンテキストメニュー表示を実現するため、
+     * ローカルイベントモニターを使用してマウスイベントを処理
+     *
+     * 処理内容：
+     * - 左クリック: ページ送り（画像エリアのクリック位置で前後判定）
+     * - 右クリック: コンテキストメニュー表示
+     * - スクロールホイール: ページ送り
+     * - Control+クリック: コンテキストメニュー表示
+     *
+     * スライダーなどのNSControl上のイベントは通過させ、通常の動作を維持
+     */
     private func setupMouseMonitors() {
         // 既存のモニターをクリーンアップしてから設定
         cleanupMouseMonitors()
@@ -375,8 +388,16 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         NSLog("[DEBUG] Mouse monitor cleanup complete")
     }
 
-    
-    /// マウスモニターを遅延設定（window が利用可能になるまで待機）
+
+    /**
+     * マウスモニターを遅延設定（window が利用可能になるまで待機）
+     *
+     * QuickLook環境では、viewDidAppear時点でwindowが利用可能でない場合がある
+     * この問題に対応するため、windowが利用可能になるまでポーリングで待機
+     *
+     * 最大試行回数：10回（1秒間）
+     * ポーリング間隔：0.1秒
+     */
     private func setupMouseMonitorsWithDelay() {
         // 既存のタイマーをキャンセル
         mouseMonitorSetupTimer?.invalidate()
@@ -538,12 +559,25 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
     */
 
+    /**
+     * QuickLookプレビューの準備処理（エントリーポイント）
+     *
+     * QuickLookシステムから呼び出され、ZIPファイルのプレビュー表示を準備
+     *
+     * 処理フロー：
+     * 1. 前回のファイルのクリーンアップ（マウスモニター、スライドショー等）
+     * 2. ZIPファイルから画像を遅延ロード（メタデータのみ即座に取得）
+     * 3. 履歴から前回の読書位置を復元
+     * 4. UI初期化とマウスモニター設定
+     *
+     * @param url プレビュー対象のZIPファイルURL
+     */
     func preparePreviewOfFile(at url: URL) async throws {
         NSLog("[DEBUG] preparePreviewOfFile called for: %@", url.lastPathComponent)
-        
+
         // ファイル切り替え時にマウスモニターをクリーンアップ
         cleanupMouseMonitors()
-        
+
         // 新しいファイルが読み込まれる際にスライドショーをリセット
         stopSlideshow()
         isSlideshowEnabled = false
@@ -1007,10 +1041,26 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         applyTransition(forward: true)
         displayCurrentImage()
     }
-    
+
+
+    /**
+     * 表示モードを設定する
+     *
+     * 単ページ/見開きモードを切り替え、Auto Layoutの制約を動的に変更
+     *
+     * 単ページモード：
+     * - 左側ImageViewのみ表示、中央配置
+     * - 右側ImageViewは非表示
+     *
+     * 見開きモード：
+     * - 左右のImageViewを表示、画面を二分割
+     * - 左画像は右寄せ、右画像は左寄せ（中央で接するように配置）
+     *
+     * @param mode 設定する表示モード
+     */
     private func setViewMode(_ mode: ViewMode) {
         guard currentViewMode != mode else { return }
-        
+
         currentViewMode = mode
         imageManager.setPreloadPreference(mode == .spread ? .spread : .single)
         
@@ -1040,11 +1090,26 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         view.needsLayout = true
         view.layoutSubtreeIfNeeded()
     }
-    
+
+
+    /**
+     * 見開きモードを使用すべきかを判定する
+     *
+     * ユーザー設定と表示コンテキストに基づいて、最適な表示モードを決定
+     *
+     * 判定ロジック：
+     * 1. 表紙ページで「常に単ページ」設定が有効な場合は単ページ強制
+     * 2. ユーザー設定モードに基づき判定：
+     *    - 自動: ウィンドウの縦横比で判定（横長なら見開き）
+     *    - 単ページ: 常に単ページ
+     *    - 見開き: 常に見開き
+     *
+     * @return 見開きモードを使用する場合true
+     */
     private func shouldUseSpreadMode() -> Bool {
         let alwaysSingleForCover = AppSettings.shared.alwaysSinglePageForCover
         let isCover = imageManager.isCoverPage()
-        
+
         // 表紙で「常に単ページ表示」が有効な場合は単ページを強制
         if alwaysSingleForCover && isCover {
             return false
@@ -1187,6 +1252,18 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
 
     // MARK: - Simple page push transition
+
+    /**
+     * ページ送りトランジションを適用する
+     *
+     * ページめくりのアニメーション効果を追加
+     * 読み方向（右綴じ/左綴じ）に応じてアニメーション方向を自動調整
+     *
+     * アニメーション種類：CATransition（Push）
+     * アニメーション時間：0.25秒
+     *
+     * @param forward 進む方向の場合true、戻る方向の場合false
+     */
     private func applyTransition(forward: Bool) {
     // トランジションが無効なら適用しない（ユーザー指定優先）
     if !isTransitionEnabled { return }
@@ -1219,6 +1296,21 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     // MARK: - Mouse Wheel Scroll Handling
 
+    /**
+     * マウスホイールスクロールイベントを処理する
+     *
+     * スクロール量を累積し、閾値を超えた場合にページ送りを実行
+     * 連続スクロール防止のためのクールダウン機構を実装
+     *
+     * 処理ロジック：
+     * 1. 縦スクロールのみを処理（横スクロールは無視）
+     * 2. スクロール量を累積（scrollAccumulator）
+     * 3. 閾値（scrollThreshold = 10.0）を超えたらページ送り実行
+     * 4. クールダウン時間（0.1秒）内の連続スクロールは無視
+     *
+     * @param event スクロールイベント
+     * @return イベントを処理した場合true
+     */
     private func handleScrollEvent(_ event: NSEvent) -> Bool {
         let currentTime = CACurrentMediaTime()
         let deltaY = event.scrollingDeltaY
@@ -1261,6 +1353,23 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         return false
     }
 
+    /**
+     * ページ送りナビゲーションを実行する
+     *
+     * キーボード、マウスホイール、クリックなど様々な入力に対応した
+     * 統一的なページ送り処理
+     *
+     * 処理内容：
+     * 1. スライドショー中の場合は一時停止
+     * 2. ImageManagerでページ移動
+     * 3. 表示モードを再評価（自動モードの場合）
+     * 4. トランジションアニメーション適用
+     * 5. 履歴保存
+     * 6. スライドショーを再開（必要な場合）
+     *
+     * @param forward 進む方向の場合true、戻る方向の場合false
+     * @return ページ移動に成功した場合true
+     */
     private func performPageNavigation(forward: Bool) -> Bool {
         let isSpreadMode = currentViewMode == .spread
 
@@ -1544,10 +1653,26 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
     
     // キーボード入力はQuick Lookホストに委ねる（本拡張では未処理）
-    
+
+
     // MARK: - Performance Optimization
-    
-    /// ImageManagerに現在のウィンドウサイズを設定して最適化を有効にする
+
+    /**
+     * ImageManagerに現在のウィンドウサイズを設定して最適化を有効にする
+     *
+     * ウィンドウサイズに基づいて、ImageManagerの目標表示サイズを更新
+     * これにより、ダウンサンプリングデコードが最適化される
+     *
+     * 最適化内容：
+     * 1. 高DPIディスプレイ対応（Retina等のbackingScaleFactorを考慮）
+     * 2. 最大サイズ制限（4K相当に制限してメモリ使用量を制御）
+     * 3. ウィンドウリサイズ時に自動更新
+     *
+     * 効果：
+     * - 巨大な画像でも即座にデコード可能
+     * - メモリ使用量の大幅削減
+     * - 画質は表示に必要十分なレベルを維持
+     */
     private func updateImageManagerDisplaySize() {
         let contentSize = view.bounds.size
         let windowSize = view.window?.frame.size ?? contentSize
@@ -1576,13 +1701,27 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
         NSLog("[Performance] Updated display size: %dx%d (scale: %f)", Int(limitedSize.width), Int(limitedSize.height), backingScaleFactor)
     }
-    
+
+
     // MARK: - Reading History Management
-    
-    /// 履歴から前回の読書位置を復元
+
+    /**
+     * 履歴から前回の読書位置を復元する
+     *
+     * ZIP別に保存された履歴情報を読み込み、前回の読書状態を復元
+     *
+     * 復元される情報：
+     * - ページ位置
+     * - 表示モード（単ページ/見開き/自動）
+     * - 見開きオフセット（左右ページの組み合わせ）
+     * - 読み方向（右綴じ/左綴じ）
+     *
+     * 履歴はApp Group UserDefaultsに保存されるため、
+     * Quick Look拡張と内蔵ビューア間で共有される
+     */
     private func restoreReadingPositionFromHistory() {
         guard !currentZipFilename.isEmpty else { return }
-        
+
         if let history = readingHistoryManager.loadReadingPosition(filename: currentZipFilename) {
             NSLog("[ReadingHistory] Restoring position for %@: page %d, viewMode %@, offset %d, rtl %@", currentZipFilename, history.page, history.viewMode, history.spreadPairOffset, history.isRightToLeftReading?.description ?? "nil")
 
@@ -1615,15 +1754,29 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             NSLog("[ReadingHistory] No history found for %@", currentZipFilename)
         }
     }
-    
-    /// 現在の読書位置を履歴に保存
+
+
+    /**
+     * 現在の読書位置を履歴に保存する
+     *
+     * ページ移動、設定変更、終了時などに呼び出され、
+     * 現在の読書状態をApp Group UserDefaultsに保存
+     *
+     * 保存される情報：
+     * - 現在のページ番号
+     * - 表示モード
+     * - 見開きオフセット
+     * - 読み方向
+     *
+     * 次回同じZIPファイルを開いた際に、この状態が復元される
+     */
     private func saveReadingPositionToHistory() {
         guard !currentZipFilename.isEmpty, imageManager.hasImages() else { return }
-        
+
         let currentPage = imageManager.getCurrentPageNumber()
         let currentViewMode = userPreferredViewMode.rawValue
         let currentOffset = imageManager.getSpreadPairOffset()
-        
+
         readingHistoryManager.saveReadingPosition(
             filename: currentZipFilename,
             page: currentPage,

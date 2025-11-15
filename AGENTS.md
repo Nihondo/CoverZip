@@ -45,7 +45,14 @@
 - 変更は最小限・局所的・既存スタイルに合わせる。無関係な最適化や一括リネームは禁止。
 - 仕様の単一責務を維持（ルーティングは App、画像表示は Viewer、ZIP 処理は Shared）。
 - 共有キーや App Group を変更しない。必要なら合意の上で全ターゲット整合を取る。
-- ログは既存の `NSLog` を用い、過剰出力は避ける（デバッグ時のみ詳細）。
+- ログは既存の `NSLog` を用い、過剰出力は避ける（デバッグ時のみ詳細）。Quick Look 実行時は quicklookd 側に出力されるため Console.app で確認すること。
+
+### 2025-11: ImageManager パフォーマンス最適化ガイド
+- デコードは `CZImageIOOptionsBuilder` によるダウンサンプリングを前提とし、巨大 JPEG は incremental プレビュー（低解像 → 高解像差し替え）の 2 段構成とすること。
+- `ImageManager` のプリロードは `DispatchWorkItem` でキャンセル可能にしている。見開き時は ±2 ページ、完了後はさらに ±4 以降をバッチ投入する仕様を維持すること。
+- プリロードと高解像差し替え用ワークアイテムは `pendingPreloadTasks` / `pendingHighResTasks` で追跡する。別用途で流用したり直列化しない。
+- ログにはプリロード計画/完了インデックスを出力している。トレースを削除する場合は Console でのデバッグ手段を別途用意してからにする。
+- `Notification.Name.imageManagerDidUpdateImage` を利用して UI を差し替えているため、デコードパイプラインを編集する際は通知が正しく送信されるか確認する。
 
 ## 禁止・注意事項（Danger Zone）
 - App Group（`group.com.dmng.CoverZip`）や `CZSettingsKeys` の値を勝手に変更しない。
@@ -72,6 +79,7 @@
 - 内蔵ビューア: 左右クリック/キー/スクロールホイールでページ送り、右綴じ/左綴じ、単/見開き/自動の切り替え、スライドショー動作。
 - 履歴: ZIP ごとの最終ページ・表示モード・綴じ方向・見開き補正が復元されること（App Group の UserDefaults に保存）。
 - サムネイル: Finder でのサムネイル生成（異常系もログ確認）。
+- プレビュー性能: 4K 相当の JPEG でダウンサンプル後の初期表示がブロックされないか（低解像プレビュー → 高解像差し替え）、見開きモードで ±2→±4 の順に先読みされるか Console ログで確認する。
 
 ## Codex/Coding Agent 向け運用
 - 複雑・複数工程の変更は `update_plan` を使って段階を明示。
@@ -96,3 +104,4 @@
 - 2025-09-06 QLPreviewSmokeTest を正式化し `QLPreviewInputDriver` として採用
 - 2025-09-06 内蔵ビューアの入力経路を `QLPreviewInputDriver` に統一（セーフ入力モード分岐を廃止）
 - 2025-09-17 Preview Extension にマウスホイールスクロール対応を追加
+- 2025-11-15 ImageManager のダウンサンプリング/段階的デコード/多段プリロード仕様を追記

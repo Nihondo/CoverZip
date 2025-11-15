@@ -2,13 +2,22 @@
 //  UnifiedAppSettings.swift
 //  CoverZip Shared
 //
-//  Unified settings access layer shared across all targets
+//  全ターゲット間で共有される統一設定アクセスレイヤー
 //
 
 import Foundation
 
-/// 共有設定アクセスレイヤー
-/// App Group経由でUserDefaultsにアクセスし、全ターゲットで一貫した設定管理を提供
+/**
+ * 共有設定アクセスレイヤー
+ *
+ * App Group経由でUserDefaultsにアクセスし、全ターゲットで一貫した設定管理を提供
+ * Single Source of Truthパターンに基づく設定の中央管理
+ *
+ * 使用方法：
+ * - メインアプリ: AppSettingsWriter（ObservableObjectラッパー）経由
+ * - プレビュー拡張: AppSettings（軽量ラッパー）経由
+ * - 直接アクセス: CZSettings.shared
+ */
 public final class CZSettings {
 
     // MARK: - Shared Instance
