@@ -8,6 +8,8 @@
 import Foundation
 import AppKit
 import ImageIO
+import UniformTypeIdentifiers
+import CoreServices
 // Shared utilities are provided in Shared/* files
 
 // ZIPの低レベル処理はShared/ZipCoreに集約
@@ -25,6 +27,9 @@ class ImageManager {
     private var currentIndex: Int = 0
     private var imageCache: [Int: NSImage] = [:]
     private let maxCacheSize: Int = 10
+    private var pendingPreloadTasks: [Int: DispatchWorkItem] = [:]
+    private var pendingHighResTasks: [Int: DispatchWorkItem] = [:]
+    private let preloadQueue = DispatchQueue(label: "com.dmng.CoverZip.imagePreload", qos: .userInitiated)
     private var memoryPressureObserver: NSObjectProtocol?
     // 見開きの左右組み合わせを1ページ分ずらすためのオフセット（0 or 1）
     private var spreadPairOffset: Int = 0
@@ -35,6 +40,8 @@ class ImageManager {
     private var targetDisplaySize: NSSize = NSSize.zero
     private let downsampleOverscanRatio: CGFloat = 1.2
     private let fallbackMaxDisplayPixels: Int = 3840
+    private let incrementalPreviewChunkBytes: Int = 256 * 1024
+    private let incrementalPreviewMinPixels: Int = 720
     // デコードキャッシュ方針（設定から取得、デフォルトは .deferred）
     private var decodeCachePolicy: CZImageDecodeCachePolicy { AppSettings.shared.imageDecodeCachePolicy }
     // 全画像のバックグラウンド読み込み中かどうか（常にfalseになる：遅延ロードのため）
@@ -67,6 +74,7 @@ class ImageManager {
      */
     func loadImages(from url: URL) -> Bool {
         do {
+            cancelAllBackgroundTasks()
             // ZIPデータをメモリにマップ（遅延ロード用）
             let data = try Data(contentsOf: url, options: [.mappedIfSafe])
             self.zipData = data
@@ -211,7 +219,7 @@ class ImageManager {
             return nil
         }
 
-        guard let image = decodeImage(data: imageData) else {
+        guard let image = decodeImage(data: imageData, at: index) else {
             NSLog("[ImageManager] Failed to decode image at index \(index): \(entryInfo.filename)")
             return nil
         }
@@ -326,6 +334,10 @@ class ImageManager {
         return currentIndex + 1
     }
 
+    func getCurrentIndex() -> Int {
+        return currentIndex
+    }
+
     /// 指定ページへ移動（1始まり）
     /// - Parameter page: 1...imageCount の範囲内で移動。範囲外は丸め込み。
     /// - Returns: 有効な画像が存在する場合にtrue
@@ -376,32 +388,75 @@ class ImageManager {
     }
     
     func preloadAdjacentImages() {
-        let indicesToLoad = [currentIndex - 1, currentIndex + 1].filter {
+        schedulePreloadTasks(for: [currentIndex - 1, currentIndex + 1])
+    }
+
+    private func schedulePreloadTasks(for indices: [Int]) {
+        let validIndices = indices.filter {
             $0 >= 0 && $0 < imageEntryInfos.count && imageCache[$0] == nil
         }
+        let keepSet = Set(validIndices)
+        cancelObsoletePreloadTasks(keeping: keepSet)
 
-        DispatchQueue.global(qos: .background).async { [weak self] in
-            for index in indicesToLoad {
-                self?.loadImageAtIndex(index)
+        for index in validIndices where pendingPreloadTasks[index] == nil {
+            let workItem = makePreloadWorkItem(for: index)
+            pendingPreloadTasks[index] = workItem
+            preloadQueue.async(execute: workItem)
+        }
+    }
+
+    private func cancelObsoletePreloadTasks(keeping keepSet: Set<Int>) {
+        guard !pendingPreloadTasks.isEmpty else { return }
+        var removalTargets: [Int] = []
+        for (index, workItem) in pendingPreloadTasks where !keepSet.contains(index) {
+            workItem.cancel()
+            removalTargets.append(index)
+        }
+        removalTargets.forEach { pendingPreloadTasks.removeValue(forKey: $0) }
+    }
+
+    private func makePreloadWorkItem(for index: Int) -> DispatchWorkItem {
+        var workItemReference: DispatchWorkItem?
+        let workItem = DispatchWorkItem(qos: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let isCancelled: () -> Bool = { workItemReference?.isCancelled ?? true }
+            self.loadImageAtIndex(index, isCancelled: isCancelled)
+            self.completePreloadTask(for: index, workItem: workItemReference)
+        }
+        workItemReference = workItem
+        return workItem
+    }
+
+    private func completePreloadTask(for index: Int, workItem: DispatchWorkItem?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let current = self.pendingPreloadTasks[index], let workItem, current === workItem {
+                self.pendingPreloadTasks.removeValue(forKey: index)
             }
         }
     }
 
-    private func loadImageAtIndex(_ index: Int) {
-        guard index >= 0, index < imageEntryInfos.count, imageCache[index] == nil else {
-            return
-        }
+    private func loadImageAtIndex(_ index: Int, isCancelled: (() -> Bool)?) {
+        guard index >= 0, index < imageEntryInfos.count else { return }
+        guard isCancelled?() != true else { return }
+        if imageCache[index] != nil { return }
 
         guard let zipData = zipData else { return }
+        guard isCancelled?() != true else { return }
 
         let entryInfo = imageEntryInfos[index]
         guard let imageData = CZZip.extractImageData(from: zipData, entryInfo: entryInfo) else {
             return
         }
+        guard isCancelled?() != true else { return }
 
-        if let image = decodeImage(data: imageData) {
+        if let image = decodeImage(data: imageData, at: index) {
+            guard isCancelled?() != true else { return }
             DispatchQueue.main.async { [weak self] in
-                self?.cacheImage(image, at: index)
+                guard let self else { return }
+                if self.imageCache[index] == nil {
+                    self.cacheImage(image, at: index)
+                }
             }
         }
     }
@@ -436,11 +491,19 @@ class ImageManager {
         let currentImage = imageCache[currentIndex]
         imageCache.removeAll()
         resizedImageCache.removeAll()
+        cancelAllBackgroundTasks()
         
         if let image = currentImage {
             imageCache[currentIndex] = image
         }
         NSLog("[ImageManager] All image cache cleared")
+    }
+
+    private func cancelAllBackgroundTasks() {
+        for (_, task) in pendingPreloadTasks { task.cancel() }
+        pendingPreloadTasks.removeAll()
+        for (_, task) in pendingHighResTasks { task.cancel() }
+        pendingHighResTasks.removeAll()
     }
     
     // MARK: - Image Resizing Methods
@@ -515,18 +578,27 @@ class ImageManager {
     }
     
     deinit {
+        cancelAllBackgroundTasks()
         removeMemoryPressureObserver()
     }
 }
-
 // MARK: - Image decode helper
 extension ImageManager {
     /// ImageIOを用いてNSImageへデコード（キャッシュ方針は設定に追従）
-    private func decodeImage(data: Data) -> NSImage? {
+    private func decodeImage(data: Data, at index: Int?) -> NSImage? {
         guard let src = CGImageSourceCreateWithData(data as CFData, nil) else {
             return NSImage(data: data) // フォールバック
         }
-        if let downsampled = createDownsampledImageIfNeeded(from: src) {
+
+        let plan = buildDownsamplePlan(for: src)
+
+        if let plan, let index, shouldUseIncrementalJPEG(for: src, plan: plan) {
+            if let preview = decodeIncrementalJPEG(data: data, plan: plan, index: index) {
+                return preview
+            }
+        }
+
+        if let downsampled = createDownsampledImage(from: src, plan: plan) {
             return NSImage(cgImage: downsampled, size: NSSize(width: downsampled.width, height: downsampled.height))
         }
 
@@ -537,14 +609,106 @@ extension ImageManager {
         return NSImage(data: data) // フォールバック
     }
 
-    private func createDownsampledImageIfNeeded(from source: CGImageSource) -> CGImage? {
-        guard let plan = buildDownsamplePlan(for: source) else { return nil }
+    private func createDownsampledImage(from source: CGImageSource, plan: DownsamplePlan?) -> CGImage? {
+        guard let plan else { return nil }
         let options = CZImageIOOptionsBuilder.buildDownsampleOptions(
             maxPixels: plan.maxPixel,
             cachePolicy: decodeCachePolicy,
             subsampleFactor: plan.subsampleFactor
         )
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options)
+    }
+
+    private func decodeIncrementalJPEG(data: Data, plan: DownsamplePlan, index: Int) -> NSImage? {
+        let previewMax = max(incrementalPreviewMinPixels, plan.maxPixel / 2)
+        let previewSubsample: Int?
+        if let originalMax = plan.originalPixelMax {
+            previewSubsample = determineSubsampleFactor(originalMax: originalMax, targetMax: CGFloat(previewMax))
+        } else {
+            previewSubsample = nil
+        }
+
+        let chunkSize = min(max(incrementalPreviewChunkBytes, data.count / 8), data.count)
+        let previewData = data.prefix(chunkSize)
+        let incremental = CGImageSourceCreateIncremental(nil)
+        CGImageSourceUpdateData(incremental, previewData as CFData, chunkSize == data.count)
+
+        let previewOptions = CZImageIOOptionsBuilder.buildDownsampleOptions(
+            maxPixels: previewMax,
+            cachePolicy: decodeCachePolicy,
+            subsampleFactor: previewSubsample
+        )
+
+        guard let cgPreview = CGImageSourceCreateThumbnailAtIndex(incremental, 0, previewOptions) else {
+            return nil
+        }
+
+        if chunkSize < data.count {
+            scheduleHighResolutionUpdate(for: index, data: data)
+        }
+
+        return NSImage(cgImage: cgPreview, size: NSSize(width: cgPreview.width, height: cgPreview.height))
+    }
+
+    private func shouldUseIncrementalJPEG(for source: CGImageSource, plan: DownsamplePlan) -> Bool {
+        guard let type = CGImageSourceGetType(source) else { return false }
+        let isJPEG: Bool
+        if #available(macOS 11.0, *) {
+            isJPEG = UTType(type as String)?.conforms(to: .jpeg) == true
+        } else {
+            isJPEG = UTTypeConformsTo(type, kUTTypeJPEG) || UTTypeConformsTo(type, kUTTypeJPEG2000)
+        }
+        guard isJPEG else { return false }
+        guard let originalMax = plan.originalPixelMax else { return false }
+        return originalMax > CGFloat(plan.maxPixel) * 1.5
+    }
+
+    private func scheduleHighResolutionUpdate(for index: Int, data: Data) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard self.pendingHighResTasks[index] == nil else { return }
+            var workItemReference: DispatchWorkItem?
+            let workItem = DispatchWorkItem(qos: .userInitiated) { [weak self] in
+                guard let self else { return }
+                guard workItemReference?.isCancelled != true else {
+                    self.completeHighResTask(for: index)
+                    return
+                }
+                let incremental = CGImageSourceCreateIncremental(nil)
+                CGImageSourceUpdateData(incremental, data as CFData, true)
+                let options = CZImageIOOptionsBuilder.buildDecodeOptions(cachePolicy: self.decodeCachePolicy)
+                guard let cg = CGImageSourceCreateImageAtIndex(incremental, 0, options) else {
+                    self.completeHighResTask(for: index)
+                    return
+                }
+                let finalImage = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    guard workItemReference?.isCancelled != true else {
+                        self.completeHighResTask(for: index)
+                        return
+                    }
+                    self.cacheImage(finalImage, at: index)
+                    if self.currentIndex == index {
+                        NotificationCenter.default.post(name: .imageManagerDidUpdateImage, object: self, userInfo: ["index": index])
+                    }
+                    self.completeHighResTask(for: index)
+                }
+            }
+            workItemReference = workItem
+            self.pendingHighResTasks[index] = workItem
+            self.preloadQueue.async(execute: workItem)
+        }
+    }
+
+    private func completeHighResTask(for index: Int) {
+        if Thread.isMainThread {
+            pendingHighResTasks.removeValue(forKey: index)
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.pendingHighResTasks.removeValue(forKey: index)
+            }
+        }
     }
 
     private func buildDownsamplePlan(for source: CGImageSource) -> DownsamplePlan? {
@@ -554,7 +718,7 @@ extension ImageManager {
               let width = propertyDict[kCGImagePropertyPixelWidth] as? CGFloat,
               let height = propertyDict[kCGImagePropertyPixelHeight] as? CGFloat else {
             // メタデータが取れない場合は最大ピクセル長のみ指定
-            return DownsamplePlan(maxPixel: targetMax, subsampleFactor: nil)
+            return DownsamplePlan(maxPixel: targetMax, subsampleFactor: nil, originalPixelMax: nil)
         }
 
         let originalMax = max(width, height)
@@ -562,7 +726,7 @@ extension ImageManager {
         guard originalMax > skipThreshold else { return nil }
 
         let subsample = determineSubsampleFactor(originalMax: originalMax, targetMax: CGFloat(targetMax))
-        return DownsamplePlan(maxPixel: targetMax, subsampleFactor: subsample)
+        return DownsamplePlan(maxPixel: targetMax, subsampleFactor: subsample, originalPixelMax: originalMax)
     }
 
     private func desiredDisplayMaxPixelLength() -> Int {
@@ -586,4 +750,9 @@ extension ImageManager {
 private struct DownsamplePlan {
     let maxPixel: Int
     let subsampleFactor: Int?
+    let originalPixelMax: CGFloat?
+}
+
+extension Notification.Name {
+    static let imageManagerDidUpdateImage = Notification.Name("com.dmng.CoverZip.imageManagerDidUpdateImage")
 }

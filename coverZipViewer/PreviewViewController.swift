@@ -46,6 +46,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var windowObservers: [NSObjectProtocol] = []
     // 分散通知（App→Extension設定同期）用オブザーバ
     private var distributedObservers: [NSObjectProtocol] = []
+    private var localObservers: [NSObjectProtocol] = []
     // セッション中にユーザーがウィンドウをリサイズしたか
     private var hasUserResizedWindow: Bool = false
     // 履歴から綴じ方向を復元済みか（既定で上書きしないためのフラグ）
@@ -111,6 +112,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         
         // マウスイベントモニターを遅延設定
         setupMouseMonitorsWithDelay()
+        registerImageManagerUpdateObserver()
     }
 
     override func viewWillDisappear() {
@@ -124,6 +126,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 通知クリーンアップ
         for o in windowObservers { NotificationCenter.default.removeObserver(o) }
         windowObservers.removeAll()
+        cleanupLocalObservers()
         for d in distributedObservers { DistributedNotificationCenter.default().removeObserver(d) }
         distributedObservers.removeAll()
         // マウスモニタークリーンアップ
@@ -1477,6 +1480,23 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 3) ビュー座標へ
         let viewPoint = view.convert(windowPoint, from: nil)
         return viewPoint
+    }
+
+    private func registerImageManagerUpdateObserver() {
+        cleanupLocalObservers()
+        let obs = NotificationCenter.default.addObserver(forName: .imageManagerDidUpdateImage, object: imageManager, queue: .main) { [weak self] note in
+            guard let self else { return }
+            guard let updatedIndex = note.userInfo?["index"] as? Int else { return }
+            if updatedIndex == self.imageManager.getCurrentIndex() {
+                self.displayCurrentImage()
+            }
+        }
+        localObservers.append(obs)
+    }
+
+    private func cleanupLocalObservers() {
+        for obs in localObservers { NotificationCenter.default.removeObserver(obs) }
+        localObservers.removeAll()
     }
 
     /// より堅牢な座標変換（フォールバック機能付き）
