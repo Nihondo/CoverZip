@@ -47,11 +47,10 @@
 - 共有キーや App Group を変更しない。必要なら合意の上で全ターゲット整合を取る。
 - ログは既存の `NSLog` を用い、過剰出力は避ける（デバッグ時のみ詳細）。Quick Look 実行時は quicklookd 側に出力されるため Console.app で確認すること。
 
-### 2025-11: ImageManager パフォーマンス最適化ガイド
-- デコードは `CZImageIOOptionsBuilder` によるダウンサンプリングを前提とし、巨大 JPEG は incremental プレビュー（低解像 → 高解像差し替え）の 2 段構成とすること。
-- `ImageManager` のプリロードは `DispatchWorkItem` でキャンセル可能にしている。見開き時は ±2 ページ、完了後はさらに ±4 以降をバッチ投入する仕様を維持すること。
-- プリロードと高解像差し替え用ワークアイテムは `pendingPreloadTasks` / `pendingHighResTasks` で追跡する。別用途で流用したり直列化しない。
-- ログにはプリロード計画/完了インデックスを出力している。トレースを削除する場合は Console でのデバッグ手段を別途用意してからにする。
+- 2025-11 時点では Finder カラム内で段階的JPEGデコードが破綻する事例があるため、`ImageManager` の `incrementalPreviewEnabled` はデフォルトで false。機能を再有効化する場合は Finder カラム判定ロジック（`updateHostEnvironment` + `inferFinderHostBySize`）を十分検証した上でトグルを戻すこと。
+- Finder カラム判定は「ウィンドウ/ビューの幅 < 620px・高さ < 900px」および Quick Look クラス名ヒューリスティックの組み合わせで推定。ProcessInfo への依存は禁止。
+- `ImageManager` のプリロードは `DispatchWorkItem` でキャンセル可能。見開き時は ±2 → (完了後) ±4、単ページ時は ±1 → ±2/±3 を順に投入する。Finder カラム向けのフォールバック (`scheduleFallbackSequentialPreload`) を導入した経緯があるため、再びオンにする際は挙動を比較できるようにしておくこと。
+- プリロード/高解像差し替え用ワークアイテムは `pendingPreloadTasks` / `pendingHighResTasks` で追跡する。ログ (`[ImageManager] Preload plan ...`, `[ImageManager] Sequential ...`) を削除する場合は Console.app で代替手段を用意すること。
 - `Notification.Name.imageManagerDidUpdateImage` を利用して UI を差し替えているため、デコードパイプラインを編集する際は通知が正しく送信されるか確認する。
 
 ## 禁止・注意事項（Danger Zone）
@@ -79,7 +78,7 @@
 - 内蔵ビューア: 左右クリック/キー/スクロールホイールでページ送り、右綴じ/左綴じ、単/見開き/自動の切り替え、スライドショー動作。
 - 履歴: ZIP ごとの最終ページ・表示モード・綴じ方向・見開き補正が復元されること（App Group の UserDefaults に保存）。
 - サムネイル: Finder でのサムネイル生成（異常系もログ確認）。
-- プレビュー性能: 4K 相当の JPEG でダウンサンプル後の初期表示がブロックされないか（低解像プレビュー → 高解像差し替え）、見開きモードで ±2→±4 の順に先読みされるか Console ログで確認する。
+- プレビュー性能: 4K 相当の JPEG で Finder カラムと Quick Look ウィンドウの双方を確認。Finder カラムでは段階的JPEGデコードが無効化されている前提で、画像の途切れがないか／プリロードが過剰になっていないかを必ず確認する。
 
 ## Codex/Coding Agent 向け運用
 - 複雑・複数工程の変更は `update_plan` を使って段階を明示。
