@@ -42,6 +42,8 @@ class ImageManager {
     private let fallbackMaxDisplayPixels: Int = 3840
     private let incrementalPreviewChunkBytes: Int = 256 * 1024
     private let incrementalPreviewMinPixels: Int = 720
+    private var preloadPreference: PreloadPreference = .single
+    private var pendingPreloadChunks: [[Int]] = []
     // デコードキャッシュ方針（設定から取得、デフォルトは .deferred）
     private var decodeCachePolicy: CZImageDecodeCachePolicy { AppSettings.shared.imageDecodeCachePolicy }
     // 全画像のバックグラウンド読み込み中かどうか（常にfalseになる：遅延ロードのため）
@@ -60,6 +62,14 @@ class ImageManager {
             // サイズが変わったらリサイズキャッシュをクリア
             resizedImageCache.removeAll()
             NSLog("[ImageManager] Target display size updated to \(Int(size.width))x\(Int(size.height))")
+        }
+    }
+
+    func setPreloadPreference(_ preference: PreloadPreference) {
+        guard preloadPreference != preference else { return }
+        preloadPreference = preference
+        if hasImages() {
+            preloadAdjacentImages()
         }
     }
     
@@ -388,15 +398,22 @@ class ImageManager {
     }
     
     func preloadAdjacentImages() {
-        schedulePreloadTasks(for: [currentIndex - 1, currentIndex + 1])
+        guard hasImages() else { return }
+        let plan = buildPreloadPlan()
+        NSLog("[ImageManager] Preload plan primary=%@ additional=%@", plan.primaryOffsets.description, plan.additionalChunks.description)
+        pendingPreloadChunks = plan.additionalChunks
+        schedulePreloadTasks(for: plan.primaryOffsets, cancelOthers: true)
     }
 
-    private func schedulePreloadTasks(for indices: [Int]) {
+    private func schedulePreloadTasks(for indices: [Int], cancelOthers: Bool) {
         let validIndices = indices.filter {
             $0 >= 0 && $0 < imageEntryInfos.count && imageCache[$0] == nil
         }
-        let keepSet = Set(validIndices)
-        cancelObsoletePreloadTasks(keeping: keepSet)
+        NSLog("[ImageManager] Scheduling preload targets=%@ (cancelOthers=%@)", validIndices.description, String(cancelOthers))
+        if cancelOthers {
+            let keepSet = Set(validIndices)
+            cancelObsoletePreloadTasks(keeping: keepSet)
+        }
 
         for index in validIndices where pendingPreloadTasks[index] == nil {
             let workItem = makePreloadWorkItem(for: index)
@@ -433,6 +450,34 @@ class ImageManager {
             if let current = self.pendingPreloadTasks[index], let workItem, current === workItem {
                 self.pendingPreloadTasks.removeValue(forKey: index)
             }
+            self.scheduleNextPreloadChunkIfNeeded()
+        }
+    }
+
+    private func scheduleNextPreloadChunkIfNeeded() {
+        guard pendingPreloadTasks.isEmpty, !pendingPreloadChunks.isEmpty else { return }
+        let nextOffsets = pendingPreloadChunks.removeFirst()
+        NSLog("[ImageManager] Scheduling next preload chunk=%@", nextOffsets.description)
+        schedulePreloadTasks(for: nextOffsets, cancelOthers: false)
+    }
+
+    private func buildPreloadPlan() -> PreloadPlan {
+        switch preloadPreference {
+        case .single:
+            return PreloadPlan(
+                primaryOffsets: [currentIndex - 1, currentIndex + 1],
+                additionalChunks: [
+                    [currentIndex - 2, currentIndex + 2],
+                    [currentIndex - 3, currentIndex + 3]
+                ]
+            )
+        case .spread:
+            return PreloadPlan(
+                primaryOffsets: [currentIndex - 2, currentIndex - 1, currentIndex + 1, currentIndex + 2],
+                additionalChunks: [
+                    [currentIndex - 4, currentIndex - 3, currentIndex + 3, currentIndex + 4]
+                ]
+            )
         }
     }
 
@@ -456,6 +501,7 @@ class ImageManager {
                 guard let self else { return }
                 if self.imageCache[index] == nil {
                     self.cacheImage(image, at: index)
+                    NSLog("[ImageManager] Preload completed index=%d", index)
                 }
             }
         }
@@ -581,6 +627,11 @@ class ImageManager {
         cancelAllBackgroundTasks()
         removeMemoryPressureObserver()
     }
+}
+
+enum PreloadPreference {
+    case single
+    case spread
 }
 // MARK: - Image decode helper
 extension ImageManager {
@@ -751,6 +802,11 @@ private struct DownsamplePlan {
     let maxPixel: Int
     let subsampleFactor: Int?
     let originalPixelMax: CGFloat?
+}
+
+private struct PreloadPlan {
+    let primaryOffsets: [Int]
+    let additionalChunks: [[Int]]
 }
 
 extension Notification.Name {

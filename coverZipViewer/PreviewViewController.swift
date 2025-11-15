@@ -1012,6 +1012,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         guard currentViewMode != mode else { return }
         
         currentViewMode = mode
+        imageManager.setPreloadPreference(mode == .spread ? .spread : .single)
         
         switch mode {
         case .single:
