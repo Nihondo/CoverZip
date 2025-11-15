@@ -1,23 +1,37 @@
 //
 //  ZipCore.swift
 //  CoverZip用共有ZIP解析・展開ユーティリティ
-//
+//  
+//  注意:
+//  - Zip64 / 暗号化ZIPには対応していない簡易実装
+//  - 圧縮方式は method 0(非圧縮) / 8(DEFLATE) のみ対応
+//  - 仕様を変更する場合は App / Extension 両方への影響を必ず確認すること
 
 import Foundation
 import Compression
 import ImageIO
 import Darwin
 
+/// ZIP内の1ファイルに対応するエントリ情報
+/// Local Header位置や圧縮サイズなど、展開に必要な最低限の情報のみを保持する
 public struct CZZipEntry {
+    /// ZIP内のパス（相対パス）
     public let filename: String
+    /// Local File Header のファイル先頭からのオフセット
     public let localHeaderOffset: Int
+    /// 圧縮サイズ（Central Directory から取得）
     public let compressedSize: Int
+    /// General Purpose Bit Flag
     public let generalPurposeFlag: UInt16
+    /// 圧縮方式（0 = 非圧縮, 8 = DEFLATE）
     public let compressionMethod: UInt16
 }
 
+/// 展開済み画像データを保持するシンプルな構造体
 public struct CZImageEntry {
+    /// 画像ファイル名（ZIP内パス）
     public let filename: String
+    /// 展開済み画像データ
     public let imageData: Data
 }
 
@@ -101,8 +115,13 @@ public enum CZZip {
      * @return 画像エントリの配列
      */
     public static func imageEntries(from url: URL) -> [CZImageEntry] {
-        do { return imageEntries(from: try Data(contentsOf: url, options: [.mappedIfSafe])) }
-        catch { NSLog("CZZip read error: \(error)"); return [] }
+        do {
+            // メモリマップを利用して大きなZIPでも効率的に読む
+            return imageEntries(from: try Data(contentsOf: url, options: [.mappedIfSafe]))
+        } catch {
+            NSLog("CZZip read error: \(error)")
+            return []
+        }
     }
 
     /**
@@ -271,7 +290,7 @@ public enum CZZip {
         return CZImageEntry(filename: entry.filename, imageData: dataOut)
     }
 
-    // MARK: - Streaming thumbnail generation (partial inflate + ImageIO incremental)
+    // MARK: - ストリーミングサムネイル生成（部分展開 + ImageIO増分デコード）
 
     /**
      * ストリーミング展開を使用して最初の画像のサムネイルCGImageを生成する
@@ -315,7 +334,7 @@ public enum CZZip {
         return createThumbnail(for: entry, in: data, maxPixel: maxPixel)
     }
 
-    // MARK: - Internal helpers for streaming thumbnail
+    // MARK: - ストリーミングサムネイル用内部ヘルパ
 
     /**
      * エントリのサムネイルを生成する
@@ -350,7 +369,7 @@ public enum CZZip {
     private static func localFileInfo(in data: Data, entry: CZZipEntry) -> (method: UInt16, fileDataOffset: Int, compressedSize: Int)? {
         let off = entry.localHeaderOffset
         guard off + 30 <= data.count else { return nil }
-        // Local Headerシグネチャを検証
+        // Local File Headerシグネチャを検証
         let expected: [UInt8] = [0x50, 0x4b, 0x03, 0x04]
         if !data.subdata(in: off..<(off+4)).elementsEqual(expected) { return nil }
         let fnLen = Int(data.subdata(in: off+26..<(off+28)).withUnsafeBytes { $0.load(as: UInt16.self) })
@@ -680,12 +699,12 @@ public enum CZZip {
         return best
     }
 
-    /// Detects filenames like "01.jpg", "001.png", "0001.tif", and also variants such as
-    /// "image001.jpg" as early-first candidates.
-    /// The rule checks the basename (without extension) and returns true when it contains
-    /// a token matching one or more zeros followed by a single '1', and that token is bounded
-    /// by non-digits or string boundaries.
-    /// Examples: "01", "001", "001-cover", "image001" => true; "1", "011", "0012" => false
+    /// "01.jpg" や "001.png", "image001.jpg" など、ゼロ埋めされた "1" を含む
+    /// ファイル名を検出し「早期に先頭候補とみなす」ための判定関数。
+    ///
+    /// ベース名（拡張子除去）に対して、非数字または文字列境界に囲まれた
+    /// 「0 が1つ以上 + 1」というトークンが含まれているかを調べる。
+    /// 例: "01", "001", "001-cover", "image001" => true / "1", "011", "0012" => false
     private static func isZeroPaddedOneFilename(_ path: String) -> Bool {
         let last = (path as NSString).lastPathComponent
         let base = (last as NSString).deletingPathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -703,7 +722,7 @@ public enum CZZip {
         }
     }
 
-    // MARK: - Cover-like scoring
+    // MARK: - 表紙らしさスコアリング
 
     /**
      * 最も表紙らしいエントリを簡易スコアヒューリスティックで選択する
@@ -729,9 +748,11 @@ public enum CZZip {
         return best
     }
 
-    /// Score filenames that look like a cover: contains keywords like "cover", "front", "表紙",
-    /// or basename equals/starts with multiple zeros (e.g. "00", "000", "0000", "000-cover").
-    /// Stronger hints yield higher scores.
+    /// ファイル名が「表紙らしい」かどうかをスコアリングする。
+    ///
+    /// 具体的には、"cover" / "front" / "表紙" といったキーワードや、
+    /// ベース名が00/000/0000のようなゼロ連番で始まるかどうかを手掛かりにする。
+    /// 強いヒントほど高いスコアを与える。
     private static func coverLikeScore(for path: String) -> Int {
         let last = (path as NSString).lastPathComponent
         let base = (last as NSString).deletingPathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
