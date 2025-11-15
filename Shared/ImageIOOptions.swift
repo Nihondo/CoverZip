@@ -19,11 +19,25 @@ public enum CZImageDecodeCachePolicy: String {
 public enum CZImageIOOptionsBuilder {
     /// サムネイル生成向けのオプション辞書を生成
     public static func buildThumbnailOptions(maxPixels: Int, cachePolicy: CZImageDecodeCachePolicy) -> CFDictionary {
+        return buildDownsampleOptions(maxPixels: maxPixels, cachePolicy: cachePolicy, subsampleFactor: nil)
+    }
+
+    /// ダウンサンプリング（部分的デコード）向けのオプション辞書を生成
+    public static func buildDownsampleOptions(maxPixels: Int,
+                                              cachePolicy: CZImageDecodeCachePolicy,
+                                              subsampleFactor: Int?) -> CFDictionary {
         var dict: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixels)
         ]
+
+        if let factor = subsampleFactor, factor > 1 {
+            if #available(macOS 10.15, *) {
+                dict[kCGImageSourceSubsampleFactor] = min(8, max(1, factor))
+            }
+        }
+
         applyCachePolicy(cachePolicy, into: &dict)
         return dict as CFDictionary
     }
@@ -49,4 +63,3 @@ public enum CZImageIOOptionsBuilder {
         }
     }
 }
-

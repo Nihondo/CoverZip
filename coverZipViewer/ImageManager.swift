@@ -33,6 +33,8 @@ class ImageManager {
     private var resizedImageCache: [String: NSImage] = [:]
     private let maxResizedCacheSize: Int = 20
     private var targetDisplaySize: NSSize = NSSize.zero
+    private let downsampleOverscanRatio: CGFloat = 1.2
+    private let fallbackMaxDisplayPixels: Int = 3840
     // デコードキャッシュ方針（設定から取得、デフォルトは .deferred）
     private var decodeCachePolicy: CZImageDecodeCachePolicy { AppSettings.shared.imageDecodeCachePolicy }
     // 全画像のバックグラウンド読み込み中かどうか（常にfalseになる：遅延ロードのため）
@@ -524,10 +526,64 @@ extension ImageManager {
         guard let src = CGImageSourceCreateWithData(data as CFData, nil) else {
             return NSImage(data: data) // フォールバック
         }
+        if let downsampled = createDownsampledImageIfNeeded(from: src) {
+            return NSImage(cgImage: downsampled, size: NSSize(width: downsampled.width, height: downsampled.height))
+        }
+
         let options = CZImageIOOptionsBuilder.buildDecodeOptions(cachePolicy: decodeCachePolicy)
         if let cg = CGImageSourceCreateImageAtIndex(src, 0, options) {
             return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
         }
         return NSImage(data: data) // フォールバック
     }
+
+    private func createDownsampledImageIfNeeded(from source: CGImageSource) -> CGImage? {
+        guard let plan = buildDownsamplePlan(for: source) else { return nil }
+        let options = CZImageIOOptionsBuilder.buildDownsampleOptions(
+            maxPixels: plan.maxPixel,
+            cachePolicy: decodeCachePolicy,
+            subsampleFactor: plan.subsampleFactor
+        )
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options)
+    }
+
+    private func buildDownsamplePlan(for source: CGImageSource) -> DownsamplePlan? {
+        let targetMax = desiredDisplayMaxPixelLength()
+
+        guard let propertyDict = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = propertyDict[kCGImagePropertyPixelWidth] as? CGFloat,
+              let height = propertyDict[kCGImagePropertyPixelHeight] as? CGFloat else {
+            // メタデータが取れない場合は最大ピクセル長のみ指定
+            return DownsamplePlan(maxPixel: targetMax, subsampleFactor: nil)
+        }
+
+        let originalMax = max(width, height)
+        let skipThreshold = CGFloat(targetMax) * 1.05
+        guard originalMax > skipThreshold else { return nil }
+
+        let subsample = determineSubsampleFactor(originalMax: originalMax, targetMax: CGFloat(targetMax))
+        return DownsamplePlan(maxPixel: targetMax, subsampleFactor: subsample)
+    }
+
+    private func desiredDisplayMaxPixelLength() -> Int {
+        if targetDisplaySize.width > 0, targetDisplaySize.height > 0 {
+            let maxSide = max(targetDisplaySize.width, targetDisplaySize.height) * downsampleOverscanRatio
+            return max(1, Int(ceil(maxSide)))
+        }
+        return fallbackMaxDisplayPixels
+    }
+
+    private func determineSubsampleFactor(originalMax: CGFloat, targetMax: CGFloat) -> Int? {
+        guard originalMax > targetMax, targetMax > 0 else { return nil }
+        let ratio = originalMax / targetMax
+        if ratio >= 7.0 { return 8 }
+        if ratio >= 3.5 { return 4 }
+        if ratio >= 1.8 { return 2 }
+        return nil
+    }
+}
+
+private struct DownsamplePlan {
+    let maxPixel: Int
+    let subsampleFactor: Int?
 }

@@ -557,6 +557,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // 新規ファイルごとに初期適用フラグをリセット
     didApplyInitialViewMode = false
         
+        // 現在わかる範囲のウィンドウ/ビューサイズをヒントとして設定
+        updateImageManagerDisplaySize()
+
         // ZIPファイルから画像を読み込む
         if imageManager.loadImages(from: url) {
             await MainActor.run {
@@ -1525,27 +1528,31 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     /// ImageManagerに現在のウィンドウサイズを設定して最適化を有効にする
     private func updateImageManagerDisplaySize() {
-        guard let window = view.window else { return }
-        
-        let windowSize = window.frame.size
         let contentSize = view.bounds.size
-        
+        let windowSize = view.window?.frame.size ?? contentSize
+        let baseWidth = max(contentSize.width, windowSize.width)
+        let baseHeight = max(contentSize.height, windowSize.height)
+        guard baseWidth > 0, baseHeight > 0 else { return }
+
         // 高DPIディスプレイ対応：実際の表示に必要なピクセル数を計算
-        let backingScaleFactor = window.backingScaleFactor
+        let backingScaleFactor = view.window?.backingScaleFactor
+            ?? view.window?.screen?.backingScaleFactor
+            ?? NSScreen.main?.backingScaleFactor
+            ?? 1.0
         let targetSize = NSSize(
-            width: max(contentSize.width, windowSize.width) * backingScaleFactor,
-            height: max(contentSize.height, windowSize.height) * backingScaleFactor
+            width: baseWidth * backingScaleFactor,
+            height: baseHeight * backingScaleFactor
         )
-        
+
         // 最大サイズ制限（メモリ使用量を制御）
         let maxSize: CGFloat = 3840 // 4Kディスプレイ相当
         let limitedSize = NSSize(
             width: min(targetSize.width, maxSize),
             height: min(targetSize.height, maxSize)
         )
-        
+
         imageManager.setTargetDisplaySize(limitedSize)
-        
+
         NSLog("[Performance] Updated display size: %dx%d (scale: %f)", Int(limitedSize.width), Int(limitedSize.height), backingScaleFactor)
     }
     
