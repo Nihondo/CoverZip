@@ -1616,16 +1616,17 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     /// Finderカラムかどうかを推定し、段階的プレビュー有無を切り替える
     private func updateHostEnvironment(reason: String) {
-        let candidate = findHostCandidate()
-        let className = candidate.map { NSStringFromClass(type(of: $0)) }
-        let inferred = className.flatMap { inferFinderHost(from: $0) }
-        if let newValue = inferred, newValue != isHostedInsideFinder {
+        let sizeBasedInference = inferFinderHostBySize()
+        let classBasedInference = findHostCandidate().flatMap { inferFinderHost(from: NSStringFromClass(type(of: $0))) }
+        let finalInference = sizeBasedInference ?? classBasedInference
+
+        if let newValue = finalInference, newValue != isHostedInsideFinder {
             isHostedInsideFinder = newValue
             imageManager.setIncrementalPreviewEnabled(!newValue)
         }
-        let classString = className ?? "nil"
-        let inferredString = inferred.map { $0 ? "true" : "false" } ?? "nil"
-        NSLog("[HostDetect] reason=%@ class=%@ inferred=%@ finder=%d", reason, classString, inferredString, isHostedInsideFinder ? 1 : 0)
+        let sizeString = sizeBasedInference.map { $0 ? "true" : "false" } ?? "nil"
+        let classString = classBasedInference.map { $0 ? "true" : "false" } ?? "nil"
+        NSLog("[HostDetect] reason=%@ sizeInferred=%@ classInferred=%@ finder=%d", reason, sizeString, classString, isHostedInsideFinder ? 1 : 0)
     }
 
     private func findHostCandidate() -> NSObject? {
@@ -1658,6 +1659,26 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             lower.contains("qlpreviewpanel") {
             return false
         }
+        return nil
+    }
+
+    /// ビュー/ウィンドウサイズに基づいて Finder カラムを推定する
+    private func inferFinderHostBySize() -> Bool? {
+        let windowWidth = view.window?.frame.width ?? view.bounds.width
+        let windowHeight = view.window?.frame.height ?? view.bounds.height
+        guard windowWidth > 0, windowHeight > 0 else { return nil }
+
+        // Finderカラムは幅がおおよそ 600px 以下、高さも 800px 以下に収まるケースが多い
+        if windowWidth < 620 && windowHeight < 900 {
+            return true
+        }
+
+        // フルプレビューは画面サイズ全体を利用できる
+        if let visibleWidth = view.window?.screen?.visibleFrame.width,
+           windowWidth >= visibleWidth * 0.8 {
+            return false
+        }
+
         return nil
     }
 
