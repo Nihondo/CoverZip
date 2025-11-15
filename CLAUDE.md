@@ -21,12 +21,16 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
 
 #### 2. QuickLook Preview Extension (`coverZipViewer/`)
 - **PreviewViewController.swift** - メインのプレビューUI制御（NSViewController）
-- **ImageManager.swift** - 画像管理・ページング制御（遅延ロード実装）
+- **ImageManager.swift** - 画像管理・ページング制御（遅延ロード・段階的プリロード実装）
   - メタデータ先行取得と必要時画像ロード
-  - 元画像キャッシュ（最大10枚）とリサイズキャッシュ（最大20枚）
-  - 隣接ページのバックグラウンドプリロード
-  - 表示サイズに最適化されたリサイズ処理
-- **ReadingHistoryManager.swift** - ZIP別の閲覧履歴管理（最終ページ、表示設定等）
+  - 元画像キャッシュ（最大10枚、距離ベース削除）とリサイズキャッシュ（最大20枚）
+  - **段階的プリロード**:
+    - 見開き時: Primary ±1〜±2 (4ページ) → Additional ±3〜±4 (4ページ)
+    - 単ページ時: Primary ±1 (2ページ) → Additional ±2, ±3 (4ページ)
+    - DispatchWorkItemによるキャンセル可能なバックグラウンド処理
+  - **段階的JPEGデコード**: 低解像度プレビュー即座表示 → 高解像度バックグラウンド差し替え
+  - **ダウンサンプリングデコード**: 表示サイズに最適化（4K超のJPEGでも高速デコード）
+- **ReadingHistoryManager.swift** - ZIP別の閲覧履歴管理（最終ページ、表示設定等、LRUで最大100件）
 - **Settings.swift** - 設定管理の軽量ラッパー（`CZSettings`へのアクセスを提供）
 - **Base.lproj/PreviewViewController.xib** - UI定義
 
@@ -104,6 +108,31 @@ qlmanage -m | grep -i coverzip
 pluginkit -m | grep -i coverzip
 ```
 
+### デバッグとログ確認
+QuickLook Extensionは独立したプロセス（quicklookd）で実行されるため、ログは専用の方法で確認する必要があります。
+
+```bash
+# Console.appでログを確認（推奨）
+# 1. Console.appを開く
+# 2. フィルタに「process == quicklookd」を入力
+# 3. または「ImageManager」「ReadingHistory」等でフィルタ
+
+# コマンドラインでリアルタイムログ確認
+log stream --predicate 'process == "quicklookd"' --level debug
+
+# 特定のログメッセージをフィルタ（プリロード動作確認）
+log stream --predicate 'process == "quicklookd" AND eventMessage CONTAINS "ImageManager"'
+
+# 画像デコード最適化のトレース確認
+log stream --predicate 'process == "quicklookd" AND (eventMessage CONTAINS "Preload" OR eventMessage CONTAINS "Performance")'
+```
+
+**ログメッセージの例:**
+- `[ImageManager] Preload plan primary=[...] additional=[...]` - プリロード計画
+- `[ImageManager] Preload completed index=X` - プリロード完了
+- `[Performance] Updated display size: WxH (scale: S)` - 表示サイズ最適化
+- `[ReadingHistory] Saved: filename page X viewMode Y` - 履歴保存
+
 ## 技術的詳細
 
 ### 主要な設計パターン
@@ -175,8 +204,19 @@ InternalViewer.show() (常に内蔵ビューアで表示)
 - **メタデータ先行取得**: `CZZip.imageEntryInfoList()` により画像のメタデータを即座に取得
 - **必要時データロード**: 実際の画像データは表示時に `CZZip.extractImageData()` で取得
 - **高速ページ送り**: 2ページ目以降への遷移が即座に可能（全画像読み込み待ちなし）
-- **メモリ効率**: 必要な画像のみをメモリに保持、隣接ページのプリロード実装
-- **リサイズキャッシュ**: 表示サイズに最適化された画像をキャッシュしパフォーマンス向上
+- **段階的プリロード戦略**:
+  - **見開きモード**: Primary段階で ±1〜±2 (4ページ) を優先ロード、完了後 Additional段階で ±3〜±4 (4ページ) を追加ロード
+  - **単ページモード**: Primary段階で ±1 (2ページ)、Additional段階で ±2, ±3 (4ページ)
+  - **キャンセル機構**: DispatchWorkItemによりページ移動時に不要なタスクを即座キャンセル
+- **段階的JPEGデコード**（大きな画像対応）:
+  - **低解像度プレビュー**: データの一部（1/8程度）で即座に低解像度版を生成・表示
+  - **高解像度差し替え**: バックグラウンドで全データを使用して高解像度版をデコード
+  - **UI更新通知**: `imageManagerDidUpdateImage` 通知により現在表示中ページを自動更新
+  - **適用条件**: JPEG画像で元サイズが目標サイズの1.5倍以上の場合
+- **ダウンサンプリングデコード**: ImageIOの `kCGImageSourceThumbnailMaxPixelSize` と `kCGImageSourceSubsampleFactor` により表示サイズに最適化（メモリ削減・高速化）
+- **2段階キャッシュ管理**:
+  - 元画像キャッシュ（最大10枚、距離ベース削除 - 現在ページから最も遠い画像を優先削除）
+  - リサイズキャッシュ（最大20枚、表示サイズ最適化版）
 - **自然順ソート一貫性**: メタデータ取得時も `NaturalSort.lessFilename()` で正しくソート
 
 #### 履歴機能
@@ -276,6 +316,85 @@ InternalViewer.show() (常に内蔵ビューアで表示)
 - **未対応**: Zip64、暗号化ZIP、その他の圧縮方式
 - **メモリ効率**: 8MBバッファによる制御されたメモリ使用
 
+### コメント規約とコーディングスタイル
+
+#### 日本語コメント標準化（2025年実施）
+コードベース全体で日本語コメントを標準化しました。新規コード追加時も同様のスタイルに従ってください。
+
+**関数コメント形式:**
+```swift
+/**
+ * 関数の目的を簡潔に説明
+ *
+ * 詳細な処理内容や注意点を記述
+ * 複数行にわたる説明も可能
+ *
+ * @param paramName パラメータの説明
+ * @param anotherParam 別のパラメータの説明
+ * @return 戻り値の説明
+ */
+func exampleFunction(paramName: String, anotherParam: Int) -> Bool {
+    // 実装
+}
+```
+
+**重要な処理へのコメント:**
+- 複雑なアルゴリズムや非自明な実装には必ずコメントを追加
+- 段階的処理（1. 〜 2. 〜 3. 〜）の説明を含める
+- パフォーマンス最適化の理由を明記
+
+**例（ImageManager.swiftより）:**
+```swift
+/**
+ * 段階的JPEG デコードを実行する
+ *
+ * 大きなJPEG画像を2段階でデコード：
+ * 1. 低解像度プレビュー（データの一部のみを使用）→ 即座に表示
+ * 2. 高解像度画像（全データ）→ バックグラウンドでデコード後に差し替え
+ *
+ * これにより、大きな画像でも即座に表示できる
+ *
+ * @param data 画像データ
+ * @param plan ダウンサンプリング計画
+ * @param index 画像のインデックス（高解像度差し替え用）
+ * @return 低解像度プレビュー画像
+ */
+private func decodeIncrementalJPEG(data: Data, plan: DownsamplePlan, index: Int) -> NSImage? {
+    // 実装...
+}
+```
+
+## 重要な技術決定と設計方針
+
+### パフォーマンス最適化の優先順位
+1. **遅延ロード**: メタデータ先行取得により2ページ目以降への即座遷移を実現
+2. **段階的プリロード**: 表示モードに応じた最適なプリロード範囲（Primary → Additional）
+3. **段階的JPEGデコード**: 大画像でも即座表示（低解像プレビュー → 高解像差し替え）
+4. **ダウンサンプリング**: 表示サイズに最適化したデコードでメモリ削減
+
+### キャッシュ戦略
+- **元画像キャッシュ**: 最大10枚、距離ベース削除（LRUではなく現在ページからの距離で判定）
+- **リサイズキャッシュ**: 最大20枚、表示サイズ最適化版
+- **理由**: ページ送りの方向に関わらず効率的なキャッシュを維持
+
+### 内蔵ビューアの安定性対策（2025-09実装）
+- **First Responder固定**: QLPreviewViewではなくフォワーダビュー（KeyForwardingView）をFirst Responderに
+- **イベント合成**: CGEventとNSApp.postEventによる合成クリックでページ送り駆動
+- **標準解放順序**: ウィンドウクローズ時はOSの標準解放順序に委ね、独自のビュー破棄は行わない
+- **理由**: QLPreviewViewを直接操作するとクローズ時にEXC_BAD_ACCESSが発生する問題を回避
+
+### App Group設定共有
+- **識別子**: `group.com.dmng.CoverZip`（絶対に変更しない）
+- **共有設定**: 読み方向、表示モード、ページ送りアニメ、スライドショー間隔、履歴データ等
+- **Single Source of Truth**: `CZSettings` クラスが全設定の唯一の真実の情報源
+- **理由**: Main App、Preview Extension、Thumbnail Extension間での設定同期を実現
+
+### 純Swift ZIP実装の選択
+- **外部ライブラリ非依存**: Foundation/Compressionフレームワークのみ使用
+- **対応範囲**: DEFLATE（方式8）と非圧縮（方式0）、Zip64/暗号化は未対応
+- **メモリ制限**: 8MBバッファによる制御されたメモリ使用
+- **理由**: App Extension環境での動作保証、軽量性、メンテナンス性
+
 ## システム要件
 
 - **macOS**: 11.0 (Big Sur) 以降
@@ -285,6 +404,6 @@ InternalViewer.show() (常に内蔵ビューアで表示)
 
 ## 参考資料
 
-- **AGENTS.md**: エージェント/自動化ツール向けのガードレールと運用指針
+- **AGENTS.md**: エージェント/自動化ツール向けのガードレールと運用指針（プリロード仕様の詳細を含む）
 - **README.md**: ユーザー向けの使用方法と機能説明
-- **wiki-ja/**: 日本語での詳細技術ドキュメント
+- **wiki-ja/**: 日本語での詳細技術ドキュメント（存在する場合）
