@@ -44,6 +44,8 @@ class ImageManager {
     private let incrementalPreviewMinPixels: Int = 720
     private var preloadPreference: PreloadPreference = .single
     private var pendingPreloadChunks: [[Int]] = []
+    // 段階的JPEGデコードの有効/無効（切り分け用にデフォルトfalse）
+    private var incrementalPreviewEnabled: Bool = false
     // デコードキャッシュ方針（設定から取得、デフォルトは .deferred）
     private var decodeCachePolicy: CZImageDecodeCachePolicy { AppSettings.shared.imageDecodeCachePolicy }
     // 全画像のバックグラウンド読み込み中かどうか（常にfalseになる：遅延ロードのため）
@@ -79,6 +81,12 @@ class ImageManager {
         if hasImages() {
             preloadAdjacentImages()
         }
+    }
+
+    /// Finderカラムなど即時プレビューを優先したい環境では false を渡す
+    func setIncrementalPreviewEnabled(_ enabled: Bool) {
+        // 一時的に段階的JPEGデコードを完全オフにするため、引数に関わらずfalse固定
+        incrementalPreviewEnabled = false
     }
     
     /**
@@ -786,7 +794,10 @@ extension ImageManager {
         let plan = buildDownsamplePlan(for: src)
 
         // 大きなJPEG画像の場合、段階的デコードを使用
-        if let plan, let index, shouldUseIncrementalJPEG(for: src, plan: plan) {
+        if incrementalPreviewEnabled,
+           let plan,
+           let index,
+           shouldUseIncrementalJPEG(for: src, plan: plan) {
             if let preview = decodeIncrementalJPEG(data: data, plan: plan, index: index) {
                 return preview
             }
@@ -1060,4 +1071,22 @@ private struct PreloadPlan {
 extension Notification.Name {
     /// 画像が更新されたことを通知（高解像度差し替え時など）
     static let imageManagerDidUpdateImage = Notification.Name("com.dmng.CoverZip.imageManagerDidUpdateImage")
+}
+
+extension ImageManager {
+    /// Finderカラム用フォールバック：キャンセルせず順番にプリロードする
+    private func scheduleFallbackSequentialPreload(indices: [Int]) {
+        let targets = indices.filter { $0 >= 0 && $0 < imageEntryInfos.count }
+        guard !targets.isEmpty else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            for index in targets {
+                if self.imageCache[index] != nil { continue }
+                let image = self.getImageAtIndex(index)
+                if image != nil {
+                    NSLog("[ImageManager] Sequential preload completed index=%d", index)
+                }
+            }
+        }
+    }
 }

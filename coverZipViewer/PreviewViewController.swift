@@ -67,6 +67,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var mouseMonitorSetupTimer: Timer?
     private var mouseMonitorSetupAttempts = 0
     private let maxMouseMonitorSetupAttempts = 10
+    private var isHostedInsideFinder: Bool = false
     
     // 表示モード
     enum ViewMode {
@@ -110,6 +111,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         super.viewWillAppear()
         NSLog("[DEBUG] viewWillAppear called, view.window: %@", view.window?.description ?? "nil")
         
+        // ホスト環境を確認（Finderカラムかどうか）
+        updateHostEnvironment(reason: "viewWillAppear")
         // マウスイベントモニターを遅延設定
         setupMouseMonitorsWithDelay()
         registerImageManagerUpdateObserver()
@@ -441,6 +444,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     override func viewDidAppear() {
         super.viewDidAppear()
+        updateHostEnvironment(reason: "viewDidAppear-main")
         // Quick LookではFirst Responderを取得しない
         // レイアウト完了後のサイズで初回画像を再フィット
         // 設定の変更を反映
@@ -595,6 +599,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     didApplyInitialViewMode = false
         
         // 現在わかる範囲のウィンドウ/ビューサイズをヒントとして設定
+        updateHostEnvironment(reason: "preparePreviewOfFile")
         updateImageManagerDisplaySize()
 
         // ZIPファイルから画像を読み込む
@@ -1607,6 +1612,53 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private func cleanupLocalObservers() {
         for obs in localObservers { NotificationCenter.default.removeObserver(obs) }
         localObservers.removeAll()
+    }
+
+    /// Finderカラムかどうかを推定し、段階的プレビュー有無を切り替える
+    private func updateHostEnvironment(reason: String) {
+        let candidate = findHostCandidate()
+        let className = candidate.map { NSStringFromClass(type(of: $0)) }
+        let inferred = className.flatMap { inferFinderHost(from: $0) }
+        if let newValue = inferred, newValue != isHostedInsideFinder {
+            isHostedInsideFinder = newValue
+            imageManager.setIncrementalPreviewEnabled(!newValue)
+        }
+        let classString = className ?? "nil"
+        let inferredString = inferred.map { $0 ? "true" : "false" } ?? "nil"
+        NSLog("[HostDetect] reason=%@ class=%@ inferred=%@ finder=%d", reason, classString, inferredString, isHostedInsideFinder ? 1 : 0)
+    }
+
+    private func findHostCandidate() -> NSObject? {
+        if let contentVC = view.window?.contentViewController {
+            return contentVC
+        }
+        if let windowController = view.window?.windowController {
+            return windowController
+        }
+        if let window = view.window {
+            return window
+        }
+        if let parent {
+            return parent
+        }
+        return nil
+    }
+
+    /// クラス名から Finder カラム判定を行う（既知の内部クラス名ベース）
+    private func inferFinderHost(from className: String) -> Bool? {
+        let lower = className.lowercased()
+        if lower.contains("qlpreviewhostviewcontroller") ||
+            lower.contains("qlpreviewcolumn") ||
+            lower.contains("qlpreviewextensionhost") ||
+            lower.contains("finder") {
+            return true
+        }
+        if lower.contains("qlpreviewremoteviewcontroller") ||
+            lower.contains("qlpreviewpanelfullscreencontroller") ||
+            lower.contains("qlpreviewpanel") {
+            return false
+        }
+        return nil
     }
 
     /// より堅牢な座標変換（フォールバック機能付き）
