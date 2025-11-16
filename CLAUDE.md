@@ -28,7 +28,7 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
     - 見開き時: Primary ±1〜±2 (4ページ) → Additional ±3〜±4 (4ページ)
     - 単ページ時: Primary ±1 (2ページ) → Additional ±2, ±3 (4ページ)
     - DispatchWorkItemによるキャンセル可能なバックグラウンド処理
-  - **段階的JPEGデコード**: 低解像度プレビュー即座表示 → 高解像度バックグラウンド差し替え（Finderカラムでは問題が出るため、現在はデフォルトOFF。Quick Look フルウィンドウ用に再導入する場合は Finder 判定の精度を確認すること）
+  - **段階的JPEGデコード**: 低解像度プレビュー即座表示 → 高解像度バックグラウンド差し替え（Finderカラムで不具合が出るため、現在は全ホストでOFF。一度無効化したまま開発を継続しており、再導入時は Finder 判定と `setTargetDisplaySize()` の更新タイミングを再検証すること）
   - **ダウンサンプリングデコード**: 表示サイズに最適化（4K超のJPEGでも高速デコード）
 - **ReadingHistoryManager.swift** - ZIP別の閲覧履歴管理（最終ページ、表示設定等、LRUで最大100件）
 - **Settings.swift** - 設定管理の軽量ラッパー（`CZSettings`へのアクセスを提供）
@@ -76,7 +76,7 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
 - サンドボックス環境での動作保証
 - メモリ使用量の最適化（8MBバッファ制限）
 - App Group (`group.com.dmng.CoverZip`) による設定共有
-- Finder カラム vs Quick Look フルウィンドウの判定は、ビューサイズ（幅<620pxかどうか）と Quick Look ホストクラス名のヒューリスティックを併用。段階的JPEGデコードを再び有効化する場合は、この判定が機能しているか `NSLog [HostDetect ...]` ログで確認すること。
+- Finder カラム vs Quick Look フルウィンドウの判定は、ビューサイズ（幅<620pxかどうか）と Quick Look ホストクラス名のヒューリスティックを併用。段階的JPEGデコードやプリロードキャンセルを再び有効化する場合は、この判定が機能しているか `NSLog [HostDetect ...]` の記録を必ず確認すること。
 
 ## ビルドと開発
 

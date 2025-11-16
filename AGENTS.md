@@ -48,8 +48,10 @@
 - ログは既存の `NSLog` を用い、過剰出力は避ける（デバッグ時のみ詳細）。Quick Look 実行時は quicklookd 側に出力されるため Console.app で確認すること。
 
 - 2025-11 時点では Finder カラム内で段階的JPEGデコードが破綻する事例があるため、`ImageManager` の `incrementalPreviewEnabled` はデフォルトで false。機能を再有効化する場合は Finder カラム判定ロジック（`updateHostEnvironment` + `inferFinderHostBySize`）を十分検証した上でトグルを戻すこと。
+- 現状は段階的JPEGデコードを完全にOFFにしている。Finder カラム判定ロジック（`inferFinderHostBySize` 等）は残しているが、再びONにする際の検証用と考えること。
 - Finder カラム判定は「ウィンドウ/ビューの幅 < 620px・高さ < 900px」および Quick Look クラス名ヒューリスティックの組み合わせで推定。ProcessInfo への依存は禁止。
 - `ImageManager` のプリロードは `DispatchWorkItem` でキャンセル可能。見開き時は ±2 → (完了後) ±4、単ページ時は ±1 → ±2/±3 を順に投入する。Finder カラム向けのフォールバック (`scheduleFallbackSequentialPreload`) を導入した経緯があるため、再びオンにする際は挙動を比較できるようにしておくこと。
+- ページ移動時のプリロードキャンセルも現在はOFF（`cancelObsoletePreloadTasks` 未使用）。連続ページ送りで CPU 使用量が増える点に注意し、再度ONにする際は Finder カラムでの途切れ再発有無を確認すること。
 - プリロード/高解像差し替え用ワークアイテムは `pendingPreloadTasks` / `pendingHighResTasks` で追跡する。ログ (`[ImageManager] Preload plan ...`, `[ImageManager] Sequential ...`) を削除する場合は Console.app で代替手段を用意すること。
 - `Notification.Name.imageManagerDidUpdateImage` を利用して UI を差し替えているため、デコードパイプラインを編集する際は通知が正しく送信されるか確認する。
 
