@@ -474,10 +474,7 @@ class ImageManager {
         NSLog("[ImageManager] Scheduling preload targets=%@ (cancelOthers=%@)", validIndices.description, String(cancelOthers))
 
         // 不要になったタスクをキャンセル（ページ移動時など）
-        if cancelOthers {
-            let keepSet = Set(validIndices)
-            cancelObsoletePreloadTasks(keeping: keepSet)
-        }
+        // キャンセル機構は一時的に無効化（挙動切り分け）
 
         // 各インデックスのプリロードタスクを作成・実行
         for index in validIndices where pendingPreloadTasks[index] == nil {
@@ -515,15 +512,11 @@ class ImageManager {
      * @return キャンセル可能なDispatchWorkItem
      */
     private func makePreloadWorkItem(for index: Int) -> DispatchWorkItem {
-        var workItemReference: DispatchWorkItem?
         let workItem = DispatchWorkItem(qos: .userInitiated) { [weak self] in
             guard let self else { return }
-            // キャンセルチェック用のクロージャ
-            let isCancelled: () -> Bool = { workItemReference?.isCancelled ?? true }
-            self.loadImageAtIndex(index, isCancelled: isCancelled)
-            self.completePreloadTask(for: index, workItem: workItemReference)
+            self.loadImageAtIndex(index, isCancelled: nil)
+            self.completePreloadTask(for: index, workItem: nil)
         }
-        workItemReference = workItem
         return workItem
     }
 
