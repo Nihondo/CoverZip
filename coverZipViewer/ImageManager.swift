@@ -33,6 +33,11 @@ class ImageManager {
     private var resizedImageCache: [String: NSImage] = [:]
     private let maxResizedCacheSize: Int = 20
     private var targetDisplaySize: NSSize = NSSize.zero
+
+    // GPU事前レンダリングキャッシュ
+    private let prerenderedLayerCache = PrerenderedLayerCache()
+    /// 事前レンダリング完了時の通知用コールバック
+    var onLayerPrerendered: ((Int) -> Void)?
     // デコードキャッシュ方針（設定から取得、デフォルトは .deferred）
     private var decodeCachePolicy: CZImageDecodeCachePolicy { AppSettings.shared.imageDecodeCachePolicy }
     // 全画像のバックグラウンド読み込み中かどうか（常にfalseになる：遅延ロードのため）
@@ -45,11 +50,13 @@ class ImageManager {
      */
     func setTargetDisplaySize(_ size: NSSize) {
         guard size.width > 0 && size.height > 0 else { return }
-        
+
         if targetDisplaySize != size {
             targetDisplaySize = size
             // サイズが変わったらリサイズキャッシュをクリア
             resizedImageCache.removeAll()
+            // 事前レンダリングキャッシュにもサイズを設定
+            prerenderedLayerCache.setTargetDisplaySize(size)
             NSLog("[ImageManager] Target display size updated to \(Int(size.width))x\(Int(size.height))")
         }
     }
@@ -374,6 +381,9 @@ class ImageManager {
     }
     
     func preloadAdjacentImages() {
+        // 現在のインデックスを事前レンダリングキャッシュに設定
+        prerenderedLayerCache.setCurrentIndex(currentIndex)
+
         let indicesToLoad = [currentIndex - 1, currentIndex + 1].filter {
             $0 >= 0 && $0 < imageEntryInfos.count && imageCache[$0] == nil
         }
@@ -383,6 +393,60 @@ class ImageManager {
                 self?.loadImageAtIndex(index)
             }
         }
+
+        // 隣接ページの事前レンダリングも実行
+        prerenderAdjacentLayers()
+    }
+
+    /// 隣接ページのCALayerを事前レンダリング
+    private func prerenderAdjacentLayers() {
+        let indicesToPrerender = [currentIndex, currentIndex - 1, currentIndex + 1, currentIndex + 2].filter {
+            $0 >= 0 && $0 < imageEntryInfos.count
+        }
+
+        for index in indicesToPrerender {
+            // 既にキャッシュ済みならスキップ
+            guard !prerenderedLayerCache.hasPrerenderedLayer(for: index) else { continue }
+
+            // 画像を取得してレンダリング
+            if let image = getImageForPrerendering(at: index) {
+                prerenderedLayerCache.prerenderLayer(from: image, for: index) { [weak self] _ in
+                    // 事前レンダリング完了を通知
+                    self?.onLayerPrerendered?(index)
+                }
+            }
+        }
+    }
+
+    /// 事前レンダリング用に画像を取得（キャッシュがあればそれを使用、なければロード）
+    private func getImageForPrerendering(at index: Int) -> NSImage? {
+        // リサイズキャッシュを確認
+        if targetDisplaySize.width > 0 && targetDisplaySize.height > 0 {
+            let cacheKey = "\(index)_\(Int(targetDisplaySize.width))x\(Int(targetDisplaySize.height))"
+            if let resizedImage = resizedImageCache[cacheKey] {
+                return resizedImage
+            }
+        }
+
+        // 元画像キャッシュを確認
+        if let cachedImage = imageCache[index] {
+            return cachedImage
+        }
+
+        // ZIPから画像データを遅延ロード
+        guard let zipData = zipData, index >= 0, index < imageEntryInfos.count else {
+            return nil
+        }
+
+        let entryInfo = imageEntryInfos[index]
+        guard let imageData = CZZip.extractImageData(from: zipData, entryInfo: entryInfo),
+              let image = decodeImage(data: imageData) else {
+            return nil
+        }
+
+        // キャッシュに追加
+        cacheImage(image, at: index)
+        return image
     }
 
     private func loadImageAtIndex(_ index: Int) {
@@ -434,11 +498,91 @@ class ImageManager {
         let currentImage = imageCache[currentIndex]
         imageCache.removeAll()
         resizedImageCache.removeAll()
-        
+        prerenderedLayerCache.clearCacheExceptCurrent()
+
         if let image = currentImage {
             imageCache[currentIndex] = image
         }
         NSLog("[ImageManager] All image cache cleared")
+    }
+
+    // MARK: - Prerendered Layer Access
+
+    /**
+     * 指定インデックスの事前レンダリング済みCALayerを取得
+     *
+     * @param index ページインデックス
+     * @return 事前レンダリング済みCALayer（なければnil）
+     */
+    func getPrerenderedLayer(for index: Int) -> CALayer? {
+        return prerenderedLayerCache.getPrerenderedLayer(for: index)
+    }
+
+    /**
+     * 現在のページの事前レンダリング済みCALayerを取得
+     *
+     * @return 事前レンダリング済みCALayer（なければnil）
+     */
+    func getCurrentPrerenderedLayer() -> CALayer? {
+        return prerenderedLayerCache.getPrerenderedLayer(for: currentIndex)
+    }
+
+    /**
+     * 指定インデックスに事前レンダリング済みレイヤーが存在するか確認
+     *
+     * @param index ページインデックス
+     * @return 存在すればtrue
+     */
+    func hasPrerenderedLayer(for index: Int) -> Bool {
+        return prerenderedLayerCache.hasPrerenderedLayer(for: index)
+    }
+
+    /**
+     * 現在ページの事前レンダリングを即座に実行（表示前に呼ぶ）
+     *
+     * @param completion 完了時コールバック
+     */
+    func prerenderCurrentLayerIfNeeded(completion: @escaping (CALayer?) -> Void) {
+        let index = currentIndex
+
+        // 既にキャッシュ済みなら即座に返す
+        if let layer = prerenderedLayerCache.getPrerenderedLayer(for: index) {
+            completion(layer)
+            return
+        }
+
+        // 画像を取得してレンダリング
+        guard let image = getCurrentImage() else {
+            completion(nil)
+            return
+        }
+
+        prerenderedLayerCache.prerenderLayer(from: image, for: index) { layer in
+            completion(layer)
+        }
+    }
+
+    /**
+     * 見開き用の事前レンダリングを実行
+     *
+     * @param isRightToLeft 右綴じモードか
+     * @param completion 完了時コールバック
+     */
+    func prerenderSpreadLayersIfNeeded(isRightToLeft: Bool, completion: @escaping ((left: CALayer?, right: CALayer?)) -> Void) {
+        let index = currentIndex
+
+        // 既にキャッシュ済みなら即座に返す
+        if let cached = prerenderedLayerCache.getSpreadLayers(for: index) {
+            completion(cached)
+            return
+        }
+
+        // 見開き画像を取得
+        let (leftImage, rightImage) = getSpreadImages(isRightToLeft: isRightToLeft)
+
+        prerenderedLayerCache.prerenderSpreadLayers(leftImage: leftImage, rightImage: rightImage, for: index) { layers in
+            completion(layers)
+        }
     }
     
     // MARK: - Image Resizing Methods

@@ -476,6 +476,17 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 初期表示サイズを設定
         updateImageManagerDisplaySize()
 
+        // 事前レンダリング完了時のコールバックを設定
+        imageManager.onLayerPrerendered = { [weak self] index in
+            guard let self = self else { return }
+            // 現在表示中のページの事前レンダリングが完了した場合、表示を更新
+            if index == self.imageManager.getCurrentPageNumber() - 1 {
+                NSLog("[GPU Prerender] Layer ready for current page, updating display")
+                // 表示を更新（事前レンダリング済みレイヤーを使用）
+                self.displayCurrentImage()
+            }
+        }
+
         // アプリ側の設定変更を反映（Distributed Notification 経由）
         let distObs = DistributedNotificationCenter.default().addObserver(forName: CZDistributedNotifications.settingsChanged, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
@@ -513,6 +524,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 自動リサイズ機能を使用するため、手動でのリサイズ処理は不要
         // レイアウト変化に応じてスライダーの可視性を見直す
         updateSliderVisibilityForContext()
+
+        // 事前レンダリングサブレイヤーのフレームを更新
+        updatePrerenderedLayerFrames()
+
         // アスペクト比変更に応じて表示モードを再評価（自動モードのみ）
         if imageManager.hasImages() {
             if isAutoMode {
@@ -521,6 +536,27 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             } else {
                 // 固定モード：表示更新のみ（モード変更なし）
                 updateImageDisplayOnly()
+            }
+        }
+    }
+
+    /// 事前レンダリングサブレイヤーのフレームを親レイヤーに合わせて更新
+    private func updatePrerenderedLayerFrames() {
+        if let ivLayer = imageView?.layer {
+            ivLayer.sublayers?.filter { $0.name == "cz_prerendered" }.forEach { sublayer in
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                sublayer.frame = ivLayer.bounds
+                CATransaction.commit()
+            }
+        }
+
+        if let rivLayer = rightImageView?.layer {
+            rivLayer.sublayers?.filter { $0.name == "cz_prerendered" }.forEach { sublayer in
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                sublayer.frame = rivLayer.bounds
+                CATransaction.commit()
             }
         }
     }
@@ -1081,26 +1117,71 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private func displayCurrentImage() {
         // アスペクト比に基づいて表示モードを決定
         let useSpread = shouldUseSpreadMode()
-        
+
         setViewMode(useSpread ? .spread : .single)
-        
+
         if useSpread {
             // 見開き表示
-            let (leftImage, rightImage) = imageManager.getSpreadImages(isRightToLeft: isRightToLeftReading)
-            setImageSafely(leftImage, toImageView: imageView)
-            setImageSafely(rightImage, toImageView: rightImageView)
+            displaySpreadImages()
         } else {
             // 単ページ表示
-            if let currentImage = imageManager.getCurrentImage() {
-                setImageSafely(currentImage, toImageView: imageView)
-                currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
-            }
+            displaySingleImage()
         }
-        
+
         updatePageLabel()
         // スライダーの位置を現在ページに同期（方向反転に対応）
         syncSliderToCurrentPage()
         updatePreferredContentSizeIfNeeded()
+    }
+
+    /// 単ページ表示の実装（事前レンダリング対応）
+    private func displaySingleImage() {
+        // 事前レンダリングサブレイヤーをクリア
+        clearPrerenderedLayers()
+
+        // 事前レンダリング済みレイヤーを優先使用
+        if let prerenderedLayer = imageManager.getCurrentPrerenderedLayer() {
+            let fallbackImage = imageManager.getCurrentImage()
+            setPrerenderedLayer(prerenderedLayer, toImageView: imageView, fallbackImage: fallbackImage)
+
+            // アスペクト比を画像から取得
+            if let img = fallbackImage {
+                currentImageAspect = (img.size.height > 0) ? (img.size.width / img.size.height) : nil
+            }
+            return
+        }
+
+        // フォールバック: 通常の画像表示
+        if let currentImage = imageManager.getCurrentImage() {
+            setImageSafely(currentImage, toImageView: imageView)
+            currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
+
+            // 表示後に事前レンダリングをバックグラウンドで実行
+            imageManager.prerenderCurrentLayerIfNeeded { _ in
+                // 完了通知（必要に応じてUIを更新）
+            }
+        }
+    }
+
+    /// 見開き表示の実装（事前レンダリング対応）
+    private func displaySpreadImages() {
+        // 事前レンダリングサブレイヤーをクリア
+        clearPrerenderedLayers()
+
+        // 見開き画像を取得
+        let (leftImage, rightImage) = imageManager.getSpreadImages(isRightToLeft: isRightToLeftReading)
+
+        // 通常の画像表示（見開きは複雑なため、まずは従来方式を使用）
+        setImageSafely(leftImage, toImageView: imageView)
+        setImageSafely(rightImage, toImageView: rightImageView)
+
+        // 見開き表示の場合は合成アスペクト比を計算
+        calculateSpreadAspectRatio(leftImage: leftImage, rightImage: rightImage)
+
+        // バックグラウンドで見開きの事前レンダリングを実行
+        imageManager.prerenderSpreadLayersIfNeeded(isRightToLeft: isRightToLeftReading) { _ in
+            // 完了通知（次回以降の表示で使用）
+        }
     }
     
     private func updateImageDisplayOnly() {
@@ -1312,6 +1393,61 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // スケーリングのみ固定。アラインメントはモード切替で設定したものを維持する
         iv.imageScaling = .scaleProportionallyUpOrDown
         iv.image = image
+    }
+
+    /**
+     * 事前レンダリング済みCALayerを使用して高速表示
+     * GPUテクスチャが既にアップロード済みのため、即座に表示される
+     *
+     * @param layer 事前レンダリング済みCALayer
+     * @param imageView 対象のNSImageView
+     * @param fallbackImage フォールバック用のNSImage
+     */
+    private func setPrerenderedLayer(_ layer: CALayer?, toImageView imageView: NSImageView?, fallbackImage: NSImage?) {
+        guard let iv = imageView, let ivLayer = iv.layer else {
+            // フォールバック: 通常の画像設定
+            setImageSafely(fallbackImage, toImageView: imageView)
+            return
+        }
+
+        guard let prerenderedLayer = layer else {
+            // 事前レンダリングがない場合はフォールバック
+            setImageSafely(fallbackImage, toImageView: imageView)
+            return
+        }
+
+        // 既存の事前レンダリングサブレイヤーを削除
+        ivLayer.sublayers?.filter { $0.name == "cz_prerendered" }.forEach { $0.removeFromSuperlayer() }
+
+        // NSImageView.imageをクリア（競合回避）
+        iv.image = nil
+
+        // 事前レンダリング済みレイヤーをサブレイヤーとして追加
+        let displayLayer = CALayer()
+        displayLayer.name = "cz_prerendered"
+        displayLayer.contents = prerenderedLayer.contents
+        displayLayer.contentsGravity = .resizeAspect
+        displayLayer.contentsScale = ivLayer.contentsScale
+        displayLayer.frame = ivLayer.bounds
+
+        // フィルタ設定
+        displayLayer.minificationFilter = .trilinear
+        displayLayer.magnificationFilter = .linear
+
+        // Auto Layoutに追従するためにautoresizingMaskを設定
+        displayLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+
+        ivLayer.addSublayer(displayLayer)
+
+        NSLog("[GPU Prerender] Used prerendered layer for display")
+    }
+
+    /**
+     * 事前レンダリングサブレイヤーをクリア（通常画像表示に戻す際）
+     */
+    private func clearPrerenderedLayers() {
+        imageView?.layer?.sublayers?.filter { $0.name == "cz_prerendered" }.forEach { $0.removeFromSuperlayer() }
+        rightImageView?.layer?.sublayers?.filter { $0.name == "cz_prerendered" }.forEach { $0.removeFromSuperlayer() }
     }
 
     // スライダー上のクリックなら、クリック位置に即時ジャンプしてアクションを発火（イベント自体は通す）
