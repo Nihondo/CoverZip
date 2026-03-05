@@ -101,7 +101,7 @@ class ImageManager {
      * @return 現在の画像データ（画像がない場合はnil）
      */
     func getCurrentImage() -> NSImage? {
-        return getImageAtIndex(currentIndex)
+        return getImageAtIndex(currentIndex, isSpreadMode: false)
     }
     
     /**
@@ -149,8 +149,8 @@ class ImageManager {
             }
         }
         
-        let leftImage = getImageAtIndex(leftIndex)
-        let rightImage = getImageAtIndex(rightIndex)
+        let leftImage = getImageAtIndex(leftIndex, isSpreadMode: true)
+        let rightImage = getImageAtIndex(rightIndex, isSpreadMode: true)
         
         return (leftImage, rightImage)
     }
@@ -172,14 +172,16 @@ class ImageManager {
      * @param index 画像のインデックス
      * @return 画像データ（範囲外やエラーの場合はnil）
      */
-    private func getImageAtIndex(_ index: Int) -> NSImage? {
+    private func getImageAtIndex(_ index: Int, isSpreadMode: Bool = false) -> NSImage? {
         guard index >= 0, index < imageEntryInfos.count else {
             return nil
         }
 
+        let decodeTargetSize = resolveDecodeTargetSize(isSpreadMode: isSpreadMode)
+
         // リサイズキャッシュから確認（ターゲットサイズが設定されている場合）
-        if targetDisplaySize.width > 0 && targetDisplaySize.height > 0 {
-            let cacheKey = "\(index)_\(Int(targetDisplaySize.width))x\(Int(targetDisplaySize.height))"
+        if let decodeTargetSize {
+            let cacheKey = buildResizedCacheKey(index: index, size: decodeTargetSize, isSpreadMode: isSpreadMode)
             if let resizedImage = resizedImageCache[cacheKey] {
                 return resizedImage
             }
@@ -188,9 +190,9 @@ class ImageManager {
         // 元画像キャッシュから確認
         if let cachedImage = imageCache[index] {
             // ターゲットサイズが設定されていればリサイズして返す
-            if targetDisplaySize.width > 0 && targetDisplaySize.height > 0 {
-                if let resizedImage = resizeImageForDisplay(cachedImage, targetSize: targetDisplaySize) {
-                    cacheResizedImage(resizedImage, at: index, size: targetDisplaySize)
+            if let decodeTargetSize {
+                if let resizedImage = resizeImageForDisplay(cachedImage, targetSize: decodeTargetSize) {
+                    cacheResizedImage(resizedImage, at: index, size: decodeTargetSize, isSpreadMode: isSpreadMode)
                     return resizedImage
                 }
             }
@@ -209,15 +211,16 @@ class ImageManager {
             return nil
         }
 
-        guard let image = decodeImage(data: imageData) else {
+        let decodeMaxPixelSize = decodeTargetSize.map { calculateDecodeMaxPixelSize(targetSize: $0) }
+        guard let image = decodeImage(data: imageData, maxPixelSize: decodeMaxPixelSize) else {
             NSLog("[ImageManager] Failed to decode image at index \(index): \(entryInfo.filename)")
             return nil
         }
 
         // ターゲットサイズが設定されていればリサイズ
-        if targetDisplaySize.width > 0 && targetDisplaySize.height > 0 {
-            if let resizedImage = resizeImageForDisplay(image, targetSize: targetDisplaySize) {
-                cacheResizedImage(resizedImage, at: index, size: targetDisplaySize)
+        if let decodeTargetSize {
+            if let resizedImage = resizeImageForDisplay(image, targetSize: decodeTargetSize) {
+                cacheResizedImage(resizedImage, at: index, size: decodeTargetSize, isSpreadMode: isSpreadMode)
                 // 元画像もキャッシュ（メモリに余裕があれば）
                 if imageCache.count < maxCacheSize {
                     cacheImage(image, at: index)
@@ -397,7 +400,10 @@ class ImageManager {
             return
         }
 
-        if let image = decodeImage(data: imageData) {
+        let decodeTargetSize = resolveDecodeTargetSize(isSpreadMode: false)
+        let decodeMaxPixelSize = decodeTargetSize.map { calculateDecodeMaxPixelSize(targetSize: $0) }
+
+        if let image = decodeImage(data: imageData, maxPixelSize: decodeMaxPixelSize) {
             DispatchQueue.main.async { [weak self] in
                 self?.cacheImage(image, at: index)
             }
@@ -478,7 +484,14 @@ class ImageManager {
      * リサイズ画像をキャッシュに追加
      */
     private func cacheResizedImage(_ image: NSImage, at index: Int, size: NSSize) {
-        let cacheKey = "\(index)_\(Int(size.width))x\(Int(size.height))"
+        cacheResizedImage(image, at: index, size: size, isSpreadMode: false)
+    }
+
+    /**
+     * リサイズ画像をキャッシュに追加（表示モード別）
+     */
+    private func cacheResizedImage(_ image: NSImage, at index: Int, size: NSSize, isSpreadMode: Bool) {
+        let cacheKey = buildResizedCacheKey(index: index, size: size, isSpreadMode: isSpreadMode)
         
         // キャッシュサイズ制限チェック
         if resizedImageCache.count >= maxResizedCacheSize {
@@ -486,6 +499,24 @@ class ImageManager {
         }
         
         resizedImageCache[cacheKey] = image
+    }
+
+    private func buildResizedCacheKey(index: Int, size: NSSize, isSpreadMode: Bool) -> String {
+        let modeToken = isSpreadMode ? "spread" : "single"
+        return "\(index)_\(modeToken)_\(Int(size.width))x\(Int(size.height))"
+    }
+
+    private func resolveDecodeTargetSize(isSpreadMode: Bool) -> NSSize? {
+        guard targetDisplaySize.width > 0 && targetDisplaySize.height > 0 else {
+            return nil
+        }
+        let targetWidth = isSpreadMode ? max(1, targetDisplaySize.width / 2.0) : targetDisplaySize.width
+        return NSSize(width: max(1, targetWidth), height: max(1, targetDisplaySize.height))
+    }
+
+    private func calculateDecodeMaxPixelSize(targetSize: NSSize) -> Int {
+        let maxSide = max(targetSize.width, targetSize.height)
+        return max(1, Int(ceil(maxSide)))
     }
     
     /**
@@ -520,14 +551,73 @@ class ImageManager {
 // MARK: - Image decode helper
 extension ImageManager {
     /// ImageIOを用いてNSImageへデコード（キャッシュ方針は設定に追従）
-    private func decodeImage(data: Data) -> NSImage? {
+    private func decodeImage(data: Data, maxPixelSize: Int? = nil) -> NSImage? {
         guard let src = CGImageSourceCreateWithData(data as CFData, nil) else {
             return NSImage(data: data) // フォールバック
         }
+
+        if let maxPixelSize, maxPixelSize > 0 {
+            let thumbnailOptions = CZImageIOOptionsBuilder.buildThumbnailOptions(maxPixels: maxPixelSize, cachePolicy: decodeCachePolicy)
+            let startTime = CFAbsoluteTimeGetCurrent()
+
+            if let thumbnailImage = CGImageSourceCreateThumbnailAtIndex(src, 0, thumbnailOptions) {
+                let elapsedMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000.0
+                logDecodeResult(source: src, decodedImage: thumbnailImage, elapsedMs: elapsedMs, maxPixelSize: maxPixelSize)
+                return NSImage(cgImage: thumbnailImage, size: NSSize(width: thumbnailImage.width, height: thumbnailImage.height))
+            }
+        }
+
         let options = CZImageIOOptionsBuilder.buildDecodeOptions(cachePolicy: decodeCachePolicy)
+        let startTime = CFAbsoluteTimeGetCurrent()
         if let cg = CGImageSourceCreateImageAtIndex(src, 0, options) {
+            let elapsedMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000.0
+            logDecodeResult(source: src, decodedImage: cg, elapsedMs: elapsedMs, maxPixelSize: nil)
             return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
         }
         return NSImage(data: data) // フォールバック
+    }
+
+    private func logDecodeResult(source: CGImageSource, decodedImage: CGImage, elapsedMs: CFTimeInterval, maxPixelSize: Int?) {
+        let decodedWidth = decodedImage.width
+        let decodedHeight = decodedImage.height
+        var sourceWidth = 0
+        var sourceHeight = 0
+
+        if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
+            sourceWidth = properties[kCGImagePropertyPixelWidth] as? Int ?? 0
+            sourceHeight = properties[kCGImagePropertyPixelHeight] as? Int ?? 0
+        }
+
+        var shrinkRatioText = "n/a"
+        if sourceWidth > 0 && sourceHeight > 0 {
+            let sourceMax = Double(max(sourceWidth, sourceHeight))
+            let decodedMax = Double(max(decodedWidth, decodedHeight))
+            if sourceMax > 0 {
+                shrinkRatioText = String(format: "%.3f", decodedMax / sourceMax)
+            }
+        }
+
+        if let maxPixelSize {
+            NSLog(
+                "[ImageManager][Decode] mode=downsample max=%d src=%dx%d decoded=%dx%d ratio=%@ time=%.2fms",
+                maxPixelSize,
+                sourceWidth,
+                sourceHeight,
+                decodedWidth,
+                decodedHeight,
+                shrinkRatioText,
+                elapsedMs
+            )
+        } else {
+            NSLog(
+                "[ImageManager][Decode] mode=full src=%dx%d decoded=%dx%d ratio=%@ time=%.2fms",
+                sourceWidth,
+                sourceHeight,
+                decodedWidth,
+                decodedHeight,
+                shrinkRatioText,
+                elapsedMs
+            )
+        }
     }
 }

@@ -1,347 +1,209 @@
-# GPU事前レンダリング計画
+# GPU事前レンダリング再実装計画（強化版）
 
-## 概要
+## 背景と方針
 
-現在のプリロード実装では、NSImageオブジェクトまでのキャッシュを行っているが、GPUへのテクスチャアップロードは表示時に発生するため、体感速度の向上が限定的である。本計画では、GPUレベルでの事前レンダリングを実装し、ページ切り替え時の表示速度を大幅に改善する。
+過去の Phase 1 実装（`dbdc39a`）は、単ページでのみ部分的に機能し、見開き未適用・スレッド安全性・計測設計の面で課題が残った。  
+このため本計画は、**いったん `git revert dbdc39a` で戻した前提で、段階導入で再実装**する。
 
-## 現状分析
+本計画の最優先は次の3点。
+- 単ページ/見開きの両方で、同一の仕組みで事前レンダリングを適用する
+- スレッド安全性を明確にした上で実装する
+- 効果を計測で判定し、Phase 2 以降に進む条件を定義する
 
-### 現在のデータフロー
+**追加方針（最重要）**:  
+大判画像ZIPでの遅延を抑えるため、Phase 1 は「フル解像度デコード禁止」を前提とする。  
+ディスプレイ表示に必要なピクセル数まで ImageIO で縮小デコードしてから GPU キャッシュへ載せる。
 
-```
-[ZIP展開] → [CGImageSourceデコード] → [NSImage作成] → [リサイズ]
-                    ↑ プリロードの範囲 ↑
-                                                            ↓
-                                              [NSImageView.image設定]
-                                                            ↓
-                                              [CALayerテクスチャアップロード] ← ボトルネック
-                                                            ↓
-                                                      [画面描画]
-```
+## 目標と非目標
 
-### ボトルネックの特定
+### 目標
+- ページ切り替え時の体感遅延を低減する（単ページ・見開き両方）
+- 現行UI/操作仕様（読み方向、見開き補正、スライドショー）を壊さない
+- メモリ上限を管理し、メモリ圧迫時は自動退避できる
 
-| 処理 | 実行タイミング | 負荷 |
-|------|---------------|------|
-| ZIP展開 | プリロード時 | 中 |
-| 画像デコード | プリロード時 | 高（CPU） |
-| リサイズ | プリロード時 | 中（CPU） |
-| **テクスチャアップロード** | **表示時** | **高（GPU転送）** |
-| 描画 | 表示時 | 低 |
+### 非目標（今回やらない）
+- Metal による全面置換
+- IOSurface 最適化
+- 画像デコード方式の大規模刷新
 
-**問題**: 最も重い「テクスチャアップロード」がプリロードされていない
+## 成功指標（Go/No-Go 判定）
 
----
+| 指標 | 合格ライン | 計測方法 |
+|------|------------|----------|
+| ページ切替レイテンシ p95 | 単ページ 25ms以下、見開き 35ms以下 | `os_signpost` + Instruments |
+| FPS（アニメ中） | 55fps以上 | Core Animation |
+| メモリ増加量 | ベースライン比 +50%以内 | Memory Report |
+| 機能回帰 | 重大回帰 0 件 | 手動テスト表 |
 
-## 改善計画
+上記を満たさない場合は、Phase 2 に進まず Phase 1 を改善する。
 
-### Phase 1: CALayerの事前準備（推奨・低リスク）
+## 計測プロトコル（実装前に固定）
 
-**目標**: 表示時のテクスチャアップロードを排除
+### 測定シナリオ
+- シナリオA: 単ページで 200 ページを連続送り
+- シナリオB: 見開き（RTL/LTR 各1回）で 200 ページを連続送り
+- シナリオC: ウィンドウサイズ変更直後に 50 ページ送り
 
-**実装概要**:
-```swift
-// 新規クラス: PrerenderedLayerCache
-class PrerenderedLayerCache {
-    private var layerCache: [Int: CALayer] = [:]
+### 収集ログ
+- `displayCurrentImage` 開始/終了
+- レイヤーキャッシュ hit/miss
+- 画像デコード時間
+- 縮小デコード後のピクセルサイズ（width/height）
+- 縮小率（原寸→表示用）
+- メモリ圧迫時の退避発生回数
 
-    func prerenderLayer(for index: Int, image: NSImage, size: CGSize) {
-        let layer = CALayer()
-        layer.contents = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        layer.contentsGravity = .resizeAspect
-        layer.frame = CGRect(origin: .zero, size: size)
+### ベースライン
+- `revert` 後の現行実装で先に3シナリオを計測
+- 同一ZIP・同一端末・同一表示倍率で比較
 
-        // 強制的にGPUにアップロード
-        layer.setNeedsDisplay()
-        layer.displayIfNeeded()
+## アーキテクチャ設計（Phase 1 再実装）
 
-        layerCache[index] = layer
-    }
-
-    func getPrerenderedLayer(for index: Int) -> CALayer? {
-        return layerCache[index]
-    }
-}
-```
-
-**変更点**:
-- `ImageManager.swift`: NSImageに加えて事前レンダリング済みCALayerもキャッシュ
-- `PreviewViewController.swift`: 表示時にNSImageView.imageではなく、レイヤー入れ替えで表示
-
-**メリット**:
-- 既存アーキテクチャへの影響が小さい
-- Metalの知識不要
-- 段階的な導入が可能
-
-**デメリット**:
-- メモリ使用量増加（CALayer + テクスチャ分）
-- 完全なGPU最適化ではない
-
-**見積もり工数**: 中
-
----
-
-### Phase 2: IOSurfaceによるゼロコピー最適化（中リスク）
-
-**目標**: CPU-GPU間のデータ転送を最小化
-
-**実装概要**:
-```swift
-import IOSurface
-
-class IOSurfaceImageCache {
-    func createIOSurfaceBackedImage(from data: Data, size: CGSize) -> CGImage? {
-        // IOSurfaceを作成
-        let properties: [IOSurfacePropertyKey: Any] = [
-            .width: Int(size.width),
-            .height: Int(size.height),
-            .bytesPerElement: 4,
-            .pixelFormat: kCVPixelFormatType_32BGRA
-        ]
-
-        guard let surface = IOSurface(properties: properties) else { return nil }
-
-        // CGImageをIOSurfaceバッキングで作成
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let context = CGContext(
-            data: IOSurfaceGetBaseAddress(surface),
-            width: Int(size.width),
-            height: Int(size.height),
-            bitsPerComponent: 8,
-            bytesPerRow: IOSurfaceGetBytesPerRow(surface),
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
-        ) else { return nil }
-
-        // 画像を描画
-        // ...
-
-        return context.makeImage()
-    }
-}
-```
-
-**変更点**:
-- 新規: `Shared/IOSurfaceImageCache.swift`
-- `ImageManager.swift`: IOSurfaceベースの画像生成に対応
-- CALayer.contentsにIOSurfaceを直接設定可能
-
-**メリット**:
-- GPUメモリへの直接マッピング
-- コピー不要でテクスチャとして使用可能
-- macOS標準APIで実現可能
-
-**デメリット**:
-- IOSurface APIの複雑さ
-- メモリ管理が難しい
-- App Extensionでの制約確認が必要
-
-**見積もり工数**: 中〜高
-
----
-
-### Phase 3: Metal統合（高リスク・高効果）
-
-**目標**: 完全なGPU駆動のレンダリングパイプライン
-
-#### Phase 3a: CAMetalLayerによる描画
-
-**実装概要**:
-```swift
-import MetalKit
-
-class MetalImageRenderer {
-    private let device: MTLDevice
-    private let commandQueue: MTLCommandQueue
-    private var textureCache: [Int: MTLTexture] = [:]
-
-    init?() {
-        guard let device = MTLCreateSystemDefaultDevice(),
-              let queue = device.makeCommandQueue() else { return nil }
-        self.device = device
-        self.commandQueue = queue
-    }
-
-    func prerenderTexture(for index: Int, image: CGImage) {
-        let textureLoader = MTKTextureLoader(device: device)
-        if let texture = try? textureLoader.newTexture(cgImage: image, options: [
-            .textureUsage: MTLTextureUsage.shaderRead.rawValue,
-            .textureStorageMode: MTLStorageMode.private.rawValue
-        ]) {
-            textureCache[index] = texture
-        }
-    }
-
-    func renderToLayer(_ metalLayer: CAMetalLayer, textureIndex: Int) {
-        guard let texture = textureCache[textureIndex],
-              let drawable = metalLayer.nextDrawable(),
-              let commandBuffer = commandQueue.makeCommandBuffer() else { return }
-
-        // レンダリングパス設定
-        let renderPassDescriptor = MTLRenderPassDescriptor()
-        renderPassDescriptor.colorAttachments[0].texture = drawable.texture
-        renderPassDescriptor.colorAttachments[0].loadAction = .clear
-        renderPassDescriptor.colorAttachments[0].storeAction = .store
-
-        // 描画コマンド
-        // ...
-
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
-    }
-}
-```
-
-**変更点**:
-- 新規: `coverZipViewer/MetalImageRenderer.swift`
-- 新規: `coverZipViewer/Shaders.metal`（シェーダー）
-- `PreviewViewController.swift`: NSImageViewをCAMetalLayer/MTKViewに置換
-
-#### Phase 3b: GPUデコード・リサイズ
-
-**実装概要**:
-```swift
-// Metal Performance Shadersを使用したリサイズ
-import MetalPerformanceShaders
-
-func resizeOnGPU(source: MTLTexture, targetSize: CGSize) -> MTLTexture? {
-    let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-        pixelFormat: source.pixelFormat,
-        width: Int(targetSize.width),
-        height: Int(targetSize.height),
-        mipmapped: false
-    )
-    descriptor.usage = [.shaderRead, .shaderWrite]
-
-    guard let destination = device.makeTexture(descriptor: descriptor),
-          let commandBuffer = commandQueue.makeCommandBuffer() else { return nil }
-
-    let scaleFilter = MPSImageLanczosScale(device: device)
-    scaleFilter.encode(commandBuffer: commandBuffer, sourceTexture: source, destinationTexture: destination)
-
-    commandBuffer.commit()
-    commandBuffer.waitUntilCompleted()
-
-    return destination
-}
-```
-
-**メリット**:
-- 最高のパフォーマンス
-- GPUでの並列処理
-- 将来的な拡張性（HDR、アニメーション等）
-
-**デメリット**:
-- 大幅なアーキテクチャ変更
-- Metalの専門知識が必要
-- デバッグが困難
-- App Extension制約の確認が必要
-
-**見積もり工数**: 高
-
----
-
-## 推奨実装順序
+### データフロー
 
 ```
-Phase 1 (CALayer事前準備)
-    ↓ 効果測定
-Phase 2 (IOSurface最適化) ← 効果が不十分な場合
-    ↓ 効果測定
-Phase 3 (Metal統合) ← さらなる最適化が必要な場合
+[ZIP展開] -> [downsample decode(ImageIO Thumbnail)] -> [PrerenderLayerEntry作成]
+                                                    -> [LayerCacheに保存]
+                                                    -> [表示時はcached layerを直接適用]
+                                                    -> [miss時のみ従来経路へフォールバック]
 ```
 
-### Phase 1で期待される効果
+### 縮小デコード戦略（Phase 1 必須）
+- フル解像度の `CGImageSourceCreateImageAtIndex` を既定経路で使わない
+- `CGImageSourceCreateThumbnailAtIndex` を使い、`kCGImageSourceThumbnailMaxPixelSize` を指定して縮小デコードする
+- EXIF向き補正のため `kCGImageSourceCreateThumbnailWithTransform = true`
+- 常にデコードするため `kCGImageSourceCreateThumbnailFromImageAlways = true`
 
-| 指標 | 現状 | Phase 1後 |
-|------|------|-----------|
-| ページ切り替え遅延 | 50-100ms | 10-20ms |
-| 体感 | カクつきあり | スムーズ |
-| メモリ使用量 | 基準 | +20-30% |
+`targetPixelSize` 算出:
+- `displayPointSize = imageView.bounds.size`
+- `displayScale = backingScaleFactor`
+- `singlePageWidth = displayPointSize.width`
+- `spreadPageWidth = displayPointSize.width / 2`（見開き時）
+- `targetHeight = displayPointSize.height`
+- `targetWidth = singlePageWidth`（単ページ）または `spreadPageWidth`（見開き）
+- `targetPixelMax = max(targetWidth, targetHeight) * displayScale`
 
----
+補足:
+- `targetPixelMax` は 64px バケットに丸める（キャッシュの安定化）
+- ズーム機能を将来追加する場合は「高解像度再デコード」を別経路で用意する
 
-## 技術的考慮事項
+### キャッシュキー設計
+- 単ページ: `(pageIndex, widthBucket, heightBucket, scale)`
+- 見開き: `(leftIndex, rightIndex, widthBucket, heightBucket, scale, readingDirection, spreadOffset)`
 
-### App Extension制約
+`widthBucket/heightBucket` は小刻みなリサイズ乱発を防ぐため 64px 単位で丸める。
 
-| API | Thumbnail Extension | Preview Extension |
-|-----|---------------------|-------------------|
-| CALayer | ✅ | ✅ |
-| IOSurface | ⚠️ 要検証 | ⚠️ 要検証 |
-| Metal | ⚠️ 要検証 | ✅（おそらく可） |
+### スレッドモデル
+- `decodeQueue`（並列可）: ZIP展開/デコード/リサイズ
+- `layerBuildQueue`（シリアル）: キャッシュ状態更新
+- MainActor: `CALayer` 生成・UI適用・`contents` 変更
 
-### メモリ管理
+ルール:
+- `CALayer` の生成/変更は MainActor 限定
+- `currentIndex`/`targetDisplaySize` を含む共有状態は `layerBuildQueue` 経由でのみ更新
+- UIコールバックは「現在表示キーと一致」した場合のみ反映（古い非同期結果を破棄）
 
-```
-Phase 1のキャッシュ戦略:
-- 事前レンダリング済みCALayer: 最大5枚（現在±2ページ）
-- リサイズ済みNSImage: 現状維持（20枚）
-- 元画像NSImage: 現状維持（10枚）
+### 表示戦略
+- `NSImageView` ごとに表示用サブレイヤーを1枚だけ保持し、毎回作り直さない
+- 表示時は `cachedLayer.contents` を転写するのではなく、**再利用可能な表示レイヤーへ最小更新**
+- miss時は必ず既存の `setImageSafely` へフォールバック
 
-推定追加メモリ使用量:
-- 4K画像1枚 ≈ 32MB（RGBA 3840x2160）
-- 5枚のCALayerテクスチャ ≈ 160MB追加
-```
+### 先読み戦略
+- 単ページ: `current, -1, +1, +2`
+- 見開き: 次の見開きセット1組を追加で先読み
+- キャッシュ上限:
+  - 単ページレイヤー 5
+  - 見開きレイヤーセット 3
+- メモリ圧迫通知時は `current` のみ残して退避
 
-### スレッド安全性
+## 実装ステップ（段階導入）
 
-```swift
-// CALayerの操作はメインスレッドで行う必要がある
-DispatchQueue.main.async {
-    self.swapPrerenderedLayer(for: index)
-}
+### Step 0: ロールバック
+- `git revert dbdc39a`
+- ビルドと既存操作の健全性確認
 
-// テクスチャ作成はバックグラウンドで可能
-DispatchQueue.global(qos: .userInitiated).async {
-    let layer = self.prerenderLayer(for: index, image: image)
-    DispatchQueue.main.async {
-        self.cachePrerenderedLayer(layer, for: index)
-    }
-}
-```
+### Step 1: 計測基盤
+- `os_signpost` とキャッシュ hit/miss ログを追加
+- ベースラインを取得し `docs` に記録
 
----
+### Step 2: 単ページのみ再実装
+- `ImageManager` に縮小デコード経路を実装（単ページ）
+- `PrerenderedLayerCache` をシンプルに作り直す（単ページのみ）
+- `PreviewViewController` 単ページ表示に限定導入
+- 単ページシナリオA/Cで合格判定
 
-## 実装ファイル構成（Phase 1）
+### Step 3: 見開き対応
+- 見開き時の半幅 `targetPixelSize` で縮小デコード
+- 見開きキーとキャッシュ実装
+- RTL/LTR、見開き補正（offset）をキーに反映
+- シナリオBで合格判定
 
-```
-coverZipViewer/
-├── PreviewViewController.swift  # 変更: レイヤー入れ替えロジック追加
-├── ImageManager.swift           # 変更: 事前レンダリング呼び出し追加
-├── PrerenderedLayerCache.swift  # 新規: CALayerキャッシュ管理
-└── ...
+### Step 4: メモリ圧迫・サイズ変更の安定化
+- サイズ変更時のバケット再計算と古いエントリ廃棄
+- メモリ圧迫時の退避ロジックと復帰確認
 
-Shared/
-├── ImageUtilities.swift         # 変更: CGImage変換ヘルパー追加
-└── ...
-```
+### Step 5: リリース判断
+- 成功指標の最終判定
+- 未達なら Phase 1 改善継続、達成なら Phase 2 検討に進む
 
----
+## 変更対象ファイル（Phase 1）
 
-## 成功指標
+- `coverZipViewer/ImageManager.swift`
+  - 先読み対象の管理
+  - 縮小デコード（ImageIO Thumbnail）実装
+  - 事前レンダリング要求APIの窓口
+- `coverZipViewer/PreviewViewController.swift`
+  - 単/見開きでの表示切替
+  - フォールバック制御
+  - 計測ログ
+- `coverZipViewer/PrerenderedLayerCache.swift`（再作成）
+  - キー管理、LRU、メモリ圧迫時退避
+- `docs/GPU_PRERENDERING_PLAN.md`
+  - 計測結果と判定記録の追記
 
-1. **ページ切り替え遅延**: 50ms以下
-2. **FPS**: 60fps維持（ページ送りアニメーション中）
-3. **メモリ使用量**: 基準+50%以下
-4. **CPU使用率**: ページ切り替え時5%以下
+## テスト観点
 
----
+### 機能テスト
+- 単ページ/見開きでページ送り・戻しが正常
+- RTL/LTR 切替後も表示順が正しい
+- 見開き補正（offset）有効時も正しく表示
+- スライドショー中のページ遷移で表示破綻しない
+
+### 安定性テスト
+- 連続ページ送り 500 回でクラッシュしない
+- ウィンドウリサイズ連打中も表示が破綻しない
+- メモリ圧迫通知後に表示が復旧する
+
+### 回帰テスト
+- 画像がないZIP、破損ZIPで従来通りフォールバック
+- 履歴復元（ページ・表示モード・綴じ方向）に影響しない
+- 超高解像度画像ZIPで、表示が粗すぎないこと（目視許容範囲）
 
 ## リスクと軽減策
 
 | リスク | 影響 | 軽減策 |
 |--------|------|--------|
-| メモリ不足 | クラッシュ | 動的キャッシュサイズ調整 |
-| App Extension制約 | 機能制限 | フォールバック実装 |
-| レイヤー同期問題 | 表示不具合 | メインスレッド強制 |
-| Retina対応漏れ | ぼやけ | backingScaleFactor考慮 |
+| 非同期結果の逆転適用 | ちらつき/誤表示 | 表示キー一致チェック |
+| メモリ増大 | 処理落ち/クラッシュ | バケット化 + 固定上限 + 圧迫時退避 |
+| 見開きキー不足 | キャッシュ誤ヒット | readingDirection/offsetをキー化 |
+| 縮小しすぎによる画質低下 | 可読性低下 | scale反映 + バケット最小値設定 + 必要時再デコード |
+| 効果が小さい | 工数超過 | Step 2 で計測ゲートを設置 |
 
----
+## 実装前TODO（この順で実施）
 
-## 次のステップ
+1. [ ] `dbdc39a` を `git revert` して作業ブランチをクリーン化
+2. [ ] ベースライン計測（A/B/C）を取得
+3. [ ] `ImageManager` の縮小デコード設計（targetPixelSize/バケット）を確定
+4. [ ] 単ページの縮小デコード + 事前レンダリング実装で計測合格を確認
+5. [ ] 見開き縮小デコード + 見開きキャッシュ実装（RTL/LTR/offset）を検証
+6. [ ] メモリ圧迫・リサイズ安定化を実装
+7. [ ] 計測結果を本ドキュメントに反映し、Phase 2 判定を実施
 
-1. [ ] Phase 1のプロトタイプ実装
-2. [ ] パフォーマンス測定環境の構築
-3. [ ] 効果測定とボトルネック再分析
-4. [ ] Phase 2以降の判断
+## 将来計画（Phase 2/3 の判断条件）
+
+### Phase 2（IOSurface）に進む条件
+- Phase 1 合格後も p95 が目標未達
+- GPU転送が依然として支配的と計測で確認
+
+### Phase 3（Metal）に進む条件
+- Phase 2 実施後も要件未達
+- UI/保守性コスト増を受容可能と判断
