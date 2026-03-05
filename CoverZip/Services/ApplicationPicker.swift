@@ -7,6 +7,7 @@
 
 import AppKit
 import Foundation
+import UniformTypeIdentifiers
 
 class ApplicationPicker {
 
@@ -22,7 +23,7 @@ class ApplicationPicker {
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
-        panel.allowedFileTypes = ["app"]
+        panel.allowedContentTypes = [.applicationBundle]
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.level = .modalPanel
 

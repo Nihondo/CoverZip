@@ -16,6 +16,11 @@ import QuartzCore
  */
 class ImageManager {
 
+    enum DecodeQualityTier: String {
+        case low
+        case normal
+    }
+
     private struct DecodeRequest {
         let widthBucket: Int
         let heightBucket: Int
@@ -42,9 +47,15 @@ class ImageManager {
     // 画像キャッシュ（表示サイズバケット単位）
     private var resizedImageCache: [String: NSImage] = [:]
     private var resizedImageIndexMap: [String: Int] = [:]
-    private let maxResizedCacheSize: Int = 20
+    private let maxResizedCacheSize: Int = 32
     private let imageBucketStep: CGFloat = 64.0
     private let fallbackDecodeMaxPixelSize: Int = 2048
+    private let lowQualityMaxPixelSingle: Int = 768
+    private let lowQualityMaxPixelSpread: Int = 640
+    private let singlePreloadBackwardPageCount = 1
+    private let singlePreloadForwardPageCount = 5
+    private let spreadPreloadBackwardSetCount = 1
+    private let spreadPreloadForwardSetCount = 3
 
     private var targetDisplaySizeInPoints: NSSize = .zero
     private var targetDisplayScale: CGFloat = 1.0
@@ -68,7 +79,8 @@ class ImageManager {
      *
      * @param size 表示対象のサイズ（point）
      */
-    func setTargetDisplaySize(_ size: NSSize) {
+    @discardableResult
+    func setTargetDisplaySize(_ size: NSSize) -> Bool {
         setTargetDisplaySize(size, backingScaleFactor: 1.0)
     }
 
@@ -78,15 +90,16 @@ class ImageManager {
      * @param size 表示対象のサイズ（point）
      * @param backingScaleFactor バッキングスケール
      */
-    func setTargetDisplaySize(_ size: NSSize, backingScaleFactor: CGFloat) {
-        guard size.width > 0 && size.height > 0 else { return }
+    @discardableResult
+    func setTargetDisplaySize(_ size: NSSize, backingScaleFactor: CGFloat) -> Bool {
+        guard size.width > 0 && size.height > 0 else { return false }
 
         let sanitizedScale = max(1.0, backingScaleFactor)
         let nextSignature = buildBucketSignature(sizeInPoints: size, scale: sanitizedScale)
         let wasSameSignature = currentBucketSignature == nextSignature
         let wasSamePointSize = targetDisplaySizeInPoints == size && abs(targetDisplayScale - sanitizedScale) < 0.001
         if wasSameSignature && wasSamePointSize {
-            return
+            return false
         }
 
         targetDisplaySizeInPoints = size
@@ -99,6 +112,7 @@ class ImageManager {
                 resizedImageIndexMap.removeAll()
             }
             prerenderedLayerCache.clearAll()
+            clearInFlightPrerenderState()
         }
 
         NSLog(
@@ -108,6 +122,7 @@ class ImageManager {
             sanitizedScale,
             wasSameSignature ? 0 : 1
         )
+        return !wasSameSignature
     }
 
     /**
@@ -130,6 +145,7 @@ class ImageManager {
                 resizedImageIndexMap.removeAll()
             }
             prerenderedLayerCache.clearAll()
+            clearInFlightPrerenderState()
             setupMemoryPressureMonitoring()
 
             // 初期表示の体感を落とさないため先頭のみ先にデコード
@@ -148,7 +164,51 @@ class ImageManager {
      * 現在の画像を取得する
      */
     func getCurrentImage() -> NSImage? {
-        getImageAtIndex(currentIndex, isSpreadMode: false)
+        getImageAtIndex(currentIndex, isSpreadMode: false, quality: .normal)
+    }
+
+    /// 指定ページ画像をバックグラウンドで取得する（完了はMainActor）
+    func requestImageAsync(
+        at index: Int,
+        isSpreadMode: Bool,
+        quality: DecodeQualityTier = .normal,
+        completion: @escaping (_ pageIndex: Int, _ image: NSImage?) -> Void
+    ) {
+        decodeQueue.async { [weak self] in
+            guard let self else { return }
+            let image = self.getImageAtIndex(index, isSpreadMode: isSpreadMode, quality: quality)
+            DispatchQueue.main.async {
+                completion(index, image)
+            }
+        }
+    }
+
+    /// 指定基準インデックスの見開き画像をバックグラウンドで取得する（完了はMainActor）
+    func requestSpreadImagesAsync(
+        baseIndex: Int,
+        isRightToLeft: Bool,
+        quality: DecodeQualityTier = .normal,
+        completion: @escaping (_ baseIndex: Int, _ images: (left: NSImage?, right: NSImage?)) -> Void
+    ) {
+        decodeQueue.async { [weak self] in
+            guard let self else { return }
+            let images: (left: NSImage?, right: NSImage?)
+            if let pair = self.resolveSpreadPairIndices(baseIndex: baseIndex, isRightToLeft: isRightToLeft) {
+                let leftImage = pair.left.flatMap { self.getImageAtIndex($0, isSpreadMode: true, quality: quality) }
+                let rightImage = pair.right.flatMap { self.getImageAtIndex($0, isSpreadMode: true, quality: quality) }
+                images = (leftImage, rightImage)
+            } else {
+                images = (nil, nil)
+            }
+            DispatchQueue.main.async {
+                completion(baseIndex, images)
+            }
+        }
+    }
+
+    /// 現在ページのキャッシュ済み画像のみを返す（未キャッシュならnil）
+    func getCurrentImageIfCachedOnly(quality: DecodeQualityTier = .normal) -> NSImage? {
+        getCachedImageAtIndex(currentIndex, isSpreadMode: false, quality: quality)
     }
 
     /**
@@ -159,8 +219,22 @@ class ImageManager {
             return (getCurrentImage(), nil)
         }
 
-        let leftImage = pair.left.flatMap { getImageAtIndex($0, isSpreadMode: true) }
-        let rightImage = pair.right.flatMap { getImageAtIndex($0, isSpreadMode: true) }
+        let leftImage = pair.left.flatMap { getImageAtIndex($0, isSpreadMode: true, quality: .normal) }
+        let rightImage = pair.right.flatMap { getImageAtIndex($0, isSpreadMode: true, quality: .normal) }
+        return (leftImage, rightImage)
+    }
+
+    /// 見開きのキャッシュ済み画像のみを返す（未キャッシュならnil）
+    func getSpreadImagesIfCachedOnly(
+        isRightToLeft: Bool,
+        quality: DecodeQualityTier = .normal
+    ) -> (left: NSImage?, right: NSImage?) {
+        guard let pair = resolveSpreadPairIndices(baseIndex: currentIndex, isRightToLeft: isRightToLeft) else {
+            return (getCurrentImageIfCachedOnly(quality: quality), nil)
+        }
+
+        let leftImage = pair.left.flatMap { getCachedImageAtIndex($0, isSpreadMode: true, quality: quality) }
+        let rightImage = pair.right.flatMap { getCachedImageAtIndex($0, isSpreadMode: true, quality: quality) }
         return (leftImage, rightImage)
     }
 
@@ -310,10 +384,14 @@ class ImageManager {
             completion?(cached)
             return
         }
+        guard beginSinglePrerender(key) else {
+            return
+        }
 
         let targetIndex = currentIndex
         decodeQueue.async { [weak self] in
             guard let self else { return }
+            defer { self.endSinglePrerender(key) }
             guard let image = self.getImageAtIndex(targetIndex, isSpreadMode: false),
                   let layer = self.createPrerenderedLayer(from: image) else {
                 DispatchQueue.main.async { completion?(nil) }
@@ -352,9 +430,14 @@ class ImageManager {
             completion?(cached)
             return
         }
+        guard beginSpreadPrerender(spreadKey) else {
+            return
+        }
+        let targetIndex = currentIndex
 
         decodeQueue.async { [weak self] in
             guard let self else { return }
+            defer { self.endSpreadPrerender(spreadKey) }
 
             let leftImage = pair.left.flatMap { self.getImageAtIndex($0, isSpreadMode: true) }
             let rightImage = pair.right.flatMap { self.getImageAtIndex($0, isSpreadMode: true) }
@@ -364,7 +447,7 @@ class ImageManager {
             self.prerenderedLayerCache.storeSpread(left: leftLayer, right: rightLayer, for: spreadKey)
             DispatchQueue.main.async {
                 completion?((leftLayer, rightLayer))
-                self.onLayerPrerendered?(self.currentIndex)
+                self.onLayerPrerendered?(targetIndex)
             }
         }
     }
@@ -373,20 +456,29 @@ class ImageManager {
 
     func preloadAdjacentImages(isSpreadMode: Bool = false, isRightToLeft: Bool = true) {
         let indicesToLoad: [Int]
+        let spreadBaseIndices: [Int]
         if isSpreadMode {
-            indicesToLoad = buildSpreadPreloadIndices(isRightToLeft: isRightToLeft)
+            let spreadContext = buildSpreadPreloadContext(isRightToLeft: isRightToLeft)
+            indicesToLoad = spreadContext.indices
+            spreadBaseIndices = spreadContext.baseIndices
         } else {
-            indicesToLoad = [currentIndex - 1, currentIndex + 1, currentIndex + 2]
+            indicesToLoad = buildSinglePreloadIndices()
+            spreadBaseIndices = []
         }
 
         let valid = Array(Set(indicesToLoad)).filter { $0 >= 0 && $0 < imageEntryInfos.count }
-        guard !valid.isEmpty else { return }
+        if valid.isEmpty && spreadBaseIndices.isEmpty { return }
 
         decodeQueue.async { [weak self] in
             guard let self else { return }
             for index in valid {
                 _ = self.getImageAtIndex(index, isSpreadMode: isSpreadMode)
                 self.prerenderSingleLayerIfNeeded(pageIndex: index)
+            }
+
+            guard isSpreadMode else { return }
+            for baseIndex in spreadBaseIndices {
+                self.prerenderSpreadLayerIfNeeded(baseIndex: baseIndex, isRightToLeft: isRightToLeft)
             }
         }
     }
@@ -397,16 +489,21 @@ class ImageManager {
             resizedImageIndexMap.removeAll()
         }
         prerenderedLayerCache.clearAll()
+        clearInFlightPrerenderState()
         NSLog("[ImageManager] All image cache cleared")
     }
 
     // MARK: - Private
 
-    private func getImageAtIndex(_ index: Int, isSpreadMode: Bool = false) -> NSImage? {
+    private func getImageAtIndex(
+        _ index: Int,
+        isSpreadMode: Bool = false,
+        quality: DecodeQualityTier = .normal
+    ) -> NSImage? {
         guard index >= 0, index < imageEntryInfos.count else { return nil }
 
-        let request = buildDecodeRequest(isSpreadMode: isSpreadMode)
-        let cacheKey = buildResizedCacheKey(index: index, request: request, isSpreadMode: isSpreadMode)
+        let request = buildDecodeRequest(isSpreadMode: isSpreadMode, quality: quality)
+        let cacheKey = buildResizedCacheKey(index: index, request: request, isSpreadMode: isSpreadMode, quality: quality)
         if let cached = cacheStateQueue.sync(execute: { resizedImageCache[cacheKey] }) {
             return cached
         }
@@ -431,15 +528,35 @@ class ImageManager {
         return image
     }
 
-    private func buildDecodeRequest(isSpreadMode: Bool) -> DecodeRequest {
+    private func getCachedImageAtIndex(
+        _ index: Int,
+        isSpreadMode: Bool = false,
+        quality: DecodeQualityTier = .normal
+    ) -> NSImage? {
+        guard index >= 0, index < imageEntryInfos.count else { return nil }
+        let request = buildDecodeRequest(isSpreadMode: isSpreadMode, quality: quality)
+        let cacheKey = buildResizedCacheKey(index: index, request: request, isSpreadMode: isSpreadMode, quality: quality)
+        return cacheStateQueue.sync(execute: { resizedImageCache[cacheKey] })
+    }
+
+    private func buildDecodeRequest(
+        isSpreadMode: Bool,
+        quality: DecodeQualityTier = .normal
+    ) -> DecodeRequest {
         buildDecodeRequest(
             sizeInPoints: targetDisplaySizeInPoints,
             scale: targetDisplayScale,
-            isSpreadMode: isSpreadMode
+            isSpreadMode: isSpreadMode,
+            quality: quality
         )
     }
 
-    private func buildDecodeRequest(sizeInPoints: NSSize, scale: CGFloat, isSpreadMode: Bool) -> DecodeRequest {
+    private func buildDecodeRequest(
+        sizeInPoints: NSSize,
+        scale: CGFloat,
+        isSpreadMode: Bool,
+        quality: DecodeQualityTier
+    ) -> DecodeRequest {
         let fallbackScaleToken = max(100, Int((max(1.0, scale) * 100.0).rounded()))
 
         guard sizeInPoints.width > 0 && sizeInPoints.height > 0 else {
@@ -457,20 +574,29 @@ class ImageManager {
 
         let pixelWidth = baseWidth * sanitizedScale
         let pixelHeight = baseHeight * sanitizedScale
-        let widthBucket = bucket(pixelWidth)
-        let heightBucket = bucket(pixelHeight)
+        var widthBucket = bucket(pixelWidth)
+        var heightBucket = bucket(pixelHeight)
+        var maxPixel = max(widthBucket, heightBucket)
+
+        if quality == .low {
+            let lowQualityCap = isSpreadMode ? lowQualityMaxPixelSpread : lowQualityMaxPixelSingle
+            let capped = max(Int(imageBucketStep), min(lowQualityCap, maxPixel))
+            maxPixel = capped
+            widthBucket = min(widthBucket, capped)
+            heightBucket = min(heightBucket, capped)
+        }
 
         return DecodeRequest(
             widthBucket: widthBucket,
             heightBucket: heightBucket,
-            maxPixelSize: max(widthBucket, heightBucket),
+            maxPixelSize: maxPixel,
             scaleToken: fallbackScaleToken
         )
     }
 
     private func buildBucketSignature(sizeInPoints: NSSize, scale: CGFloat) -> BucketSignature {
-        let single = buildDecodeRequest(sizeInPoints: sizeInPoints, scale: scale, isSpreadMode: false)
-        let spread = buildDecodeRequest(sizeInPoints: sizeInPoints, scale: scale, isSpreadMode: true)
+        let single = buildDecodeRequest(sizeInPoints: sizeInPoints, scale: scale, isSpreadMode: false, quality: .normal)
+        let spread = buildDecodeRequest(sizeInPoints: sizeInPoints, scale: scale, isSpreadMode: true, quality: .normal)
         return BucketSignature(
             singleWidthBucket: single.widthBucket,
             singleHeightBucket: single.heightBucket,
@@ -485,9 +611,15 @@ class ImageManager {
         return max(Int(imageBucketStep), Int(rounded))
     }
 
-    private func buildResizedCacheKey(index: Int, request: DecodeRequest, isSpreadMode: Bool) -> String {
+    private func buildResizedCacheKey(
+        index: Int,
+        request: DecodeRequest,
+        isSpreadMode: Bool,
+        quality: DecodeQualityTier
+    ) -> String {
         let modeToken = isSpreadMode ? "spread" : "single"
-        return "\(index)_\(modeToken)_\(request.widthBucket)x\(request.heightBucket)_s\(request.scaleToken)"
+        let qualityToken = (quality == .low) ? "low" : "normal"
+        return "\(index)_\(modeToken)_\(qualityToken)_\(request.widthBucket)x\(request.heightBucket)_s\(request.scaleToken)"
     }
 
     private func cacheResizedImage(_ image: NSImage, key: String, index: Int) {
@@ -518,24 +650,52 @@ class ImageManager {
         resizedImageIndexMap.removeValue(forKey: victimKey)
     }
 
-    private func buildSpreadPreloadIndices(isRightToLeft: Bool) -> [Int] {
+    private func buildSinglePreloadIndices() -> [Int] {
         var indices: [Int] = []
+        if singlePreloadBackwardPageCount > 0 {
+            for offset in 1...singlePreloadBackwardPageCount {
+                indices.append(currentIndex - offset)
+            }
+        }
+        if singlePreloadForwardPageCount > 0 {
+            for offset in 1...singlePreloadForwardPageCount {
+                indices.append(currentIndex + offset)
+            }
+        }
+        return indices
+    }
 
-        if let currentPair = resolveSpreadPairIndices(baseIndex: currentIndex, isRightToLeft: isRightToLeft) {
+    private func buildSpreadPreloadContext(isRightToLeft: Bool) -> (indices: [Int], baseIndices: [Int]) {
+        var indices: [Int] = []
+        var baseIndices: [Int] = []
+
+        let anchorBaseIndex = currentIndex == 0 ? 1 : currentIndex
+
+        if currentIndex == 0 {
+            baseIndices.append(0)
+        }
+
+        baseIndices.append(anchorBaseIndex)
+        if spreadPreloadForwardSetCount > 0 {
+            for step in 1...spreadPreloadForwardSetCount {
+                baseIndices.append(anchorBaseIndex + (step * 2))
+            }
+        }
+        if spreadPreloadBackwardSetCount > 0 {
+            for step in 1...spreadPreloadBackwardSetCount {
+                baseIndices.append(anchorBaseIndex - (step * 2))
+            }
+        }
+
+        for baseIndex in baseIndices {
+            guard let currentPair = resolveSpreadPairIndices(baseIndex: baseIndex, isRightToLeft: isRightToLeft) else {
+                continue
+            }
             indices.append(contentsOf: [currentPair.left, currentPair.right].compactMap { $0 })
         }
 
-        let nextBase = currentIndex == 0 ? 1 : currentIndex + 2
-        if let nextPair = resolveSpreadPairIndices(baseIndex: nextBase, isRightToLeft: isRightToLeft) {
-            indices.append(contentsOf: [nextPair.left, nextPair.right].compactMap { $0 })
-        }
-
-        let previousBase = currentIndex <= 1 ? nil : currentIndex - 2
-        if let previousBase, let previousPair = resolveSpreadPairIndices(baseIndex: previousBase, isRightToLeft: isRightToLeft) {
-            indices.append(contentsOf: [previousPair.left, previousPair.right].compactMap { $0 })
-        }
-
-        return indices
+        let validBaseIndices = Array(Set(baseIndices)).sorted()
+        return (indices, validBaseIndices)
     }
 
     private func resolveSpreadPairIndices(baseIndex: Int, isRightToLeft: Bool) -> (left: Int?, right: Int?)? {
@@ -584,12 +744,46 @@ class ImageManager {
         )
 
         if prerenderedLayerCache.layer(for: key) != nil { return }
+        guard beginSinglePrerender(key) else { return }
 
         layerBuildQueue.async { [weak self] in
             guard let self else { return }
+            defer { self.endSinglePrerender(key) }
             guard let image = self.getImageAtIndex(pageIndex, isSpreadMode: false),
                   let layer = self.createPrerenderedLayer(from: image) else { return }
             self.prerenderedLayerCache.store(layer, for: key)
+            DispatchQueue.main.async {
+                self.onLayerPrerendered?(pageIndex)
+            }
+        }
+    }
+
+    private func prerenderSpreadLayerIfNeeded(baseIndex: Int, isRightToLeft: Bool) {
+        guard let pair = resolveSpreadPairIndices(baseIndex: baseIndex, isRightToLeft: isRightToLeft) else { return }
+        let request = buildDecodeRequest(isSpreadMode: true)
+        let spreadKey = PrerenderedLayerCache.SpreadKey(
+            leftIndex: pair.left,
+            rightIndex: pair.right,
+            widthBucket: request.widthBucket,
+            heightBucket: request.heightBucket,
+            scaleToken: request.scaleToken,
+            isRightToLeft: isRightToLeft,
+            spreadOffset: spreadPairOffset
+        )
+        if prerenderedLayerCache.spreadLayers(for: spreadKey) != nil { return }
+        guard beginSpreadPrerender(spreadKey) else { return }
+
+        layerBuildQueue.async { [weak self] in
+            guard let self else { return }
+            defer { self.endSpreadPrerender(spreadKey) }
+            let leftImage = pair.left.flatMap { self.getImageAtIndex($0, isSpreadMode: true) }
+            let rightImage = pair.right.flatMap { self.getImageAtIndex($0, isSpreadMode: true) }
+            let leftLayer = leftImage.flatMap { self.createPrerenderedLayer(from: $0) }
+            let rightLayer = rightImage.flatMap { self.createPrerenderedLayer(from: $0) }
+            self.prerenderedLayerCache.storeSpread(left: leftLayer, right: rightLayer, for: spreadKey)
+            DispatchQueue.main.async {
+                self.onLayerPrerendered?(baseIndex)
+            }
         }
     }
 
@@ -668,7 +862,51 @@ class ImageManager {
             resizedImageIndexMap = resizedImageIndexMap.filter { resizedImageCache[$0.key] != nil }
         }
         prerenderedLayerCache.clearExcept(singleKey: currentSingleKey, spreadKey: nil)
+        clearInFlightPrerenderState()
         NSLog("[ImageManager] Memory pressure handled at index=%d", currentIndexSnapshot)
+    }
+
+    private let prerenderStateQueue = DispatchQueue(label: "com.dmng.coverzip.prerender.state", qos: .userInitiated)
+    private var inFlightSinglePrerenderKeys: Set<PrerenderedLayerCache.SingleKey> = []
+    private var inFlightSpreadPrerenderKeys: Set<PrerenderedLayerCache.SpreadKey> = []
+
+    private func beginSinglePrerender(_ key: PrerenderedLayerCache.SingleKey) -> Bool {
+        prerenderStateQueue.sync {
+            if inFlightSinglePrerenderKeys.contains(key) {
+                return false
+            }
+            inFlightSinglePrerenderKeys.insert(key)
+            return true
+        }
+    }
+
+    private func endSinglePrerender(_ key: PrerenderedLayerCache.SingleKey) {
+        prerenderStateQueue.sync {
+            _ = inFlightSinglePrerenderKeys.remove(key)
+        }
+    }
+
+    private func beginSpreadPrerender(_ key: PrerenderedLayerCache.SpreadKey) -> Bool {
+        prerenderStateQueue.sync {
+            if inFlightSpreadPrerenderKeys.contains(key) {
+                return false
+            }
+            inFlightSpreadPrerenderKeys.insert(key)
+            return true
+        }
+    }
+
+    private func endSpreadPrerender(_ key: PrerenderedLayerCache.SpreadKey) {
+        prerenderStateQueue.sync {
+            _ = inFlightSpreadPrerenderKeys.remove(key)
+        }
+    }
+
+    private func clearInFlightPrerenderState() {
+        prerenderStateQueue.sync {
+            inFlightSinglePrerenderKeys.removeAll()
+            inFlightSpreadPrerenderKeys.removeAll()
+        }
     }
 
     deinit {
@@ -777,8 +1015,8 @@ private final class PrerenderedLayerCache {
     private var spreadAccessTick: [SpreadKey: Int] = [:]
     private var tickCounter: Int = 0
 
-    private let maxSingleCacheSize = 5
-    private let maxSpreadCacheSize = 3
+    private let maxSingleCacheSize = 10
+    private let maxSpreadCacheSize = 6
 
     func layer(for key: SingleKey) -> CALayer? {
         queue.sync {

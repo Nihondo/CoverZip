@@ -82,6 +82,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         return userPreferredViewMode == .auto
     }
     private let performanceLog = OSLog(subsystem: "com.dmng.CoverZip.coverZipViewer", category: "Performance")
+    private var isDisplayCurrentImageInFlight: Bool = false
+    private var needsDisplayCurrentImageRetry: Bool = false
+    private var isDisplayCurrentImageScheduled: Bool = false
+    private var lastDisplayCurrentImageTimestamp: CFTimeInterval = 0
+    private var lastDisplayKey: String?
+    private var lastPrerenderRefreshKey: String?
+    private var lastPrerenderRequestKey: String?
+    private var lastImageFallbackRequestKey: String?
+    private let minDisplayCurrentImageInterval: CFTimeInterval = 0.008
 
     
     override var nibName: NSNib.Name? {
@@ -482,7 +491,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             guard let self else { return }
             let currentPageIndex = self.imageManager.getCurrentPageNumber() - 1
             guard index == currentPageIndex else { return }
-            self.displayCurrentImage()
+            let displayKey = self.buildCurrentDisplayKey()
+            guard self.lastPrerenderRefreshKey != displayKey else { return }
+            self.lastPrerenderRefreshKey = displayKey
+            self.scheduleDisplayCurrentImageIfNeeded()
         }
 
         // アプリ側の設定変更を反映（Distributed Notification 経由）
@@ -522,15 +534,21 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 自動リサイズ機能を使用するため、手動でのリサイズ処理は不要
         // レイアウト変化に応じてスライダーの可視性を見直す
         updateSliderVisibilityForContext()
-        updateImageManagerDisplaySize()
+        let didBucketChange = updateImageManagerDisplaySize()
         // アスペクト比変更に応じて表示モードを再評価（自動モードのみ）
         if imageManager.hasImages() {
             if isAutoMode {
-                // 自動モード：レイアウト変更に応じてモードを再評価
-                displayCurrentImage()
+                // 自動モード：バケット変更またはモード変更時のみ再描画
+                let desiredMode: ViewMode = shouldUseSpreadMode() ? .spread : .single
+                let didModeChange = desiredMode != currentViewMode
+                if didBucketChange || didModeChange {
+                    displayCurrentImage()
+                }
             } else {
-                // 固定モード：表示更新のみ（モード変更なし）
-                updateImageDisplayOnly()
+                // 固定モード：バケット変更時のみ表示更新（モード変更なし）
+                if didBucketChange {
+                    updateImageDisplayOnly()
+                }
             }
         }
     }
@@ -1087,8 +1105,44 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // ダブルクリック時は何もしない（シングルクリックハンドラで検知して無視）
     
     // MARK: - Image Display
+
+    private func buildCurrentDisplayKey() -> String {
+        let modeToken = currentViewMode == .spread ? "spread" : "single"
+        let bounds = view.bounds
+        return "\(imageManager.getCurrentPageNumber())_\(modeToken)_\(isRightToLeftReading ? 1 : 0)_\(imageManager.getSpreadPairOffset())_\(Int(bounds.width))x\(Int(bounds.height))"
+    }
+
+    private func scheduleDisplayCurrentImageIfNeeded() {
+        guard !isDisplayCurrentImageScheduled else { return }
+        isDisplayCurrentImageScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isDisplayCurrentImageScheduled = false
+            self.displayCurrentImage()
+        }
+    }
     
     private func displayCurrentImage() {
+        let now = CACurrentMediaTime()
+        if !isDisplayCurrentImageInFlight, (now - lastDisplayCurrentImageTimestamp) < minDisplayCurrentImageInterval {
+            scheduleDisplayCurrentImageIfNeeded()
+            return
+        }
+        if isDisplayCurrentImageInFlight {
+            needsDisplayCurrentImageRetry = true
+            return
+        }
+
+        isDisplayCurrentImageInFlight = true
+        lastDisplayCurrentImageTimestamp = now
+        defer {
+            isDisplayCurrentImageInFlight = false
+            if needsDisplayCurrentImageRetry {
+                needsDisplayCurrentImageRetry = false
+                scheduleDisplayCurrentImageIfNeeded()
+            }
+        }
+
         os_signpost(.begin, log: performanceLog, name: "displayCurrentImage")
         // アスペクト比に基づいて表示モードを決定
         let useSpread = shouldUseSpreadMode()
@@ -1105,6 +1159,13 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // スライダーの位置を現在ページに同期（方向反転に対応）
         syncSliderToCurrentPage()
         updatePreferredContentSizeIfNeeded()
+        let displayKey = buildCurrentDisplayKey()
+        if displayKey != lastDisplayKey {
+            lastPrerenderRefreshKey = nil
+            lastPrerenderRequestKey = nil
+            lastImageFallbackRequestKey = nil
+            lastDisplayKey = displayKey
+        }
         os_signpost(.end, log: performanceLog, name: "displayCurrentImage")
     }
     
@@ -1125,10 +1186,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     private func displaySingleImage(usePrerender: Bool) {
         clearPrerenderedLayers()
+        let displayKey = buildCurrentDisplayKey()
 
         if usePrerender, let cachedLayer = imageManager.getCurrentPrerenderedLayer() {
             os_signpost(.event, log: performanceLog, name: "layerCacheHit", "mode=single")
-            let fallbackImage = imageManager.getCurrentImage()
+            let fallbackImage = imageManager.getCurrentImageIfCachedOnly(quality: .normal)
+                ?? imageManager.getCurrentImageIfCachedOnly(quality: .low)
             let didApplyPrerender = setPrerenderedLayer(cachedLayer, toImageView: imageView, fallbackImage: fallbackImage)
             if !didApplyPrerender, let fallbackImage {
                 setImageSafely(fallbackImage, toImageView: imageView)
@@ -1136,11 +1199,26 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             if let fallbackImage {
                 currentImageAspect = (fallbackImage.size.height > 0) ? (fallbackImage.size.width / fallbackImage.size.height) : nil
             }
+            lastPrerenderRequestKey = nil
+        } else if usePrerender {
+            if let currentImage = imageManager.getCurrentImageIfCachedOnly(quality: .normal)
+                ?? imageManager.getCurrentImageIfCachedOnly(quality: .low) {
+                setImageSafely(currentImage, toImageView: imageView)
+                currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
+            } else {
+                // 現在ページ画像が未準備の間、前ページ画像が残らないように明示クリア
+                setImageSafely(nil, toImageView: imageView)
+                currentImageAspect = nil
+                requestSingleFallbackImageIfNeeded(displayKey: displayKey)
+            }
+            if lastPrerenderRequestKey != displayKey {
+                os_signpost(.event, log: performanceLog, name: "layerCacheMiss", "mode=single")
+                lastPrerenderRequestKey = displayKey
+                imageManager.prerenderCurrentLayerIfNeeded()
+            }
         } else if let currentImage = imageManager.getCurrentImage() {
-            os_signpost(.event, log: performanceLog, name: "layerCacheMiss", "mode=single")
             setImageSafely(currentImage, toImageView: imageView)
             currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
-            imageManager.prerenderCurrentLayerIfNeeded()
         }
 
         imageManager.preloadAdjacentImages(isSpreadMode: false, isRightToLeft: isRightToLeftReading)
@@ -1148,7 +1226,18 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     private func displaySpreadImages(usePrerender: Bool) {
         clearPrerenderedLayers()
-        let spreadImages = imageManager.getSpreadImages(isRightToLeft: isRightToLeftReading)
+        let displayKey = buildCurrentDisplayKey()
+        let spreadImages: (left: NSImage?, right: NSImage?)
+        if usePrerender {
+            let normalImages = imageManager.getSpreadImagesIfCachedOnly(isRightToLeft: isRightToLeftReading, quality: .normal)
+            let lowImages = imageManager.getSpreadImagesIfCachedOnly(isRightToLeft: isRightToLeftReading, quality: .low)
+            spreadImages = (
+                left: normalImages.left ?? lowImages.left,
+                right: normalImages.right ?? lowImages.right
+            )
+        } else {
+            spreadImages = imageManager.getSpreadImages(isRightToLeft: isRightToLeftReading)
+        }
 
         if usePrerender, let cachedLayers = imageManager.getSpreadPrerenderedLayers(isRightToLeft: isRightToLeftReading) {
             os_signpost(.event, log: performanceLog, name: "layerCacheHit", "mode=spread")
@@ -1160,15 +1249,61 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             if !didApplyRight {
                 setImageSafely(spreadImages.right, toImageView: rightImageView)
             }
+            lastPrerenderRequestKey = nil
         } else {
-            os_signpost(.event, log: performanceLog, name: "layerCacheMiss", "mode=spread")
-            setImageSafely(spreadImages.left, toImageView: imageView)
-            setImageSafely(spreadImages.right, toImageView: rightImageView)
-            imageManager.prerenderSpreadLayersIfNeeded(isRightToLeft: isRightToLeftReading)
+            if let leftImage = spreadImages.left {
+                setImageSafely(leftImage, toImageView: imageView)
+            } else {
+                setImageSafely(nil, toImageView: imageView)
+            }
+            if let rightImage = spreadImages.right {
+                setImageSafely(rightImage, toImageView: rightImageView)
+            } else {
+                setImageSafely(nil, toImageView: rightImageView)
+            }
+            if spreadImages.left == nil || spreadImages.right == nil {
+                requestSpreadFallbackImagesIfNeeded(displayKey: displayKey)
+            }
+            if lastPrerenderRequestKey != displayKey {
+                os_signpost(.event, log: performanceLog, name: "layerCacheMiss", "mode=spread")
+                lastPrerenderRequestKey = displayKey
+                imageManager.prerenderSpreadLayersIfNeeded(isRightToLeft: isRightToLeftReading)
+            }
         }
 
         calculateSpreadAspectRatio(leftImage: spreadImages.left, rightImage: spreadImages.right)
         imageManager.preloadAdjacentImages(isSpreadMode: true, isRightToLeft: isRightToLeftReading)
+    }
+
+    private func requestSingleFallbackImageIfNeeded(displayKey: String) {
+        guard lastImageFallbackRequestKey != displayKey else { return }
+        lastImageFallbackRequestKey = displayKey
+
+        let targetIndex = imageManager.getCurrentPageNumber() - 1
+        imageManager.requestImageAsync(at: targetIndex, isSpreadMode: false, quality: .low) { [weak self] _, image in
+            guard let self else { return }
+            guard self.buildCurrentDisplayKey() == displayKey else { return }
+            guard let image else { return }
+            self.setImageSafely(image, toImageView: self.imageView)
+            self.currentImageAspect = (image.size.height > 0) ? (image.size.width / image.size.height) : nil
+            self.updatePreferredContentSizeIfNeeded()
+        }
+    }
+
+    private func requestSpreadFallbackImagesIfNeeded(displayKey: String) {
+        guard lastImageFallbackRequestKey != displayKey else { return }
+        lastImageFallbackRequestKey = displayKey
+
+        let targetBaseIndex = imageManager.getCurrentPageNumber() - 1
+        let targetRTL = isRightToLeftReading
+        imageManager.requestSpreadImagesAsync(baseIndex: targetBaseIndex, isRightToLeft: targetRTL, quality: .low) { [weak self] _, images in
+            guard let self else { return }
+            guard self.buildCurrentDisplayKey() == displayKey else { return }
+            self.setImageSafely(images.left, toImageView: self.imageView)
+            self.setImageSafely(images.right, toImageView: self.rightImageView)
+            self.calculateSpreadAspectRatio(leftImage: images.left, rightImage: images.right)
+            self.updatePreferredContentSizeIfNeeded()
+        }
     }
     
     private func calculateSpreadAspectRatio(leftImage: NSImage?, rightImage: NSImage?) {
@@ -1608,8 +1743,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // MARK: - Performance Optimization
     
     /// ImageManagerに現在のウィンドウサイズを設定して最適化を有効にする
-    private func updateImageManagerDisplaySize() {
-        guard let window = view.window else { return }
+    @discardableResult
+    private func updateImageManagerDisplaySize() -> Bool {
+        guard let window = view.window else { return false }
         
         let windowSize = window.frame.size
         let contentSize = view.bounds.size
@@ -1626,7 +1762,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             height: min(targetPointSize.height, maxSize)
         )
         
-        imageManager.setTargetDisplaySize(limitedSize, backingScaleFactor: backingScaleFactor)
+        let didBucketChange = imageManager.setTargetDisplaySize(limitedSize, backingScaleFactor: backingScaleFactor)
         
         NSLog(
             "[Performance] Updated display size: points=%dx%d scale=%f",
@@ -1634,6 +1770,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             Int(limitedSize.height),
             backingScaleFactor
         )
+        return didBucketChange
     }
     
     // MARK: - Reading History Management

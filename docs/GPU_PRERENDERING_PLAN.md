@@ -72,6 +72,9 @@
 - `CGImageSourceCreateThumbnailAtIndex` を使い、`kCGImageSourceThumbnailMaxPixelSize` を指定して縮小デコードする
 - EXIF向き補正のため `kCGImageSourceCreateThumbnailWithTransform = true`
 - 常にデコードするため `kCGImageSourceCreateThumbnailFromImageAlways = true`
+- 黒画面対策として **2段階表示** を採用:
+  - `low` 品質（低解像度）を先行表示
+  - `normal` 品質（通常解像度）を後追いで置換
 
 `targetPixelSize` 算出:
 - `displayPointSize = imageView.bounds.size`
@@ -209,9 +212,16 @@
 - `DispatchSource.makeMemoryPressureSource` によるメモリ圧迫監視を追加し、圧迫時に current 以外を退避
 - `PreviewViewController` の表示経路を
   - レイヤーcache hit: 事前レンダリングレイヤー表示
-  - miss: 従来画像表示 + 非同期事前レンダリング
+  - miss: **キャッシュ済み画像のみ**をフォールバック表示し、事前レンダリングを非同期要求
   に切り替え
 - `displayCurrentImage` と cache hit/miss の `os_signpost` ログを追加
+- 先読み範囲を拡張（単ページ: `-1,+1..+5` / 見開き: 次3セット + 前1セット）し、対応してキャッシュ上限を引き上げ
+- `viewDidLayout` での過剰再描画を抑止（表示サイズバケット変更またはモード変化時のみ再描画）
+- 同一キーの事前レンダリング重複投入を抑止（single/spread の in-flight キー管理を導入）
+- 同一表示キーでの miss ログ/要求重複を抑止（`lastPrerenderRequestKey`）
+- 連打時の追従不良対策として、**先読み経路の完了時にも `onLayerPrerendered` を通知**するよう修正
+- spread 完了通知で `currentIndex` の動的参照をやめ、**要求開始時 index のスナップショット**を通知するよう修正
+- 連打時の黒画面対策として、画像キャッシュを `low/normal` 品質ティア化し、miss時は `low` を先行非同期表示
 
 ### 未完了（次フェーズ）
 - シナリオA/B/Cでの p95/FPS/メモリ計測（Go/No-Go 判定）

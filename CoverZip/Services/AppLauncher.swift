@@ -45,25 +45,17 @@ class AppLauncher {
             return .fileNotFound
         }
         
-        do {
-            // アプリケーションのURLを取得
-            guard let applicationURL = findApplicationURL(applicationName: applicationName) else {
-                return .applicationNotFound
-            }
-            
-            // アプリケーションでファイルを開く
-            try NSWorkspace.shared.open(
-                [zipFileURL],
-                withApplicationAt: applicationURL,
-                options: [],
-                configuration: [:]
-            )
-            
-            return .success
-            
-        } catch {
-            return .launchFailed(error)
+        // アプリケーションのURLを取得
+        guard let applicationURL = findApplicationURL(applicationName: applicationName) else {
+            return .applicationNotFound
         }
+
+        // アプリケーションでファイルを開く（macOS 11以降のAPI）
+        if let launchError = openURLs([zipFileURL], withApplicationAt: applicationURL) {
+            return .launchFailed(launchError)
+        }
+
+        return .success
     }
     
     /**
@@ -129,6 +121,27 @@ class AppLauncher {
         }
         
         return nil
+    }
+
+    private static func openURLs(_ urls: [URL], withApplicationAt applicationURL: URL) -> Error? {
+        let configuration = NSWorkspace.OpenConfiguration()
+        let semaphore = DispatchSemaphore(value: 0)
+        var launchError: Error?
+
+        NSWorkspace.shared.open(urls, withApplicationAt: applicationURL, configuration: configuration) { _, error in
+            launchError = error
+            semaphore.signal()
+        }
+
+        let timeout = DispatchTime.now() + .seconds(5)
+        if semaphore.wait(timeout: timeout) == .timedOut {
+            return NSError(
+                domain: "AppLauncher",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "アプリケーション起動がタイムアウトしました"]
+            )
+        }
+        return launchError
     }
     
 }
