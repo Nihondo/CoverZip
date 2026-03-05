@@ -11,6 +11,7 @@ import Foundation
 import AppKit
 import Compression
 import QuartzCore
+import os.signpost
 
 // MARK: - Preview View Controller
 
@@ -80,6 +81,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var isAutoMode: Bool {
         return userPreferredViewMode == .auto
     }
+    private let performanceLog = OSLog(subsystem: "com.dmng.CoverZip.coverZipViewer", category: "Performance")
 
     
     override var nibName: NSNib.Name? {
@@ -476,6 +478,13 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 初期表示サイズを設定
         updateImageManagerDisplaySize()
 
+        imageManager.onLayerPrerendered = { [weak self] index in
+            guard let self else { return }
+            let currentPageIndex = self.imageManager.getCurrentPageNumber() - 1
+            guard index == currentPageIndex else { return }
+            self.displayCurrentImage()
+        }
+
         // アプリ側の設定変更を反映（Distributed Notification 経由）
         let distObs = DistributedNotificationCenter.default().addObserver(forName: CZDistributedNotifications.settingsChanged, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
@@ -513,6 +522,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 自動リサイズ機能を使用するため、手動でのリサイズ処理は不要
         // レイアウト変化に応じてスライダーの可視性を見直す
         updateSliderVisibilityForContext()
+        updateImageManagerDisplaySize()
         // アスペクト比変更に応じて表示モードを再評価（自動モードのみ）
         if imageManager.hasImages() {
             if isAutoMode {
@@ -1079,28 +1089,23 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // MARK: - Image Display
     
     private func displayCurrentImage() {
+        os_signpost(.begin, log: performanceLog, name: "displayCurrentImage")
         // アスペクト比に基づいて表示モードを決定
         let useSpread = shouldUseSpreadMode()
         
         setViewMode(useSpread ? .spread : .single)
         
         if useSpread {
-            // 見開き表示
-            let (leftImage, rightImage) = imageManager.getSpreadImages(isRightToLeft: isRightToLeftReading)
-            setImageSafely(leftImage, toImageView: imageView)
-            setImageSafely(rightImage, toImageView: rightImageView)
+            displaySpreadImages(usePrerender: true)
         } else {
-            // 単ページ表示
-            if let currentImage = imageManager.getCurrentImage() {
-                setImageSafely(currentImage, toImageView: imageView)
-                currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
-            }
+            displaySingleImage(usePrerender: true)
         }
         
         updatePageLabel()
         // スライダーの位置を現在ページに同期（方向反転に対応）
         syncSliderToCurrentPage()
         updatePreferredContentSizeIfNeeded()
+        os_signpost(.end, log: performanceLog, name: "displayCurrentImage")
     }
     
     private func updateImageDisplayOnly() {
@@ -1108,24 +1113,62 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let currentMode = currentViewMode
         
         if currentMode == .spread {
-            // 見開き表示
-            let (leftImage, rightImage) = imageManager.getSpreadImages(isRightToLeft: isRightToLeftReading)
-            setImageSafely(leftImage, toImageView: imageView)
-            setImageSafely(rightImage, toImageView: rightImageView)
-            
-            // 見開き表示の場合は合成アスペクト比を計算
-            calculateSpreadAspectRatio(leftImage: leftImage, rightImage: rightImage)
+            displaySpreadImages(usePrerender: true)
         } else {
-            // 単ページ表示
-            if let currentImage = imageManager.getCurrentImage() {
-                setImageSafely(currentImage, toImageView: imageView)
-                currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
-            }
+            displaySingleImage(usePrerender: true)
         }
         
         updatePageLabel()
         syncSliderToCurrentPage()
         updatePreferredContentSizeIfNeeded()
+    }
+
+    private func displaySingleImage(usePrerender: Bool) {
+        clearPrerenderedLayers()
+
+        if usePrerender, let cachedLayer = imageManager.getCurrentPrerenderedLayer() {
+            os_signpost(.event, log: performanceLog, name: "layerCacheHit", "mode=single")
+            let fallbackImage = imageManager.getCurrentImage()
+            let didApplyPrerender = setPrerenderedLayer(cachedLayer, toImageView: imageView, fallbackImage: fallbackImage)
+            if !didApplyPrerender, let fallbackImage {
+                setImageSafely(fallbackImage, toImageView: imageView)
+            }
+            if let fallbackImage {
+                currentImageAspect = (fallbackImage.size.height > 0) ? (fallbackImage.size.width / fallbackImage.size.height) : nil
+            }
+        } else if let currentImage = imageManager.getCurrentImage() {
+            os_signpost(.event, log: performanceLog, name: "layerCacheMiss", "mode=single")
+            setImageSafely(currentImage, toImageView: imageView)
+            currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
+            imageManager.prerenderCurrentLayerIfNeeded()
+        }
+
+        imageManager.preloadAdjacentImages(isSpreadMode: false, isRightToLeft: isRightToLeftReading)
+    }
+
+    private func displaySpreadImages(usePrerender: Bool) {
+        clearPrerenderedLayers()
+        let spreadImages = imageManager.getSpreadImages(isRightToLeft: isRightToLeftReading)
+
+        if usePrerender, let cachedLayers = imageManager.getSpreadPrerenderedLayers(isRightToLeft: isRightToLeftReading) {
+            os_signpost(.event, log: performanceLog, name: "layerCacheHit", "mode=spread")
+            let didApplyLeft = setPrerenderedLayer(cachedLayers.left, toImageView: imageView, fallbackImage: spreadImages.left)
+            let didApplyRight = setPrerenderedLayer(cachedLayers.right, toImageView: rightImageView, fallbackImage: spreadImages.right)
+            if !didApplyLeft {
+                setImageSafely(spreadImages.left, toImageView: imageView)
+            }
+            if !didApplyRight {
+                setImageSafely(spreadImages.right, toImageView: rightImageView)
+            }
+        } else {
+            os_signpost(.event, log: performanceLog, name: "layerCacheMiss", "mode=spread")
+            setImageSafely(spreadImages.left, toImageView: imageView)
+            setImageSafely(spreadImages.right, toImageView: rightImageView)
+            imageManager.prerenderSpreadLayersIfNeeded(isRightToLeft: isRightToLeftReading)
+        }
+
+        calculateSpreadAspectRatio(leftImage: spreadImages.left, rightImage: spreadImages.right)
+        imageManager.preloadAdjacentImages(isSpreadMode: true, isRightToLeft: isRightToLeftReading)
     }
     
     private func calculateSpreadAspectRatio(leftImage: NSImage?, rightImage: NSImage?) {
@@ -1312,6 +1355,47 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // スケーリングのみ固定。アラインメントはモード切替で設定したものを維持する
         iv.imageScaling = .scaleProportionallyUpOrDown
         iv.image = image
+    }
+
+    @discardableResult
+    private func setPrerenderedLayer(_ layer: CALayer?, toImageView imageView: NSImageView?, fallbackImage: NSImage?) -> Bool {
+        guard let imageView, let hostLayer = imageView.layer else {
+            setImageSafely(fallbackImage, toImageView: imageView)
+            return false
+        }
+        guard let layer else {
+            setImageSafely(fallbackImage, toImageView: imageView)
+            return false
+        }
+        guard !hostLayer.bounds.isEmpty else {
+            setImageSafely(fallbackImage, toImageView: imageView)
+            return false
+        }
+        guard let prerenderedContents = layer.contents else {
+            setImageSafely(fallbackImage, toImageView: imageView)
+            return false
+        }
+
+        hostLayer.sublayers?.filter { $0.name == "cz_prerendered" }.forEach { $0.removeFromSuperlayer() }
+        // フォールバック画像は残したまま上にレイヤーを重ねる（失敗時の黒画面防止）
+        setImageSafely(fallbackImage, toImageView: imageView)
+
+        let displayLayer = CALayer()
+        displayLayer.name = "cz_prerendered"
+        displayLayer.contents = prerenderedContents
+        displayLayer.contentsGravity = .resizeAspect
+        displayLayer.frame = hostLayer.bounds
+        displayLayer.contentsScale = max(hostLayer.contentsScale, view.window?.backingScaleFactor ?? 1.0)
+        displayLayer.minificationFilter = .trilinear
+        displayLayer.magnificationFilter = .linear
+        displayLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+        hostLayer.addSublayer(displayLayer)
+        return true
+    }
+
+    private func clearPrerenderedLayers() {
+        imageView?.layer?.sublayers?.filter { $0.name == "cz_prerendered" }.forEach { $0.removeFromSuperlayer() }
+        rightImageView?.layer?.sublayers?.filter { $0.name == "cz_prerendered" }.forEach { $0.removeFromSuperlayer() }
     }
 
     // スライダー上のクリックなら、クリック位置に即時ジャンプしてアクションを発火（イベント自体は通す）
@@ -1529,24 +1613,27 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         
         let windowSize = window.frame.size
         let contentSize = view.bounds.size
-        
-        // 高DPIディスプレイ対応：実際の表示に必要なピクセル数を計算
         let backingScaleFactor = window.backingScaleFactor
-        let targetSize = NSSize(
-            width: max(contentSize.width, windowSize.width) * backingScaleFactor,
-            height: max(contentSize.height, windowSize.height) * backingScaleFactor
+        let targetPointSize = NSSize(
+            width: max(contentSize.width, windowSize.width),
+            height: max(contentSize.height, windowSize.height)
         )
         
         // 最大サイズ制限（メモリ使用量を制御）
-        let maxSize: CGFloat = 3840 // 4Kディスプレイ相当
+        let maxSize: CGFloat = 3840 // 論理サイズの上限
         let limitedSize = NSSize(
-            width: min(targetSize.width, maxSize),
-            height: min(targetSize.height, maxSize)
+            width: min(targetPointSize.width, maxSize),
+            height: min(targetPointSize.height, maxSize)
         )
         
-        imageManager.setTargetDisplaySize(limitedSize)
+        imageManager.setTargetDisplaySize(limitedSize, backingScaleFactor: backingScaleFactor)
         
-        NSLog("[Performance] Updated display size: %dx%d (scale: %f)", Int(limitedSize.width), Int(limitedSize.height), backingScaleFactor)
+        NSLog(
+            "[Performance] Updated display size: points=%dx%d scale=%f",
+            Int(limitedSize.width),
+            Int(limitedSize.height),
+            backingScaleFactor
+        )
     }
     
     // MARK: - Reading History Management

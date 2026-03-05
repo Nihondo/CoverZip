@@ -198,6 +198,26 @@
 6. [ ] メモリ圧迫・リサイズ安定化を実装
 7. [ ] 計測結果を本ドキュメントに反映し、Phase 2 判定を実施
 
+## 実装進捗メモ（2026-03-05）
+
+### 実装済み（コード反映済み）
+- `ImageManager` に **表示サイズバケット（64px）+ scale token** を導入
+- `CGImageSourceCreateThumbnailAtIndex` ベースの縮小デコードを既定化
+- 単ページ/見開きそれぞれに対して、表示サイズ別キーで画像キャッシュを分離
+- `PrerenderedLayerCache` を再構築（単ページ5件 / 見開き3件のLRU上限）
+- リサイズ時は「pointサイズ変化」ではなく「バケット変化」のときだけキャッシュ破棄するように修正
+- `DispatchSource.makeMemoryPressureSource` によるメモリ圧迫監視を追加し、圧迫時に current 以外を退避
+- `PreviewViewController` の表示経路を
+  - レイヤーcache hit: 事前レンダリングレイヤー表示
+  - miss: 従来画像表示 + 非同期事前レンダリング
+  に切り替え
+- `displayCurrentImage` と cache hit/miss の `os_signpost` ログを追加
+
+### 未完了（次フェーズ）
+- シナリオA/B/Cでの p95/FPS/メモリ計測（Go/No-Go 判定）
+- 見開き補正・RTL/LTR の長時間連続操作（500回）での安定性確認
+- メモリ圧迫発生時のUI体感（復帰時間・再描画遅延）の評価
+
 ## 将来計画（Phase 2/3 の判断条件）
 
 ### Phase 2（IOSurface）に進む条件
