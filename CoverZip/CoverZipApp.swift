@@ -33,7 +33,7 @@ struct CoverZipApp: App {
                     // Fallback on earlier versions
                 }
             }
-            .frame(minWidth: 500, minHeight: 550)
+            .frame(minWidth: 650, minHeight: 500)
         }
         .commands {
             FileMenuCommands()

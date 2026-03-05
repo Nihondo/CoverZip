@@ -56,6 +56,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var didLogHostWindowInfo: Bool = false
     // 読み込みインジケータ
     private var loadingIndicator: NSProgressIndicator?
+    // サムネイルストリップ
+    private var thumbnailStripView: ThumbnailStripView?
+    private var imageViewBottomToStripConstraint: NSLayoutConstraint?
 
     // マウスホイールスクロール管理
     private var scrollAccumulator: CGFloat = 0.0
@@ -362,6 +365,37 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             NSLog("[ERROR] Failed to register leftMouseUp monitor")
         }
         
+        // キーダウンモニタ：左右カーソルキーでページナビゲーション
+        // makeFirstResponderが失敗する場合でも確実にキー入力を処理するため、
+        // マウスモニタと同じローカルモニタパターンで実装
+        if let keyDown = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] event -> NSEvent? in
+            guard let self else { return event }
+            guard self.view.window != nil || self.view.superview != nil else { return event }
+            guard let specialKey = event.specialKey else { return event }
+            if self.isThumbnailStripFirstResponderActive() {
+                return event
+            }
+
+            let forward: Bool
+            switch specialKey {
+            case .leftArrow:
+                // 右綴じ: 左→次ページ（番号増加）／左綴じ: 左→前ページ（番号減少）
+                forward = self.isRightToLeftReading
+            case .rightArrow:
+                // 右綴じ: 右→前ページ（番号減少）／左綴じ: 右→次ページ（番号増加）
+                forward = !self.isRightToLeftReading
+            default:
+                return event
+            }
+            _ = self.performPageNavigation(forward: forward)
+            return nil // イベントを消費してFinderへ渡さない
+        }) {
+            mouseMonitors.append(keyDown)
+            NSLog("[DEBUG] Successfully registered keyDown monitor")
+        } else {
+            NSLog("[ERROR] Failed to register keyDown monitor")
+        }
+
         NSLog("[DEBUG] Mouse monitor setup complete. Total monitors: %d", mouseMonitors.count)
     }
     
@@ -527,6 +561,28 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             self.updateContextMenuStates()
         }
         distributedObservers.append(distObs)
+
+        // サムネイルストリップのコールバックを設定
+        thumbnailStripView?.onPageSelected = { [weak self] index in
+            guard let self else { return }
+            guard self.imageManager.goToPage(index + 1) else { return }
+            self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
+            self.displayCurrentImage()
+            self.saveReadingPositionToHistory()
+        }
+
+        // NSCollectionViewへのFirstResponder設定（ベストエフォート）
+        if let strip = thumbnailStripView {
+            let success = strip.focusCollectionView()
+            NSLog("[DEBUG] makeFirstResponder(collectionView): %d", success ? 1 : 0)
+            if !success {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, let strip = self.thumbnailStripView else { return }
+                    let retrySuccess = strip.focusCollectionView()
+                    NSLog("[DEBUG] makeFirstResponder(collectionView) retry: %d", retrySuccess ? 1 : 0)
+                }
+            }
+        }
     }
 
     override func viewDidLayout() {
@@ -590,7 +646,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             await MainActor.run {
                 // 履歴から前回の読書位置を復元
                 restoreReadingPositionFromHistory()
-                
+
                 // 初回表示モードをユーザー設定に基づき適用
                 applyInitialViewModeIfNeeded()
                 // UI要素を更新（読み方向変更を反映）
@@ -602,7 +658,14 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 updateSliderLimits()
                 // 先頭のみ即表示→全件読み込み中であればインジケータ表示
                 updateLoadingIndicator()
-                
+
+                // サムネイルストリップの設定
+                if let source = imageManager.getThumbnailSourceData() {
+                    thumbnailStripView?.isRightToLeft = isRightToLeftReading
+                    thumbnailStripView?.configure(zipData: source.zipData, entries: source.entries)
+                    thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
+                }
+
                 // マウスモニターを遅延設定（window が確実に利用可能になってから）
                 NSLog("[DEBUG] Scheduling delayed mouse monitor setup")
                 setupMouseMonitorsWithDelay()
@@ -706,7 +769,13 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             applySliderLayoutDirection()
         }
 
-        // 制約の再構成（スライダー表示/非表示を切り替え可能に）
+        // サムネイルストリップを追加
+        let strip = ThumbnailStripView()
+        strip.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(strip)
+        thumbnailStripView = strip
+
+        // 制約の再構成（サムネイルストリップをimageViewとスライダーの間に挿入）
         if let imageView, let pageLabel, let slider = pageSlider {
             // 既存の imageView と pageLabel の間の縦方向制約を解除
             let toRemove = view.constraints.filter { c in
@@ -717,15 +786,25 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             }
             NSLayoutConstraint.deactivate(toRemove)
 
-            // スライダー経由の制約を作成（保持）
+            // imageView.bottom → thumbnailStripView.top（常時）
+            let stripTopConstraint = strip.topAnchor.constraint(equalTo: imageView.bottomAnchor)
+            imageViewBottomToStripConstraint = stripTopConstraint
+            NSLayoutConstraint.activate([
+                stripTopConstraint,
+                strip.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                strip.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                strip.heightAnchor.constraint(equalToConstant: 88),
+            ])
+
+            // スライダー経由の制約を作成（サムネイルストリップの下から）
             sliderConstraints = [
-                slider.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 8),
+                slider.topAnchor.constraint(equalTo: strip.bottomAnchor, constant: 8),
                 pageLabel.topAnchor.constraint(equalTo: slider.bottomAnchor, constant: 6),
                 slider.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
                 slider.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
             ]
-            // スライダーを使わず直接 label を imageView に接続する制約（保持、初期は非アクティブ）
-            directLabelTopConstraint = pageLabel.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 8)
+            // スライダーを使わず直接 label をサムネイルストリップに接続する制約（保持、初期は非アクティブ）
+            directLabelTopConstraint = pageLabel.topAnchor.constraint(equalTo: strip.bottomAnchor, constant: 8)
 
             // デフォルトはスライダー表示を前提に有効化（後で文脈に応じて切替）
             NSLayoutConstraint.activate(sliderConstraints)
@@ -926,24 +1005,28 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     @objc private func setRightToLeft(_ sender: NSMenuItem) {
         isRightToLeftReading = true
         didRestoreRTLFromHistory = true
-        
+
         // UI要素を即座に更新
         applySliderLayoutDirection()
         syncSliderToCurrentPage()
         displayCurrentImage()
+        thumbnailStripView?.isRightToLeft = true
+        thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
         updateContextMenuStates()
         // 履歴を保存
         saveReadingPositionToHistory()
     }
-    
+
     @objc private func setLeftToRight(_ sender: NSMenuItem) {
         isRightToLeftReading = false
         didRestoreRTLFromHistory = true
-        
+
         // UI要素を即座に更新
         applySliderLayoutDirection()
         syncSliderToCurrentPage()
         displayCurrentImage()
+        thumbnailStripView?.isRightToLeft = false
+        thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
         updateContextMenuStates()
         // 履歴を保存
         saveReadingPositionToHistory()
@@ -1463,6 +1546,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             startSlideshow()
         }
 
+        // サムネイル選択を現在ページに同期
+        if didChange {
+            thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
+        }
+
         return didChange
     }
 
@@ -1720,6 +1808,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     // 指定ビュー座標が「通過させるべきNSControl」上かを判定（imageView配下は除外して吸収対象にする）
     private func isPointInsidePassThroughControl(_ pointInView: NSPoint) -> Bool {
+        // サムネイルストリップ領域のクリックはそのまま通す（ページ移動を発生させない）
+        if let strip = thumbnailStripView, strip.frame.contains(pointInView) { return true }
         guard let hit = view.hitTest(pointInView) else { return false }
         var v: NSView? = hit
         while let cur = v {
@@ -1728,6 +1818,21 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             if let riv = self.rightImageView, cur === riv { return false }
             if cur is NSControl { return true }
             v = cur.superview
+        }
+        return false
+    }
+
+    private func isThumbnailStripFirstResponderActive() -> Bool {
+        guard let strip = thumbnailStripView,
+              let responder = view.window?.firstResponder else { return false }
+        guard let responderView = responder as? NSView else { return false }
+
+        var currentView: NSView? = responderView
+        while let viewInChain = currentView {
+            if viewInChain === strip.collectionView || viewInChain === strip {
+                return true
+            }
+            currentView = viewInChain.superview
         }
         return false
     }

@@ -14,15 +14,70 @@ struct RoutingSettingsView: View {
     @State private var alertMessage = ""
 
     var body: some View {
-        VStack(spacing: 20) {
-            headerSection
-            rulesSection
-            defaultApplicationSection
-            actionsSection
-            Spacer()
+        Form {
+            Section {
+                if settings.rules.isEmpty {
+                    emptyRulesView
+                } else {
+                    rulesListView
+                }
+
+                HStack {
+                    Button(action: addNewRule) {
+                        Label("新規ルール", systemImage: "plus")
+                    }
+                    Spacer()
+                }
+            } header: {
+                Label("ルール一覧", systemImage: "list.bullet")
+            } footer: {
+                Text("ZIPファイル名に基づいて適切なアプリケーションを自動起動します。ルールは上から順に適用されます。")
+            }
+
+            Section {
+                HStack {
+                    TextField("アプリケーション名", text: $settings.defaultApplication)
+                        .onChange(of: settings.defaultApplication) { _ in
+                            hasUnsavedChanges = true
+                        }
+                    Button("選択...") {
+                        ApplicationPicker.pickApplication { appName in
+                            if let appName = appName {
+                                settings.defaultApplication = appName
+                                hasUnsavedChanges = true
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Label("デフォルトアプリケーション", systemImage: "app")
+            } footer: {
+                Text("ルールにマッチしない場合に使用されます。空欄の場合はシステムのデフォルトアプリケーションで開きます。")
+            }
+
+            Section {
+                HStack {
+                    Button("保存") {
+                        saveSettings()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!hasUnsavedChanges)
+
+                    Button("リセット") {
+                        resetSettings()
+                    }
+                    .disabled(!hasUnsavedChanges)
+
+                    Spacer()
+
+                    Button("JSONファイルを編集") {
+                        let _ = SettingsFileManager.openSettingsFileInExternalEditor()
+                    }
+                }
+            }
         }
-        .padding()
-        .frame(minWidth: 700, minHeight: 500)
+        .formStyle(.grouped)
+        .frame(minWidth: 650, minHeight: 450)
         .alert("通知", isPresented: $showingAlert) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -30,157 +85,31 @@ struct RoutingSettingsView: View {
         }
     }
 
-    // MARK: - Header Section
-
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("ファイルルーティング設定")
-                .font(.title2)
-                .fontWeight(.semibold)
-            Text("ZIPファイル名に基づいて適切なアプリケーションを自動起動します")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Text("ルールは上から順に適用されます。ドラッグして並び替えできます")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-        }
-    }
-
-    // MARK: - Rules Section
-
-    private var rulesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("ルール一覧")
-                    .font(.headline)
-                Spacer()
-                Button(action: addNewRule) {
-                    Label("新規ルール", systemImage: "plus")
-                }
-                .buttonStyle(.bordered)
-            }
-
-            if settings.rules.isEmpty {
-                emptyRulesView
-            } else {
-                rulesTableView
-            }
-        }
-    }
+    // MARK: - Rules Views
 
     private var emptyRulesView: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 48))
+                .font(.system(size: 36))
                 .foregroundColor(.secondary)
             Text("ルールがありません")
-                .font(.headline)
                 .foregroundColor(.secondary)
             Text("「新規ルール」ボタンをクリックして追加してください")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
-        .frame(maxWidth: .infinity, minHeight: 150)
-        .background(Color.gray.opacity(0.05))
-        .cornerRadius(8)
+        .frame(maxWidth: .infinity, minHeight: 100)
     }
 
-    private var rulesTableView: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack(spacing: 12) {
-                Text("キーワード")
-                    .frame(width: 150, alignment: .leading)
-                Text("マッチ方式")
-                    .frame(width: 130, alignment: .leading)
-                Text("対象")
-                    .frame(width: 100, alignment: .leading)
-                Text("アプリケーション")
-                    .frame(minWidth: 150, alignment: .leading)
-                Spacer()
-                Text("")
-                    .frame(width: 30)
-            }
-            .font(.caption)
-            .fontWeight(.semibold)
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.gray.opacity(0.1))
-
-            Divider()
-
-            // Rules List
-            List {
-                ForEach($settings.rules) { $rule in
-                    RuleRowView(rule: $rule, onDelete: {
-                        deleteRule(rule)
-                    }, onChange: {
-                        hasUnsavedChanges = true
-                    })
-                }
-                .onMove(perform: moveRules)
-            }
-            .listStyle(.plain)
-            .frame(minHeight: 200)
+    private var rulesListView: some View {
+        ForEach($settings.rules) { $rule in
+            RuleRowView(rule: $rule, onDelete: {
+                deleteRule(rule)
+            }, onChange: {
+                hasUnsavedChanges = true
+            })
         }
-        .background(Color.gray.opacity(0.05))
-        .cornerRadius(8)
-    }
-
-    // MARK: - Default Application Section
-
-    private var defaultApplicationSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("デフォルトアプリケーション")
-                .font(.headline)
-            HStack {
-                Text("ルールにマッチしない場合:")
-                    .font(.subheadline)
-                TextField("アプリケーション名", text: $settings.defaultApplication)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 250)
-                    .onChange(of: settings.defaultApplication) { _ in
-                        hasUnsavedChanges = true
-                    }
-                Button("選択...") {
-                    ApplicationPicker.pickApplication { appName in
-                        if let appName = appName {
-                            settings.defaultApplication = appName
-                            hasUnsavedChanges = true
-                        }
-                    }
-                }
-            }
-            Text("空欄の場合、システムのデフォルトアプリケーションで開きます")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-        }
-    }
-
-    // MARK: - Actions Section
-
-    private var actionsSection: some View {
-        HStack(spacing: 12) {
-            Button("保存") {
-                saveSettings()
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!hasUnsavedChanges)
-
-            Button("リセット") {
-                resetSettings()
-            }
-            .disabled(!hasUnsavedChanges)
-
-            Spacer()
-
-            Button("JSONファイルを編集") {
-                let _ = SettingsFileManager.openSettingsFileInExternalEditor()
-            }
-            .buttonStyle(.bordered)
-        }
-        .padding(.top, 8)
+        .onMove(perform: moveRules)
     }
 
     // MARK: - Helper Methods
@@ -231,23 +160,20 @@ struct RuleRowView: View {
     let onChange: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Keyword
+        HStack(spacing: 8) {
             TextField("キーワード", text: $rule.keyword)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 150)
+                .frame(width: 130)
                 .onChange(of: rule.keyword) { _ in onChange() }
 
-            // Match Mode
             Picker("", selection: $rule.matchMode) {
                 ForEach(MatchMode.allCases, id: \.self) { mode in
                     Text(mode.displayName).tag(mode)
                 }
             }
-            .frame(width: 130)
+            .frame(width: 120)
             .onChange(of: rule.matchMode) { _ in onChange() }
 
-            // Type
             Picker("", selection: $rule.type) {
                 ForEach(KeywordType.allCases, id: \.self) { type in
                     Text(type.displayName).tag(type)
@@ -256,11 +182,10 @@ struct RuleRowView: View {
             .frame(width: 100)
             .onChange(of: rule.type) { _ in onChange() }
 
-            // Application
             HStack(spacing: 4) {
                 TextField("アプリ", text: $rule.application)
                     .textFieldStyle(.roundedBorder)
-                    .frame(minWidth: 120)
+                    .frame(minWidth: 100)
                     .onChange(of: rule.application) { _ in onChange() }
 
                 Button(action: {
@@ -277,20 +202,16 @@ struct RuleRowView: View {
                 .buttonStyle(.plain)
                 .help("アプリケーションを選択")
             }
-            .frame(minWidth: 150)
 
             Spacer()
 
-            // Delete Button
             Button(action: onDelete) {
                 Image(systemName: "trash")
                     .foregroundColor(.red)
             }
             .buttonStyle(.plain)
             .help("削除")
-            .frame(width: 30)
         }
-        .padding(.vertical, 4)
     }
 }
 

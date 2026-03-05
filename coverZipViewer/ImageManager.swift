@@ -74,6 +74,15 @@ class ImageManager {
     /// 現在ページのレイヤーが準備できたときの通知
     var onLayerPrerendered: ((Int) -> Void)?
 
+    /// 現在表示中のページインデックス（0始まり）
+    var currentPageIndex: Int { currentIndex }
+
+    /// サムネイル生成用にZIPデータとエントリー情報を返す
+    func getThumbnailSourceData() -> (zipData: Data, entries: [CZImageEntryInfo])? {
+        guard let zipData = zipData else { return nil }
+        return (zipData, imageEntryInfos)
+    }
+
     /**
      * 表示対象サイズを設定（point）
      *
