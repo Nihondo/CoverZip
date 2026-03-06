@@ -202,7 +202,8 @@ public enum CZZip {
             return thumbnailFromImageData(compSlice as CFData, maxPixel: maxPixel, isFinal: true)
         }
         if compMethod == 8 {
-            return inflateToThumbnail(compressed: compSlice, maxPixel: maxPixel)
+            guard let decompressed = inflateData(compSlice) else { return nil }
+            return thumbnailFromImageData(decompressed as CFData, maxPixel: maxPixel, isFinal: true)
         }
         return nil
     }
@@ -237,62 +238,6 @@ public enum CZZip {
         let inc1 = CGImageSourceCreateIncremental(nil)
         CGImageSourceUpdateData(inc1, imgData, isFinal)
         return CGImageSourceCreateThumbnailAtIndex(inc1, 0, opts)
-    }
-
-    /// Stream-inflate DEFLATE-compressed image and attempt incremental thumbnail creation.
-    private static func inflateToThumbnail(compressed comp: Data, maxPixel: Int) -> CGImage? {
-        let streamPtr = UnsafeMutablePointer<compression_stream>.allocate(capacity: 1)
-        defer { streamPtr.deallocate() }
-        memset(streamPtr, 0, MemoryLayout<compression_stream>.size)
-        var status = compression_stream_init(streamPtr, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB)
-        guard status == COMPRESSION_STATUS_OK else { return nil }
-        defer { compression_stream_destroy(streamPtr) }
-
-        let dstCap = 64 * 1024
-        let dstBuf = UnsafeMutablePointer<UInt8>.allocate(capacity: dstCap)
-        defer { dstBuf.deallocate() }
-
-        guard let outData = CFDataCreateMutable(nil, 0) else { return nil }
-        let inc = CGImageSourceCreateIncremental(nil)
-        let thumbOpts: CFDictionary = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixel),
-            kCGImageSourceShouldCache: false
-        ] as CFDictionary
-
-        comp.withUnsafeBytes { rawBuf in
-            guard let srcBase = rawBuf.bindMemory(to: UInt8.self).baseAddress else { return }
-            streamPtr.pointee.src_ptr = srcBase
-            streamPtr.pointee.src_size = comp.count
-            streamPtr.pointee.dst_ptr = dstBuf
-            streamPtr.pointee.dst_size = dstCap
-
-            while status == COMPRESSION_STATUS_OK {
-                status = compression_stream_process(streamPtr, Int32(0))
-                let written = dstCap - streamPtr.pointee.dst_size
-                if written > 0 {
-                    CFDataAppendBytes(outData, dstBuf, written)
-                    streamPtr.pointee.dst_ptr = dstBuf
-                    streamPtr.pointee.dst_size = dstCap
-                    // Update incremental source with partial data (do not finalize; continue streaming)
-                    CGImageSourceUpdateData(inc, outData, false)
-                }
-
-                if status == COMPRESSION_STATUS_END { break }
-                if status == COMPRESSION_STATUS_ERROR { break }
-                if streamPtr.pointee.src_size == 0 && status == COMPRESSION_STATUS_OK {
-                    // No more input but not ended; break to avoid infinite loop
-                    break
-                }
-            }
-        }
-
-        // Finalize and build thumbnail from full data
-        CGImageSourceUpdateData(inc, outData, true)
-        if let th = CGImageSourceCreateThumbnailAtIndex(inc, 0, thumbOpts) { return th }
-        // As a last fallback, create full image (may be heavy)
-        return CGImageSourceCreateImageAtIndex(inc, 0, nil)
     }
 
     /// Read the first image data with an optional early pick rule from raw ZIP data.
