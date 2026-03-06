@@ -94,6 +94,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var lastDisplayKey: String?
     private var lastPrerenderRefreshKey: String?
     private var lastPrerenderRequestKey: String?
+    private var lastPrerenderApplyRetryKey: String?
     private var lastImageFallbackRequestKey: String?
     private let minDisplayCurrentImageInterval: CFTimeInterval = 0.008
     private var skipThumbnailSyncOnce: Bool = false
@@ -1270,6 +1271,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if displayKey != lastDisplayKey {
             lastPrerenderRefreshKey = nil
             lastPrerenderRequestKey = nil
+            lastPrerenderApplyRetryKey = nil
             lastImageFallbackRequestKey = nil
             lastDisplayKey = displayKey
         }
@@ -1302,6 +1304,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             let didApplyPrerender = setPrerenderedLayer(cachedLayer, toImageView: imageView, fallbackImage: fallbackImage)
             if !didApplyPrerender, let fallbackImage {
                 setImageSafely(fallbackImage, toImageView: imageView)
+            }
+            if didApplyPrerender {
+                lastPrerenderApplyRetryKey = nil
+            } else if lastPrerenderApplyRetryKey != displayKey {
+                lastPrerenderApplyRetryKey = displayKey
+                scheduleDisplayCurrentImageIfNeeded()
             }
             if let fallbackImage {
                 currentImageAspect = (fallbackImage.size.height > 0) ? (fallbackImage.size.width / fallbackImage.size.height) : nil
@@ -1356,6 +1364,13 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             if !didApplyRight {
                 setImageSafely(spreadImages.right, toImageView: rightImageView)
             }
+            let didFailExpectedLayer = (cachedLayers.left != nil && !didApplyLeft) || (cachedLayers.right != nil && !didApplyRight)
+            if !didFailExpectedLayer {
+                lastPrerenderApplyRetryKey = nil
+            } else if lastPrerenderApplyRetryKey != displayKey {
+                lastPrerenderApplyRetryKey = displayKey
+                scheduleDisplayCurrentImageIfNeeded()
+            }
             lastPrerenderRequestKey = nil
         } else {
             if let leftImage = spreadImages.left {
@@ -1390,10 +1405,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         imageManager.requestImageAsync(at: targetIndex, isSpreadMode: false, quality: .low) { [weak self] _, image in
             guard let self else { return }
             guard self.buildCurrentDisplayKey() == displayKey else { return }
-            guard let image else { return }
-            self.setImageSafely(image, toImageView: self.imageView)
-            self.currentImageAspect = (image.size.height > 0) ? (image.size.width / image.size.height) : nil
-            self.updatePreferredContentSizeIfNeeded()
+            guard image != nil else { return }
+            self.scheduleDisplayCurrentImageIfNeeded()
         }
     }
 
@@ -1406,10 +1419,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         imageManager.requestSpreadImagesAsync(baseIndex: targetBaseIndex, isRightToLeft: targetRTL, quality: .low) { [weak self] _, images in
             guard let self else { return }
             guard self.buildCurrentDisplayKey() == displayKey else { return }
-            self.setImageSafely(images.left, toImageView: self.imageView)
-            self.setImageSafely(images.right, toImageView: self.rightImageView)
-            self.calculateSpreadAspectRatio(leftImage: images.left, rightImage: images.right)
-            self.updatePreferredContentSizeIfNeeded()
+            guard images.left != nil || images.right != nil else { return }
+            self.scheduleDisplayCurrentImageIfNeeded()
         }
     }
     
