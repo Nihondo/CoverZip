@@ -96,6 +96,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var lastPrerenderRequestKey: String?
     private var lastImageFallbackRequestKey: String?
     private let minDisplayCurrentImageInterval: CFTimeInterval = 0.008
+    private var skipThumbnailSyncOnce: Bool = false
 
     
     override var nibName: NSNib.Name? {
@@ -575,10 +576,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // サムネイルストリップのコールバックを設定
         thumbnailStripView?.onPageSelected = { [weak self] index in
             guard let self else { return }
-            guard self.imageManager.goToPage(index + 1) else { return }
-            self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
-            self.displayCurrentImage()
-            self.saveReadingPositionToHistory()
+            self.moveToPageFromThumbnail(index + 1)
         }
 
         // NSCollectionViewへのFirstResponder設定（ベストエフォート）
@@ -1264,7 +1262,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         
         updatePageLabel()
         // スライダーの位置を現在ページに同期（方向反転に対応）
-        syncSliderToCurrentPage()
+        let skipThumb = skipThumbnailSyncOnce
+        skipThumbnailSyncOnce = false
+        syncSliderToCurrentPage(skipThumbnailSync: skipThumb)
         updatePreferredContentSizeIfNeeded()
         let displayKey = buildCurrentDisplayKey()
         if displayKey != lastDisplayKey {
@@ -1755,13 +1755,48 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         )
     }
 
+    /// サムネイルクリック時のページ遷移（サムネイル再選択をスキップして応答性を向上）
+    private func moveToPageFromThumbnail(_ page: Int) {
+        let wasSlideshow = isSlideshowEnabled
+        if wasSlideshow { stopSlideshow() }
+
+        skipThumbnailSyncOnce = true
+        if imageManager.goToPage(page) {
+            displayCurrentImage()
+            saveReadingPositionToHistory()
+        }
+
+        if wasSlideshow { startSlideshow() }
+
+        DistributedNotificationCenter.default().post(
+            name: CZDistributedNotifications.sliderOperationCompleted,
+            object: nil
+        )
+    }
+
+    /// サムネイル選択などをスライダー操作経路へ統一してページ移動する
+    private func moveToPageViaSlider(_ page: Int) {
+        guard let slider = pageSlider else {
+            if imageManager.goToPage(page) {
+                displayCurrentImage()
+                saveReadingPositionToHistory()
+            }
+            return
+        }
+
+        slider.integerValue = page
+        pageSliderChanged(slider)
+    }
+
     // 現在ページをスライダー位置へ反映（方向反転対応）
-    private func syncSliderToCurrentPage() {
+    private func syncSliderToCurrentPage(skipThumbnailSync: Bool = false) {
         guard let slider = pageSlider else { return }
         // 内部値はそのまま同期（見た目の方向はUIレベルで反映）
         let current = imageManager.getCurrentPageNumber()
         slider.integerValue = current
-        thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
+        if !skipThumbnailSync {
+            thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
+        }
     }
 
     // Quick Look ホストに対して、縦方向いっぱいの希望サイズをヒントとして提示
