@@ -32,6 +32,8 @@ enum QLPreviewInputDriver {
     private static var didPromptAX: Bool = false
     /// コンテキストメニュー供給（アプリ側で設定）
     static var contextMenuProvider: (() -> NSMenu)?
+    /// 共有パネル用データソースを強参照で保持（QLPreviewPanel.dataSourceはunowned）
+    private static var retainedPanelDataSource: SimplePanelDataSource?
 
     // MARK: - Keyboard Focus Management
 
@@ -181,7 +183,9 @@ enum QLPreviewInputDriver {
             guard let previewView = QLPreviewView(frame: .zero, style: .normal) else {
                 // 生成失敗時は共有パネルへフォールバック
                 if let panel = QLPreviewPanel.shared() {
-                    panel.dataSource = SimplePanelDataSource(item: url as NSURL)
+                    let dataSource = SimplePanelDataSource(item: url as NSURL)
+                    retainedPanelDataSource = dataSource
+                    panel.dataSource = dataSource
                     panel.makeKeyAndOrderFront(nil)
                     panel.reloadData()
                 }
