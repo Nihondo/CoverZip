@@ -372,7 +372,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;
-			shellScript = "#!/bin/bash\nset -euo pipefail\n\n# コミット数を取得（git -C でSRCROOTを明示指定）\ncommit_count=$(git -C \"$SRCROOT\" rev-list --count HEAD 2>/dev/null || echo \"0\")\n\n# 前回のビルド番号をカウンターファイルから取得\n# DERIVED_FILE_DIR はターゲット・構成ごとの中間ファイル置き場\ncounter_file=\"${DERIVED_FILE_DIR}/.build_counter\"\nbuild_count=1\n\nif [[ -f \"$counter_file\" ]]; then\n    saved_commit=$(awk '{print $1}' \"$counter_file\" 2>/dev/null || echo \"\")\n    saved_build=$(awk '{print $2}' \"$counter_file\" 2>/dev/null || echo \"0\")\n    if [[ \"$saved_commit\" == \"$commit_count\" ]]; then\n        build_count=$((saved_build + 1))\n    fi\nfi\n\n# カウンターファイルを更新\necho \"$commit_count $build_count\" > \"$counter_file\"\n\nnew_version=\"${commit_count}.${build_count}\"\necho \"Build version = $new_version\"\n\n# ビルド済み Info.plist の CFBundleVersion を直接更新\n# （agvtool は project.pbxproj を書き換えようとするためビルド中は使用不可）\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $new_version\" \\\n    \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n";
+			shellScript = "#!/bin/bash\n#set -euo pipefail\n\n# コミット数を取得（git -C でSRCROOTを明示指定）\ncommit_count=$(git -C \"$SRCROOT\" rev-list --count HEAD 2>/dev/null || echo \"0\")\n\n# 前回のビルド番号をカウンターファイルから取得\n# DERIVED_FILE_DIR はターゲット・構成ごとの中間ファイル置き場\ncounter_file=\"${DERIVED_FILE_DIR}/.build_counter\"\nbuild_count=1\n\nif [[ -f \"$counter_file\" ]]; then\n    saved_commit=$(awk '{print $1}' \"$counter_file\" 2>/dev/null || echo \"\")\n    saved_build=$(awk '{print $2}' \"$counter_file\" 2>/dev/null || echo \"0\")\n    if [[ \"$saved_commit\" == \"$commit_count\" ]]; then\n        build_count=$((saved_build + 1))\n    fi\nfi\n\n# カウンターファイルを更新\necho \"$commit_count $build_count\" > \"$counter_file\"\n\nnew_version=\"${commit_count}.${build_count}\"\necho \"Build version = $new_version\"\n\n# ビルド済み Info.plist の CFBundleVersion を直接更新\n# （agvtool は project.pbxproj を書き換えようとするためビルド中は使用不可）\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $new_version\" \\\n    \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\nexit 0\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -469,7 +469,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				NEW_SETTING = "";
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip;
@@ -511,7 +511,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				NEW_SETTING = "";
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip;
@@ -675,7 +675,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -711,7 +711,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -747,7 +747,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -781,7 +781,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

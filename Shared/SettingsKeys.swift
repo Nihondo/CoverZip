@@ -21,6 +21,8 @@ public enum CZSettingsKeys {
     public static let readingHistoryData = "readingHistoryData"
     // Image decode/cache policy for preview extension ("noCache" | "deferred" | "immediate")
     public static let imageDecodeCachePolicy = "imageDecodeCachePolicy"
+    // Thumbnail strip height in the preview extension (CGFloat, default 88)
+    public static let thumbnailStripHeight = "thumbnailStripHeight"
 }
 
 public enum CZAppGroup {

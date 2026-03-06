@@ -26,6 +26,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var readingHistoryManager = ReadingHistoryManager.shared
     private var currentZipFilename: String = ""
     private var mouseMonitors: [Any] = []
+    private var isHandlingPassThroughControlInteraction = false
     private var pendingSingleClick: DispatchWorkItem?
     private var currentImageAspect: CGFloat?
     // スライダー表示/非表示のための制約管理
@@ -59,6 +60,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // サムネイルストリップ
     private var thumbnailStripView: ThumbnailStripView?
     private var imageViewBottomToStripConstraint: NSLayoutConstraint?
+    private var thumbnailStripHeightConstraint: NSLayoutConstraint?
 
     // マウスホイールスクロール管理
     private var scrollAccumulator: CGFloat = 0.0
@@ -161,6 +163,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // マウスイベントをホスト（Finder）へ渡さないためにローカルモニタで吸収（down/up 両方）
         if let down = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
+            self.isHandlingPassThroughControlInteraction = false
             
             // window 状態をより寛容にチェック
             let hasWindow = self.view.window != nil
@@ -189,6 +192,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                     
                     // スライダーなどのNSControl（やそのサブビュー）上のクリックは通す（ただしimageView配下は除外）
                     if self.isPointInsidePassThroughControl(p) {
+                        self.isHandlingPassThroughControlInteraction = true
                         self.immediatelyJumpSliderIfNeeded(atViewPoint: p)
                         NSLog("[DEBUG] Mouse down passed through to control")
                         return event
@@ -268,6 +272,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         
         if let up = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
+            if self.isHandlingPassThroughControlInteraction {
+                self.isHandlingPassThroughControlInteraction = false
+                NSLog("[DEBUG] MouseUp treated as pass-through control interaction")
+                return event
+            }
             
             NSLog("[DEBUG] LeftMouseUp: view.window=%@", self.view.window?.description ?? "nil")
             
@@ -408,6 +417,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         
         pendingSingleClick?.cancel()
         pendingSingleClick = nil
+        isHandlingPassThroughControlInteraction = false
         
         // 遅延設定タイマーもクリーンアップ
         mouseMonitorSetupTimer?.invalidate()
@@ -789,12 +799,26 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             // imageView.bottom → thumbnailStripView.top（常時）
             let stripTopConstraint = strip.topAnchor.constraint(equalTo: imageView.bottomAnchor)
             imageViewBottomToStripConstraint = stripTopConstraint
+            let initialHeight = loadThumbnailStripHeight()
+            let heightConstraint = strip.heightAnchor.constraint(equalToConstant: initialHeight)
+            thumbnailStripHeightConstraint = heightConstraint
             NSLayoutConstraint.activate([
                 stripTopConstraint,
                 strip.leadingAnchor.constraint(equalTo: view.leadingAnchor),
                 strip.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-                strip.heightAnchor.constraint(equalToConstant: 88),
+                heightConstraint,
             ])
+
+            strip.onResizeDragged = { [weak self] delta in
+                guard let self, let constraint = self.thumbnailStripHeightConstraint else { return }
+                let maxHeight = min(200, self.view.bounds.height * 0.5)
+                constraint.constant = max(44, min(maxHeight, constraint.constant + delta))
+            }
+            strip.onResizeDragEnded = { [weak self] in
+                guard let self, let constraint = self.thumbnailStripHeightConstraint else { return }
+                self.saveThumbnailStripHeight(constraint.constant)
+                self.thumbnailStripView?.reloadThumbnails()
+            }
 
             // スライダー経由の制約を作成（サムネイルストリップの下から）
             sliderConstraints = [
@@ -1933,6 +1957,17 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             spreadPairOffset: currentOffset,
             isRightToLeftReading: isRightToLeftReading
         )
+    }
+
+    // MARK: - Thumbnail Strip Height Persistence
+
+    private func loadThumbnailStripHeight() -> CGFloat {
+        let saved = CZUserDefaults.shared.double(forKey: CZSettingsKeys.thumbnailStripHeight)
+        return saved > 0 ? saved : 88
+    }
+
+    private func saveThumbnailStripHeight(_ height: CGFloat) {
+        CZUserDefaults.shared.set(height, forKey: CZSettingsKeys.thumbnailStripHeight)
     }
 
 }
