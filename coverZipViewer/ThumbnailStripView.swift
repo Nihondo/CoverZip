@@ -14,6 +14,8 @@ private final class ThumbnailResizeHandle: NSView {
 
     private var dragStartY: CGFloat = 0
     private var isDragging = false
+    private var isHoverCursorPushed = false
+    private var isDragCursorPushed = false
     private var trackingArea: NSTrackingArea?
 
     override init(frame frameRect: NSRect) {
@@ -47,19 +49,24 @@ private final class ThumbnailResizeHandle: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) {
-        guard !isDragging else { return }
+        guard !isDragging, !isHoverCursorPushed else { return }
         NSCursor.resizeUpDown.push()
+        isHoverCursorPushed = true
     }
 
     override func mouseExited(with event: NSEvent) {
         guard !isDragging else { return }
-        NSCursor.pop()
+        if isHoverCursorPushed {
+            NSCursor.pop()
+            isHoverCursorPushed = false
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
         isDragging = true
         dragStartY = event.locationInWindow.y
         NSCursor.resizeUpDown.push()
+        isDragCursorPushed = true
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -71,11 +78,16 @@ private final class ThumbnailResizeHandle: NSView {
 
     override func mouseUp(with event: NSEvent) {
         isDragging = false
-        NSCursor.pop() // mouseDown の push を解除
+        // ドラッグ開始時の push を解除
+        if isDragCursorPushed {
+            NSCursor.pop()
+            isDragCursorPushed = false
+        }
         // ドラッグ中に mouseExited が抑制されていた場合、ハンドル外でリリースされたら hover push も解除
         let locationInSelf = convert(event.locationInWindow, from: nil)
-        if !bounds.contains(locationInSelf) {
+        if !bounds.contains(locationInSelf), isHoverCursorPushed {
             NSCursor.pop()
+            isHoverCursorPushed = false
         }
         onResizeDragEnded?()
     }
