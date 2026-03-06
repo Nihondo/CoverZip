@@ -7,6 +7,16 @@
 
 import SwiftUI
 
+// MARK: - Column Width Constants
+
+private enum ColumnWidth {
+    static let matchMode: CGFloat = 130
+    static let keywordType: CGFloat = 90
+    static let actionButtons: CGFloat = 56
+}
+
+// MARK: - RoutingSettingsView
+
 struct RoutingSettingsView: View {
     @State private var settings: KeywordSettings = SettingsFileManager.loadSettings()
     @State private var hasUnsavedChanges = false
@@ -19,14 +29,11 @@ struct RoutingSettingsView: View {
                 if settings.rules.isEmpty {
                     emptyRulesView
                 } else {
-                    rulesListView
+                    rulesTableView
                 }
 
-                HStack {
-                    Button(action: addNewRule) {
-                        Label("新規ルール", systemImage: "plus")
-                    }
-                    Spacer()
+                Button(action: addNewRule) {
+                    Label("新規ルール", systemImage: "plus")
                 }
             } header: {
                 Label("ルール一覧", systemImage: "list.bullet")
@@ -77,7 +84,7 @@ struct RoutingSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 650, minHeight: 450)
+        .frame(minWidth: 700, minHeight: 450)
         .alert("通知", isPresented: $showingAlert) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -101,7 +108,12 @@ struct RoutingSettingsView: View {
         .frame(maxWidth: .infinity, minHeight: 100)
     }
 
-    private var rulesListView: some View {
+    @ViewBuilder
+    private var rulesTableView: some View {
+        columnHeaderView
+            .moveDisabled(true)
+            .listRowBackground(Color(NSColor.controlBackgroundColor).opacity(0.5))
+
         ForEach($settings.rules) { $rule in
             RuleRowView(rule: $rule, onDelete: {
                 deleteRule(rule)
@@ -110,6 +122,28 @@ struct RoutingSettingsView: View {
             })
         }
         .onMove(perform: moveRules)
+    }
+
+    private var columnHeaderView: some View {
+        HStack(spacing: 8) {
+            Spacer().frame(width: 20)
+
+            Text("キーワード")
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text("マッチング")
+                .frame(width: ColumnWidth.matchMode, alignment: .leading)
+
+            Text("対象")
+                .frame(width: ColumnWidth.keywordType, alignment: .leading)
+
+            Text("アプリケーション")
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer().frame(width: ColumnWidth.actionButtons)
+        }
+        .font(.caption)
+        .foregroundColor(.secondary)
     }
 
     // MARK: - Helper Methods
@@ -161,9 +195,13 @@ struct RuleRowView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            TextField("キーワード", text: $rule.keyword)
+            Image(systemName: "line.3.horizontal")
+                .foregroundColor(.secondary)
+                .frame(width: 20)
+
+            TextField("", text: $rule.keyword)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 130)
+                .frame(minWidth: 80, maxWidth: .infinity)
                 .onChange(of: rule.keyword) { _ in onChange() }
 
             Picker("", selection: $rule.matchMode) {
@@ -171,7 +209,8 @@ struct RuleRowView: View {
                     Text(mode.displayName).tag(mode)
                 }
             }
-            .frame(width: 120)
+            .labelsHidden()
+            .frame(width: ColumnWidth.matchMode)
             .onChange(of: rule.matchMode) { _ in onChange() }
 
             Picker("", selection: $rule.type) {
@@ -179,13 +218,14 @@ struct RuleRowView: View {
                     Text(type.displayName).tag(type)
                 }
             }
-            .frame(width: 100)
+            .labelsHidden()
+            .frame(width: ColumnWidth.keywordType)
             .onChange(of: rule.type) { _ in onChange() }
 
             HStack(spacing: 4) {
-                TextField("アプリ", text: $rule.application)
+                TextField("", text: $rule.application)
                     .textFieldStyle(.roundedBorder)
-                    .frame(minWidth: 100)
+                    .frame(minWidth: 80, maxWidth: .infinity)
                     .onChange(of: rule.application) { _ in onChange() }
 
                 Button(action: {
@@ -199,19 +239,20 @@ struct RuleRowView: View {
                     Image(systemName: "folder")
                         .foregroundColor(.accentColor)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
                 .help("アプリケーションを選択")
             }
-
-            Spacer()
+            .frame(maxWidth: .infinity)
 
             Button(action: onDelete) {
                 Image(systemName: "trash")
                     .foregroundColor(.red)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)
             .help("削除")
+            .frame(width: ColumnWidth.actionButtons)
         }
+        .padding(.horizontal, 4)
     }
 }
 
