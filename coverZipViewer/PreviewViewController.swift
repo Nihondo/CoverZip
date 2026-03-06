@@ -1737,6 +1737,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 内部値はそのまま同期（見た目の方向はUIレベルで反映）
         let current = imageManager.getCurrentPageNumber()
         slider.integerValue = current
+        thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
     }
 
     // Quick Look ホストに対して、縦方向いっぱいの希望サイズをヒントとして提示

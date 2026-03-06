@@ -204,7 +204,11 @@ class ThumbnailStripView: NSView {
         let indexPath = IndexPath(item: displayIndex, section: 0)
 
         isUpdatingSelectionProgrammatically = true
-        collectionView.selectItems(at: [indexPath], scrollPosition: scrollToVisible ? .centeredHorizontally : [])
+        let previousSelection = collectionView.selectionIndexPaths
+        if !previousSelection.isEmpty {
+            collectionView.deselectItems(at: previousSelection)
+        }
+        collectionView.selectItems(at: [indexPath], scrollPosition: scrollToVisible ? .nearestHorizontalEdge : [])
         isUpdatingSelectionProgrammatically = false
 
         if shouldNotify {
