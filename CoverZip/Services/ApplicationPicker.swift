@@ -14,9 +14,9 @@ class ApplicationPicker {
     /**
      * アプリケーション選択パネルを表示
      *
-     * @param completion 選択されたアプリケーション名（キャンセル時はnil）
+     * @param completion 選択されたアプリケーションのURL（キャンセル時はnil）
      */
-    static func pickApplication(completion: @escaping (String?) -> Void) {
+    static func pickApplication(completion: @escaping (URL?) -> Void) {
         let panel = NSOpenPanel()
         panel.title = "アプリケーションを選択"
         panel.message = "ZIPファイルを開くアプリケーションを選択してください"
@@ -32,29 +32,73 @@ class ApplicationPicker {
                 completion(nil)
                 return
             }
-
-            // アプリケーション名を返す（例: "SimpleComicViewer.app"）
-            let appName = url.lastPathComponent
-            completion(appName)
+            completion(url)
         }
     }
 
     /**
-     * よく使うアプリケーションのプリセット
+     * アプリケーションのローカライズ済み表示名を取得
+     * CFBundleDisplayName → CFBundleName → ファイル名の順でフォールバック
      */
-    static let commonApplications = [
-        "internal",
-        "Archive Utility.app",
-        "Finder.app"
-    ]
+    static func displayName(for url: URL) -> String {
+        let bundle = Bundle(url: url)
+        if let name = bundle?.localizedInfoDictionary?["CFBundleDisplayName"] as? String { return name }
+        if let name = bundle?.infoDictionary?["CFBundleDisplayName"] as? String { return name }
+        if let name = bundle?.infoDictionary?["CFBundleName"] as? String { return name }
+        return url.deletingPathExtension().lastPathComponent
+    }
 
     /**
-     * アプリケーション名を表示用テキストに変換
+     * application文字列（フルパスまたは"internal"）から表示名を返す
      */
     static func displayName(for application: String) -> String {
-        if application == "internal" {
-            return "内蔵ビューア"
+        if application == "internal" { return "内蔵ビューア" }
+        if application.hasPrefix("/") {
+            return displayName(for: URL(fileURLWithPath: application))
         }
-        return application
+        return application.hasSuffix(".app")
+            ? String(application.dropLast(4))
+            : application
+    }
+
+    /**
+     * アプリケーションのアイコンを取得
+     */
+    static func icon(for url: URL) -> NSImage {
+        return NSWorkspace.shared.icon(forFile: url.path)
+    }
+
+    /**
+     * application文字列（フルパスまたは"internal"）からアイコンを返す
+     */
+    static func icon(for application: String) -> NSImage? {
+        guard application != "internal" else { return nil }
+        if application.hasPrefix("/") {
+            return icon(for: URL(fileURLWithPath: application))
+        }
+        // アプリ名のみの場合はURLを検索
+        if let url = findURL(for: application) {
+            return icon(for: url)
+        }
+        return nil
+    }
+
+    /**
+     * アプリ名からフルパスURLを検索
+     */
+    static func findURL(for appName: String) -> URL? {
+        let name = appName.hasSuffix(".app") ? appName : "\(appName).app"
+        let searchDirs: [String] = [
+            "/Applications",
+            "/System/Library/CoreServices/Applications",
+            FileManager.default.urls(for: .applicationDirectory, in: .userDomainMask).first?.path ?? ""
+        ]
+        for dir in searchDirs where !dir.isEmpty {
+            let url = URL(fileURLWithPath: dir).appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
     }
 }

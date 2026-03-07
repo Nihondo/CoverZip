@@ -69,10 +69,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let originalFileName = url.lastPathComponent
         let settings = KeywordSettings.load()
         
-        // キーワードマッチングを実行（ファイル名とパス名の両方を使用）
+        // キーワードマッチングを実行
         let fileName = URL(fileURLWithPath: originalFileName).deletingPathExtension().lastPathComponent
-        let fullPath = url.path
-        let matchResult = KeywordMatcher.checkKeyword(for: fileName, fullPath: fullPath, using: settings)
+        let parentFolder = url.deletingLastPathComponent().lastPathComponent
+        let fileExtension = url.pathExtension
+        let matchResult = KeywordMatcher.checkKeyword(for: fileName, parentFolder: parentFolder, fileExtension: fileExtension, using: settings)
         
         // ルーティング結果に基づいて起動
         if let application = matchResult.matchedApplication, !application.isEmpty {

@@ -46,14 +46,15 @@ class KeywordMatcher {
         let fileName: String
         
         if let originalFileName = originalFileName {
-            // 元のファイル名を使用（拡張子を除去）
             fileName = URL(fileURLWithPath: originalFileName).deletingPathExtension().lastPathComponent
         } else {
-            // URLから取得
             fileName = zipFileURL.deletingPathExtension().lastPathComponent
         }
         
-        return checkKeyword(for: fileName, using: settings)
+        let parentFolder = zipFileURL.deletingLastPathComponent().lastPathComponent
+        let fileExtension = zipFileURL.pathExtension
+        
+        return checkKeyword(for: fileName, parentFolder: parentFolder, fileExtension: fileExtension, using: settings)
     }
     
     /**
@@ -64,7 +65,7 @@ class KeywordMatcher {
      * @return マッチング結果
      */
     static func checkKeyword(for fileName: String, using settings: KeywordSettings) -> KeywordMatchResult {
-        return checkKeyword(for: fileName, fullPath: fileName, using: settings)
+        return checkKeyword(for: fileName, parentFolder: "", fileExtension: "", using: settings)
     }
     
     /**
@@ -75,10 +76,9 @@ class KeywordMatcher {
      * @param settings JSON設定ファイルのキーワード設定
      * @return マッチング結果
      */
-    static func checkKeyword(for fileName: String, fullPath: String, using settings: KeywordSettings) -> KeywordMatchResult {
-        NSLog("ZIPファイルマッチング開始: ファイル名='\(fileName)', フルパス='\(fullPath)'")
+    static func checkKeyword(for fileName: String, parentFolder: String, fileExtension: String, using settings: KeywordSettings) -> KeywordMatchResult {
+        NSLog("ZIPファイルマッチング開始: ファイル名='\(fileName)', フォルダ名='\(parentFolder)', 拡張子='\(fileExtension)'")
 
-        // 各ルールを順番にチェック（配列の順序が優先順位）
         for rule in settings.rules {
             NSLog("ルールチェック: '\(rule.keyword)' (タイプ: \(rule.type))")
 
@@ -90,15 +90,16 @@ class KeywordMatcher {
             case .filename:
                 targetString = fileName
                 matchType = .filename
-
             case .pathname:
-                targetString = fullPath
+                targetString = parentFolder
                 matchType = .pathname
+            case .fileExtension:
+                targetString = fileExtension
+                matchType = .filename
             }
 
-            // マッチング方式に応じて処理
             isMatch = performMatch(targetString, keyword: rule.keyword, mode: rule.matchMode)
-            NSLog("\(rule.type == .filename ? "ファイル名" : "パス名")マッチング (\(rule.matchMode)): '\(targetString)' vs '\(rule.keyword)' -> \(isMatch)")
+            NSLog("\(rule.type.displayName)マッチング (\(rule.matchMode)): '\(targetString)' vs '\(rule.keyword)' -> \(isMatch)")
 
             if isMatch {
                 NSLog("マッチ成功: '\(rule.keyword)' -> '\(rule.application)' (タイプ: \(matchType))")
@@ -110,7 +111,6 @@ class KeywordMatcher {
             }
         }
 
-        // マッチなし - デフォルトアプリケーションを返す
         NSLog("マッチなし - デフォルトアプリケーション: '\(settings.defaultApplication)'")
         return KeywordMatchResult(
             matchedApplication: settings.defaultApplication.isEmpty ? nil : settings.defaultApplication,
@@ -128,6 +128,12 @@ class KeywordMatcher {
         switch mode {
         case .contains:
             return text.lowercased().contains(keyword.lowercased())
+            
+        case .startsWith:
+            return text.lowercased().hasPrefix(keyword.lowercased())
+            
+        case .endsWith:
+            return text.lowercased().hasSuffix(keyword.lowercased())
             
         case .wildcard:
             return matchesWildcard(text, pattern: keyword)

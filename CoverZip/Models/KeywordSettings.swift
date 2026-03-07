@@ -11,13 +11,15 @@ import Foundation
  * キーワードタイプを表す列挙型
  */
 enum KeywordType: String, Codable, CaseIterable {
-    case pathname = "pathname"
-    case filename = "filename"
+    case filename      = "filename"   // ファイル名が
+    case pathname      = "pathname"   // フォルダ名が（直接の親フォルダ名）
+    case fileExtension = "extension"  // 拡張子が
 
     var displayName: String {
         switch self {
-        case .pathname: return "パス名"
-        case .filename: return "ファイル名"
+        case .filename:      return "ファイル名が"
+        case .pathname:      return "フォルダ名が"
+        case .fileExtension: return "拡張子が"
         }
     }
 }
@@ -26,15 +28,19 @@ enum KeywordType: String, Codable, CaseIterable {
  * マッチング方式を表す列挙型
  */
 enum MatchMode: String, Codable, CaseIterable {
-    case contains = "contains"     // 部分一致（デフォルト）
-    case wildcard = "wildcard"     // ワイルドカード (*,?)
-    case regex = "regex"           // 正規表現
+    case contains   = "contains"    // 次を含む
+    case startsWith = "startsWith"  // 次で始まる
+    case endsWith   = "endsWith"    // 次で終わる
+    case wildcard   = "wildcard"    // 次に一致（ワイルドカード）
+    case regex      = "regex"       // 次に一致（正規表現）
 
     var displayName: String {
         switch self {
-        case .contains: return "を含む"
-        case .wildcard: return "ワイルドカード"
-        case .regex: return "正規表現"
+        case .contains:   return "次を含む"
+        case .startsWith: return "次で始まる"
+        case .endsWith:   return "次で終わる"
+        case .wildcard:   return "ワイルドカードに一致"
+        case .regex:      return "正規表現に一致"
         }
     }
 }
@@ -78,22 +84,62 @@ struct KeywordSettings: Codable {
         // 1. アプリケーションサポートディレクトリのsettings.jsonを試す
         if let appSupportURL = getApplicationSupportDirectory(),
            let data = try? Data(contentsOf: appSupportURL.appendingPathComponent("settings.json")),
-           let settings = try? JSONDecoder().decode(KeywordSettings.self, from: data) {
+           var settings = try? JSONDecoder().decode(KeywordSettings.self, from: data) {
             NSLog("ユーザー設定ファイルを読み込みました: \(appSupportURL.appendingPathComponent("settings.json").path)")
+            settings.migrateApplicationPaths()
             return settings
         }
 
         // 2. アプリケーションバンドル内のsettings.jsonを試す
         if let bundlePath = Bundle.main.path(forResource: "settings", ofType: "json"),
            let data = try? Data(contentsOf: URL(fileURLWithPath: bundlePath)),
-           let settings = try? JSONDecoder().decode(KeywordSettings.self, from: data) {
+           var settings = try? JSONDecoder().decode(KeywordSettings.self, from: data) {
             NSLog("バンドル内のデフォルト設定ファイルを読み込みました: \(bundlePath)")
+            settings.migrateApplicationPaths()
             return settings
         }
 
         // 3. デフォルト設定を返す
         NSLog("有効な設定ファイルが見つからなかったため、デフォルト設定を返します")
         return defaultSettings
+    }
+
+    /**
+     * アプリ名のみの設定（旧形式）をフルパスに変換する後方互換処理
+     */
+    private mutating func migrateApplicationPaths() {
+        for i in rules.indices {
+            let app = rules[i].application
+            if app != "internal" && !app.hasPrefix("/") {
+                if let url = findApplicationURL(appName: app) {
+                    rules[i].application = url.path
+                }
+            }
+        }
+        if defaultApplication != "internal" && !defaultApplication.hasPrefix("/") && !defaultApplication.isEmpty {
+            if let url = findApplicationURL(appName: defaultApplication) {
+                defaultApplication = url.path
+            }
+        }
+    }
+
+    /**
+     * アプリ名からフルパスURLを検索
+     */
+    private func findApplicationURL(appName: String) -> URL? {
+        let name = appName.hasSuffix(".app") ? appName : "\(appName).app"
+        let searchDirs = [
+            "/Applications",
+            "/System/Library/CoreServices/Applications",
+            (FileManager.default.urls(for: .applicationDirectory, in: .userDomainMask).first?.path ?? "")
+        ]
+        for dir in searchDirs {
+            let url = URL(fileURLWithPath: dir).appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
     }
 
     /**
