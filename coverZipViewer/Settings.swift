@@ -41,6 +41,16 @@ final class AppSettings {
         set { core.slideshowInterval = newValue }
     }
 
+    var isSlideshowEnabled: Bool {
+        get { core.isSlideshowEnabled }
+        set { core.isSlideshowEnabled = newValue }
+    }
+
+    var isThumbnailStripVisible: Bool {
+        get { core.isThumbnailStripVisible }
+        set { core.isThumbnailStripVisible = newValue }
+    }
+
     var restoreWindowFrameEnabled: Bool {
         get { core.restoreWindowFrameEnabled }
         set { core.restoreWindowFrameEnabled = newValue }

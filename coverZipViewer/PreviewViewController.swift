@@ -47,7 +47,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // リサイズ監視のためのオブザーバ
     private var windowObservers: [NSObjectProtocol] = []
     // 分散通知（App→Extension設定同期）用オブザーバ
-    private var distributedObservers: [NSObjectProtocol] = []
+    private var hasSetupDistributedNotificationObservers = false
     // セッション中にユーザーがウィンドウをリサイズしたか
     private var hasUserResizedWindow: Bool = false
     // 履歴から綴じ方向を復元済みか（既定で上書きしないためのフラグ）
@@ -61,6 +61,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var thumbnailStripView: ThumbnailStripView?
     private var imageViewBottomToStripConstraint: NSLayoutConstraint?
     private var thumbnailStripHeightConstraint: NSLayoutConstraint?
+    private var isThumbnailStripVisible: Bool = true
+    private var lastVisibleThumbnailStripHeight: CGFloat = 88
 
     // マウスホイールスクロール管理
     private var scrollAccumulator: CGFloat = 0.0
@@ -117,6 +119,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     userPreferredViewMode = AppSettings.shared.defaultViewMode
     // ページ送りアニメの初期状態を共有設定からロード
     isTransitionEnabled = AppSettings.shared.pageTransitionEnabled
+    isThumbnailStripVisible = AppSettings.shared.isThumbnailStripVisible
+    lastVisibleThumbnailStripHeight = loadThumbnailStripHeight()
     NSLog("[DEBUG] Initial userPreferredViewMode loaded: %@", userPreferredViewMode.rawValue)
         setupUI()
         setupGestureRecognizers()
@@ -126,6 +130,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     override func viewWillAppear() {
         super.viewWillAppear()
         NSLog("[DEBUG] viewWillAppear called, view.window: %@", view.window?.description ?? "nil")
+        setupDistributedNotificationObserversIfNeeded()
         
         // マウスイベントモニターを遅延設定
         setupMouseMonitorsWithDelay()
@@ -142,8 +147,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 通知クリーンアップ
         for o in windowObservers { NotificationCenter.default.removeObserver(o) }
         windowObservers.removeAll()
-        for d in distributedObservers { DistributedNotificationCenter.default().removeObserver(d) }
-        distributedObservers.removeAll()
+        teardownDistributedNotificationObservers()
         // マウスモニタークリーンアップ
         cleanupMouseMonitors()
         // スライドショーのクリーンアップ
@@ -543,44 +547,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             self.scheduleDisplayCurrentImageIfNeeded()
         }
 
-        // アプリ側の設定変更を反映（Distributed Notification 経由）
-        let distObs = DistributedNotificationCenter.default().addObserver(forName: CZDistributedNotifications.settingsChanged, object: nil, queue: .main) { [weak self] _ in
-            guard let self else { return }
-            // 最新設定を共有UserDefaultsから再取得
-            let newRTL = AppSettings.shared.isRightToLeftReading
-            if !self.didRestoreRTLFromHistory && newRTL != self.isRightToLeftReading {
-                self.isRightToLeftReading = newRTL
-                self.applySliderLayoutDirection()
-                self.syncSliderToCurrentPage()
-            }
-            let newTransition = AppSettings.shared.pageTransitionEnabled
-            if newTransition != self.isTransitionEnabled { self.isTransitionEnabled = newTransition }
-            let newViewMode = AppSettings.shared.defaultViewMode
-            if !self.didRestoreViewModeFromHistory && newViewMode != self.userPreferredViewMode {
-                self.userPreferredViewMode = newViewMode
-            }
-            let newSpreadOffset = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
-            if self.imageManager.getSpreadPairOffset() != newSpreadOffset {
-                self.imageManager.setSpreadPairOffset(newSpreadOffset)
-            }
-            // 表示更新
-            if self.imageManager.hasImages() {
-                self.displayCurrentImage()
-            }
-            // メニュー状態を更新
-            self.updateContextMenuStates()
-        }
-        distributedObservers.append(distObs)
-
-        let sessionCommandObserver = DistributedNotificationCenter.default().addObserver(
-            forName: CZDistributedNotifications.previewSessionCommand,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            self?.handlePreviewSessionCommand(notification)
-        }
-        distributedObservers.append(sessionCommandObserver)
-
         // サムネイルストリップのコールバックを設定
         thumbnailStripView?.onPageSelected = { [weak self] index in
             guard let self else { return }
@@ -806,6 +772,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             let stripTopConstraint = strip.topAnchor.constraint(equalTo: imageView.bottomAnchor)
             imageViewBottomToStripConstraint = stripTopConstraint
             let initialHeight = loadThumbnailStripHeight()
+            lastVisibleThumbnailStripHeight = initialHeight
             let heightConstraint = strip.heightAnchor.constraint(equalToConstant: initialHeight)
             thumbnailStripHeightConstraint = heightConstraint
             NSLayoutConstraint.activate([
@@ -823,6 +790,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             strip.onResizeDragEnded = { [weak self] in
                 guard let self, let constraint = self.thumbnailStripHeightConstraint else { return }
                 self.saveThumbnailStripHeight(constraint.constant)
+                self.lastVisibleThumbnailStripHeight = constraint.constant
                 self.thumbnailStripView?.reloadThumbnails()
             }
 
@@ -840,6 +808,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             NSLayoutConstraint.activate(sliderConstraints)
             directLabelTopConstraint?.isActive = false
         }
+
+        applyThumbnailStripVisibility(isThumbnailStripVisible)
     }
     
     private func setupConstraintPriorities() {
@@ -951,6 +921,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return #selector(setViewModeSpread(_:))
         case .setSpreadPairOffset:
             return #selector(toggleSpreadPairingOffset(_:))
+        case .setThumbnailStripVisible:
+            return #selector(toggleThumbnailStripVisibility(_:))
         case .setPageTransitionEnabled:
             return #selector(toggleTransition(_:))
         case .setSlideshowEnabled:
@@ -972,6 +944,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return userPreferredViewMode == .spread ? .on : .off
         case .setSpreadPairOffset:
             return imageManager.getSpreadPairOffset() == 1 ? .on : .off
+        case .setThumbnailStripVisible:
+            return isThumbnailStripVisible ? .on : .off
         case .setPageTransitionEnabled:
             return isTransitionEnabled ? .on : .off
         case .setSlideshowEnabled:
@@ -1011,6 +985,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     @objc private func toggleSlideshow(_ sender: NSMenuItem) {
         applySlideshowEnabled(!isSlideshowEnabled)
+    }
+
+    @objc private func toggleThumbnailStripVisibility(_ sender: NSMenuItem) {
+        applyThumbnailStripVisibility(!isThumbnailStripVisible)
     }
 
     private func applyViewModePreference(_ viewMode: ViewModePreference) {
@@ -1054,6 +1032,97 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         updateContextMenuStates()
     }
 
+    private func applyThumbnailStripVisibility(_ isVisible: Bool) {
+        isThumbnailStripVisible = isVisible
+
+        guard let strip = thumbnailStripView,
+              let heightConstraint = thumbnailStripHeightConstraint else {
+            return
+        }
+
+        if isVisible {
+            let resolvedHeight = max(44, lastVisibleThumbnailStripHeight)
+            heightConstraint.constant = resolvedHeight
+            strip.isHidden = false
+        } else {
+            if heightConstraint.constant > 0 {
+                lastVisibleThumbnailStripHeight = heightConstraint.constant
+            }
+            heightConstraint.constant = 0
+            strip.isHidden = true
+        }
+
+        view.needsLayout = true
+        view.layoutSubtreeIfNeeded()
+        updateContextMenuStates()
+    }
+
+    private func setupDistributedNotificationObserversIfNeeded() {
+        guard !hasSetupDistributedNotificationObservers else { return }
+        let center = DistributedNotificationCenter.default()
+        center.addObserver(
+            self,
+            selector: #selector(handleSettingsChangedNotification(_:)),
+            name: CZDistributedNotifications.settingsChanged,
+            object: nil,
+            suspensionBehavior: .deliverImmediately
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handlePreviewSessionCommandNotification(_:)),
+            name: CZDistributedNotifications.previewSessionCommand,
+            object: nil,
+            suspensionBehavior: .deliverImmediately
+        )
+        hasSetupDistributedNotificationObservers = true
+    }
+
+    private func teardownDistributedNotificationObservers() {
+        guard hasSetupDistributedNotificationObservers else { return }
+        let center = DistributedNotificationCenter.default()
+        center.removeObserver(self, name: CZDistributedNotifications.settingsChanged, object: nil)
+        center.removeObserver(self, name: CZDistributedNotifications.previewSessionCommand, object: nil)
+        hasSetupDistributedNotificationObservers = false
+    }
+
+    @objc private func handleSettingsChangedNotification(_ notification: Notification) {
+        // 最新設定を共有UserDefaultsから再取得
+        let newRTL = AppSettings.shared.isRightToLeftReading
+        if !didRestoreRTLFromHistory && newRTL != isRightToLeftReading {
+            isRightToLeftReading = newRTL
+            applySliderLayoutDirection()
+            syncSliderToCurrentPage()
+        }
+        let newTransition = AppSettings.shared.pageTransitionEnabled
+        if newTransition != isTransitionEnabled { isTransitionEnabled = newTransition }
+        let newThumbnailStripVisible = AppSettings.shared.isThumbnailStripVisible
+        if newThumbnailStripVisible != isThumbnailStripVisible {
+            applyThumbnailStripVisibility(newThumbnailStripVisible)
+        }
+        let newSlideshowEnabled = AppSettings.shared.isSlideshowEnabled
+        if newSlideshowEnabled != isSlideshowEnabled {
+            applySlideshowEnabled(newSlideshowEnabled)
+        }
+        let newViewMode = AppSettings.shared.defaultViewMode
+        if !didRestoreViewModeFromHistory && newViewMode != userPreferredViewMode {
+            userPreferredViewMode = newViewMode
+        }
+        let newSpreadOffset = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
+        if imageManager.getSpreadPairOffset() != newSpreadOffset {
+            imageManager.setSpreadPairOffset(newSpreadOffset)
+        }
+        // 表示更新
+        if imageManager.hasImages() {
+            displayCurrentImage()
+        }
+        // メニュー状態を更新
+        updateContextMenuStates()
+    }
+
+    @objc private func handlePreviewSessionCommandNotification(_ notification: Notification) {
+        handlePreviewSessionCommand(notification)
+    }
+
     private func handlePreviewSessionCommand(_ notification: Notification) {
         let userInfo = notification.userInfo ?? [:]
         let commandRaw = (userInfo[CZPreviewSessionCommandUserInfoKeys.command] as? String) ?? (notification.object as? String)
@@ -1076,26 +1145,34 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         case .setSpreadPairOffset:
             let offset = userInfo[CZPreviewSessionCommandUserInfoKeys.intValue] as? Int ?? (1 - imageManager.getSpreadPairOffset())
             applySpreadPairOffset(offset)
+        case .setThumbnailStripVisible:
+            let isVisible = userInfo[CZPreviewSessionCommandUserInfoKeys.boolValue] as? Bool ?? !isThumbnailStripVisible
+            applyThumbnailStripVisibility(isVisible)
         case .setPageTransitionEnabled:
             let enabled = userInfo[CZPreviewSessionCommandUserInfoKeys.boolValue] as? Bool ?? !isTransitionEnabled
             applyTransitionEnabled(enabled)
         case .setSlideshowEnabled:
             let enabled = userInfo[CZPreviewSessionCommandUserInfoKeys.boolValue] as? Bool ?? !isSlideshowEnabled
+            NSLog("[DEBUG] Received setSlideshowEnabled command: %d", enabled ? 1 : 0)
             applySlideshowEnabled(enabled)
         }
     }
     
     private func startSlideshow() {
         guard !isSlideshowEnabled else { return }
+        NSLog("[DEBUG] startSlideshow")
         isSlideshowEnabled = true
         
         let interval = AppSettings.shared.slideshowInterval
-        slideshowTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             self?.advanceSlideshow()
         }
+        slideshowTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
     
     private func stopSlideshow() {
+        NSLog("[DEBUG] stopSlideshow")
         isSlideshowEnabled = false
         slideshowTimer?.invalidate()
         slideshowTimer = nil

@@ -11,6 +11,8 @@ public enum CZSettingsKeys {
     public static let alwaysSinglePageForCover = "alwaysSinglePageForCover"
     public static let defaultViewMode = "defaultViewMode" // "auto" | "single" | "spread"
     public static let slideshowInterval = "slideshowInterval"
+    public static let slideshowEnabled = "slideshowEnabled"
+    public static let thumbnailStripVisible = "thumbnailStripVisible"
     public static let pageTransitionEnabled = "pageTransitionEnabled"
     public static let spreadPairOffset = "spreadPairOffset" // 見開きの左右を補正 (0 or 1)
     // Window frame persistence
@@ -37,6 +39,7 @@ public enum CZPreviewSessionCommand: String {
     case setViewModeSingle
     case setViewModeSpread
     case setSpreadPairOffset
+    case setThumbnailStripVisible
     case setPageTransitionEnabled
     case setSlideshowEnabled
 }
@@ -62,6 +65,7 @@ public enum CZPreviewContextMenuLayout {
         .action(.setViewModeSpread),
         .separator,
         .action(.setSpreadPairOffset),
+        .action(.setThumbnailStripVisible),
         .separator,
         .action(.setPageTransitionEnabled),
         .action(.setSlideshowEnabled),
@@ -81,6 +85,8 @@ public enum CZPreviewContextMenuLayout {
             return "見開き"
         case .setSpreadPairOffset:
             return "見開きの左右を補正"
+        case .setThumbnailStripVisible:
+            return "サムネイルリスト表示"
         case .setPageTransitionEnabled:
             return "ページ送りアニメ"
         case .setSlideshowEnabled:

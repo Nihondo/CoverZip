@@ -33,6 +33,8 @@ public final class CZSettings {
             CZSettingsKeys.alwaysSinglePageForCover: true,
             CZSettingsKeys.defaultViewMode: "auto",
             CZSettingsKeys.slideshowInterval: 3.0,
+            CZSettingsKeys.slideshowEnabled: false,
+            CZSettingsKeys.thumbnailStripVisible: true,
             CZSettingsKeys.pageTransitionEnabled: true,
             CZSettingsKeys.restoreWindowFrameEnabled: true,
             CZSettingsKeys.readingHistoryEnabled: true,
@@ -77,6 +79,16 @@ public final class CZSettings {
     public var slideshowInterval: Double {
         get { defaults.object(forKey: CZSettingsKeys.slideshowInterval) as? Double ?? 3.0 }
         set { defaults.set(newValue, forKey: CZSettingsKeys.slideshowInterval) }
+    }
+
+    public var isSlideshowEnabled: Bool {
+        get { defaults.object(forKey: CZSettingsKeys.slideshowEnabled) as? Bool ?? false }
+        set { defaults.set(newValue, forKey: CZSettingsKeys.slideshowEnabled) }
+    }
+
+    public var isThumbnailStripVisible: Bool {
+        get { defaults.object(forKey: CZSettingsKeys.thumbnailStripVisible) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: CZSettingsKeys.thumbnailStripVisible) }
     }
 
     // MARK: - Window Frame Persistence

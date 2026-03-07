@@ -39,7 +39,7 @@
 - キー入力処理は `KeyForwardingView`（First Responder 専用の薄いビュー）で受け取り、プレビュー領域の左右半分への左クリック（ダウン/アップ）を合成してページ送りを駆動（正式: `QLPreviewInputDriver`）。
 - `QLPreviewView` 自体を First Responder にしない（クローズ時の解放競合を回避）。
 - クローズ時は OS の標準解放順序（`shouldCloseWithWindow = true`）に委ね、独自のビュー破棄は行わない。
-- Context menu items (reading direction / view mode / animation / slideshow) are unified between the app-side internal viewer and Quick Look viewer via shared menu definitions.
+- Context menu items (reading direction / view mode / spread offset / thumbnail strip visibility / animation / slideshow) are unified between the app-side internal viewer and Quick Look viewer via shared menu definitions.
 - Runtime menu operations from the internal viewer are propagated to the Quick Look viewer via distributed session-command notifications (not direct shared-UserDefaults writes for each click).
 
 ## 実装ポリシー（変更方針）

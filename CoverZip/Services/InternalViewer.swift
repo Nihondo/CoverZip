@@ -15,6 +15,7 @@ final class InternalViewer: NSObject {
     private var spreadPairOffset = 0
     private var isTransitionEnabled = true
     private var isSlideshowEnabled = false
+    private var isThumbnailStripVisible = true
     private var settingsObserver: NSObjectProtocol?
 
     // 公開API: 内蔵ビューアでZIPを表示（QLPreviewInputDriver に委譲）
@@ -58,35 +59,35 @@ final class InternalViewer: NSObject {
     @objc func setRightToLeft(_ sender: NSMenuItem) {
         applyReadingDirection(isRightToLeft: true)
         CZUserDefaults.shared.set(true, forKey: CZSettingsKeys.isRightToLeftReading)
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        postSettingsChanged()
         postSessionCommand(.setRightToLeftReading)
     }
 
     @objc func setLeftToRight(_ sender: NSMenuItem) {
         applyReadingDirection(isRightToLeft: false)
         CZUserDefaults.shared.set(false, forKey: CZSettingsKeys.isRightToLeftReading)
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        postSettingsChanged()
         postSessionCommand(.setLeftToRightReading)
     }
 
     @objc func setViewModeAuto(_ sender: NSMenuItem) {
         applyViewMode(.auto)
         CZUserDefaults.shared.set(ViewModePreference.auto.rawValue, forKey: CZSettingsKeys.defaultViewMode)
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        postSettingsChanged()
         postSessionCommand(.setViewModeAuto)
     }
 
     @objc func setViewModeSingle(_ sender: NSMenuItem) {
         applyViewMode(.single)
         CZUserDefaults.shared.set(ViewModePreference.single.rawValue, forKey: CZSettingsKeys.defaultViewMode)
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        postSettingsChanged()
         postSessionCommand(.setViewModeSingle)
     }
 
     @objc func setViewModeSpread(_ sender: NSMenuItem) {
         applyViewMode(.spread)
         CZUserDefaults.shared.set(ViewModePreference.spread.rawValue, forKey: CZSettingsKeys.defaultViewMode)
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        postSettingsChanged()
         postSessionCommand(.setViewModeSpread)
     }
 
@@ -94,13 +95,16 @@ final class InternalViewer: NSObject {
         let next = !isTransitionEnabled
         applyTransitionEnabled(next)
         CZUserDefaults.shared.set(next, forKey: CZSettingsKeys.pageTransitionEnabled)
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        postSettingsChanged()
         postSessionCommand(.setPageTransitionEnabled, boolValue: next)
     }
 
     @objc func toggleSlideshow(_ sender: NSMenuItem) {
         let next = !isSlideshowEnabled
+        NSLog("[InternalViewer] toggleSlideshow next=%d", next ? 1 : 0)
         applySlideshowEnabled(next)
+        CZSettings.shared.isSlideshowEnabled = next
+        postSettingsChanged()
         postSessionCommand(.setSlideshowEnabled, boolValue: next)
     }
 
@@ -108,8 +112,16 @@ final class InternalViewer: NSObject {
         let next = 1 - spreadPairOffset
         applySpreadPairOffset(next)
         CZUserDefaults.shared.set(next, forKey: CZSettingsKeys.spreadPairOffset)
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        postSettingsChanged()
         postSessionCommand(.setSpreadPairOffset, intValue: next)
+    }
+
+    @objc func toggleThumbnailStripVisibility(_ sender: NSMenuItem) {
+        let next = !isThumbnailStripVisible
+        applyThumbnailStripVisibility(next)
+        CZSettings.shared.isThumbnailStripVisible = next
+        postSettingsChanged()
+        postSessionCommand(.setThumbnailStripVisible, boolValue: next)
     }
 
     // MARK: - Private
@@ -130,8 +142,11 @@ final class InternalViewer: NSObject {
         currentViewMode = ViewModePreference(rawValue: CZUserDefaults.shared.string(forKey: CZSettingsKeys.defaultViewMode) ?? ViewModePreference.auto.rawValue) ?? .auto
         spreadPairOffset = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
         isTransitionEnabled = CZUserDefaults.shared.object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true
+        isSlideshowEnabled = CZSettings.shared.isSlideshowEnabled
+        isThumbnailStripVisible = CZSettings.shared.isThumbnailStripVisible
         if resetSlideshowState {
             isSlideshowEnabled = false
+            CZSettings.shared.isSlideshowEnabled = false
         }
     }
 
@@ -149,6 +164,8 @@ final class InternalViewer: NSObject {
             return #selector(setViewModeSpread(_:))
         case .setSpreadPairOffset:
             return #selector(toggleSpreadPairOffset(_:))
+        case .setThumbnailStripVisible:
+            return #selector(toggleThumbnailStripVisibility(_:))
         case .setPageTransitionEnabled:
             return #selector(toggleTransition(_:))
         case .setSlideshowEnabled:
@@ -170,6 +187,8 @@ final class InternalViewer: NSObject {
             return currentViewMode == .spread ? .on : .off
         case .setSpreadPairOffset:
             return spreadPairOffset == 1 ? .on : .off
+        case .setThumbnailStripVisible:
+            return isThumbnailStripVisible ? .on : .off
         case .setPageTransitionEnabled:
             return isTransitionEnabled ? .on : .off
         case .setSlideshowEnabled:
@@ -197,6 +216,19 @@ final class InternalViewer: NSObject {
         isSlideshowEnabled = enabled
     }
 
+    private func applyThumbnailStripVisibility(_ isVisible: Bool) {
+        isThumbnailStripVisible = isVisible
+    }
+
+    private func postSettingsChanged() {
+        DistributedNotificationCenter.default().postNotificationName(
+            CZDistributedNotifications.settingsChanged,
+            object: nil,
+            userInfo: nil,
+            deliverImmediately: true
+        )
+    }
+
     private func postSessionCommand(_ command: CZPreviewSessionCommand, boolValue: Bool? = nil, intValue: Int? = nil) {
         var userInfo: [String: Any] = [
             CZPreviewSessionCommandUserInfoKeys.command: command.rawValue
@@ -208,10 +240,11 @@ final class InternalViewer: NSObject {
             userInfo[CZPreviewSessionCommandUserInfoKeys.intValue] = intValue
         }
 
-        DistributedNotificationCenter.default().post(
-            name: CZDistributedNotifications.previewSessionCommand,
+        DistributedNotificationCenter.default().postNotificationName(
+            CZDistributedNotifications.previewSessionCommand,
             object: command.rawValue,
-            userInfo: userInfo
+            userInfo: userInfo,
+            deliverImmediately: true
         )
     }
 }
