@@ -36,6 +36,13 @@ final class AppSettingsWriter: ObservableObject {
         didSet { core.slideshowInterval = slideshowInterval }
     }
 
+    @Published var isThumbnailStripVisible: Bool = true {
+        didSet {
+            core.isThumbnailStripVisible = isThumbnailStripVisible
+            notifySettingsChangedIfNeeded()
+        }
+    }
+
     @Published var restoreWindowFrameEnabled: Bool = true {
         didSet { core.restoreWindowFrameEnabled = restoreWindowFrameEnabled }
     }
@@ -47,9 +54,7 @@ final class AppSettingsWriter: ObservableObject {
     @Published var pageTransitionEnabled: Bool = true {
         didSet {
             core.pageTransitionEnabled = pageTransitionEnabled
-            if !isLoadingSettings {
-                DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
-            }
+            notifySettingsChangedIfNeeded()
         }
     }
 
@@ -66,10 +71,17 @@ final class AppSettingsWriter: ObservableObject {
         sliderVisibilityWidthThreshold = core.sliderVisibilityWidthThreshold
         alwaysSinglePageForCover = core.alwaysSinglePageForCover
         slideshowInterval = core.slideshowInterval
+        isThumbnailStripVisible = core.isThumbnailStripVisible
         restoreWindowFrameEnabled = core.restoreWindowFrameEnabled
         imageDecodeCachePolicy = core.imageDecodeCachePolicy
         pageTransitionEnabled = core.pageTransitionEnabled
         defaultViewMode = core.defaultViewMode
+    }
+
+    private func notifySettingsChangedIfNeeded() {
+        if !isLoadingSettings {
+            DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        }
     }
 
     var savedWindowFrameString: String? {

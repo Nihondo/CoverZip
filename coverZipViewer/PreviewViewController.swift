@@ -486,6 +486,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             isRightToLeftReading = newRTL
             applySliderLayoutDirection()
             syncSliderToCurrentPage()
+            thumbnailStripView?.isRightToLeft = isRightToLeftReading
+            thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
         }
         let newThreshold = CGFloat(AppSettings.shared.sliderVisibilityWidthThreshold)
         if newThreshold != sliderVisibilityWidthThreshold { sliderVisibilityWidthThreshold = newThreshold; updateSliderVisibilityForContext() }
@@ -1092,6 +1094,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             isRightToLeftReading = newRTL
             applySliderLayoutDirection()
             syncSliderToCurrentPage()
+            thumbnailStripView?.isRightToLeft = isRightToLeftReading
+            thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
         }
         let newTransition = AppSettings.shared.pageTransitionEnabled
         if newTransition != isTransitionEnabled { isTransitionEnabled = newTransition }

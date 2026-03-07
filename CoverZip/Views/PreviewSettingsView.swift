@@ -43,6 +43,11 @@ struct PreviewSettingsView: View {
                     get: { settings.alwaysSinglePageForCover },
                     set: { settings.alwaysSinglePageForCover = $0 }
                 ))
+
+                Toggle("初期状態でサムネイルリストを表示", isOn: Binding(
+                    get: { settings.isThumbnailStripVisible },
+                    set: { settings.isThumbnailStripVisible = $0 }
+                ))
             } header: {
                 Label("表示モード", systemImage: "rectangle.split.2x1")
             } footer: {

@@ -186,12 +186,15 @@ class ThumbnailStripView: NSView {
         collectionView.allowsMultipleSelection = false
         collectionView.isSelectable = true
         collectionView.backgroundColors = [.clear]
+        // サムネイル並びは isRightToLeft のみで制御し、環境レイアウト方向の自動ミラーを避ける
+        collectionView.userInterfaceLayoutDirection = .leftToRight
         collectionView.register(ThumbnailCollectionViewItem.self,
                                 forItemWithIdentifier: ThumbnailCollectionViewItem.identifier)
         collectionView.dataSource = self
         collectionView.delegate = self
 
         scrollView.documentView = collectionView
+        scrollView.userInterfaceLayoutDirection = .leftToRight
         scrollView.hasVerticalScroller = false
         scrollView.hasHorizontalScroller = true
         scrollView.autohidesScrollers = true
