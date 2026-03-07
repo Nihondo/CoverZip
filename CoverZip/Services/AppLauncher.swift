@@ -92,38 +92,7 @@ class AppLauncher {
      * @return アプリケーションのURL（見つからない場合はnil）
      */
     private static func findApplicationURL(applicationName: String) -> URL? {
-        let workspace = NSWorkspace.shared
-        
-        // .appが付いていない場合は追加
-        let appName = applicationName.hasSuffix(".app") ? applicationName : "\(applicationName).app"
-        
-        // 絶対パスの場合
-        if applicationName.hasPrefix("/") {
-            let url = URL(fileURLWithPath: applicationName)
-            return FileManager.default.fileExists(atPath: url.path) ? url : nil
-        }
-        
-        // アプリケーション名からURLを検索
-        if let url = workspace.urlForApplication(withBundleIdentifier: appName) {
-            return url
-        }
-        
-        // Applications フォルダで検索
-        let applicationsURL = URL(fileURLWithPath: "/Applications")
-        let appURL = applicationsURL.appendingPathComponent(appName)
-        if FileManager.default.fileExists(atPath: appURL.path) {
-            return appURL
-        }
-        
-        // ユーザーのApplications フォルダで検索
-        if let userApplicationsURL = FileManager.default.urls(for: .applicationDirectory, in: .userDomainMask).first {
-            let userAppURL = userApplicationsURL.appendingPathComponent(appName)
-            if FileManager.default.fileExists(atPath: userAppURL.path) {
-                return userAppURL
-            }
-        }
-        
-        return nil
+        ApplicationResolver.resolveApplicationURL(from: applicationName)
     }
 
     private static func openURLs(_ urls: [URL], withApplicationAt applicationURL: URL) -> Error? {

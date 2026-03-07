@@ -255,107 +255,11 @@ class ImageManager {
         return (leftImage, rightImage)
     }
 
-    // 現在の見開きペアリングオフセットをトグル（0<->1）
-    func toggleSpreadPairOffset() {
-        spreadPairOffset = 1 - spreadPairOffset
-    }
-
     func setSpreadPairOffset(_ value: Int) {
         spreadPairOffset = (value % 2 + 2) % 2
     }
 
     func getSpreadPairOffset() -> Int { spreadPairOffset }
-
-    /**
-     * 現在の画像のファイル名を取得する
-     */
-    func getCurrentImageName() -> String {
-        guard !imageEntryInfos.isEmpty, currentIndex >= 0, currentIndex < imageEntryInfos.count else {
-            return ""
-        }
-        return imageEntryInfos[currentIndex].filename
-    }
-
-    /**
-     * 次の画像に移動する
-     */
-    func nextImage(isSpreadMode: Bool = false) -> Bool {
-        guard !imageEntryInfos.isEmpty else { return false }
-
-        if isSpreadMode {
-            if currentIndex == 0 {
-                guard currentIndex < imageEntryInfos.count - 1 else { return false }
-                currentIndex = 1
-            } else {
-                let nextIndex = currentIndex + 2
-                guard nextIndex < imageEntryInfos.count else { return false }
-                currentIndex = nextIndex
-            }
-        } else {
-            guard currentIndex < imageEntryInfos.count - 1 else { return false }
-            currentIndex += 1
-        }
-
-        preloadAdjacentImages(isSpreadMode: false)
-        return true
-    }
-
-    /**
-     * 前の画像に移動する
-     */
-    func previousImage(isSpreadMode: Bool = false) -> Bool {
-        guard !imageEntryInfos.isEmpty, currentIndex > 0 else { return false }
-
-        if isSpreadMode {
-            if currentIndex == 1 {
-                currentIndex = 0
-            } else {
-                currentIndex = max(0, currentIndex - 2)
-            }
-        } else {
-            currentIndex -= 1
-        }
-
-        preloadAdjacentImages(isSpreadMode: false)
-        return true
-    }
-
-    /**
-     * 画像の総数を取得する
-     */
-    func getImageCount() -> Int {
-        imageEntryInfos.count
-    }
-
-    /**
-     * 現在のページ番号を取得する（1始まり）
-     */
-    func getCurrentPageNumber() -> Int {
-        currentIndex + 1
-    }
-
-    /// 指定ページへ移動（1始まり）
-    func goToPage(_ page: Int) -> Bool {
-        guard !imageEntryInfos.isEmpty else { return false }
-        let clamped = max(1, min(page, imageEntryInfos.count))
-        currentIndex = clamped - 1
-        preloadAdjacentImages()
-        return true
-    }
-
-    /**
-     * 画像があるかどうかを確認する
-     */
-    func hasImages() -> Bool {
-        !imageEntryInfos.isEmpty
-    }
-
-    /**
-     * 現在のページが表紙かどうかを判定する
-     */
-    func isCoverPage() -> Bool {
-        currentIndex == 0
-    }
 
     // MARK: - GPU Prerender Access
 
@@ -928,6 +832,100 @@ class ImageManager {
 
     deinit {
         removeMemoryPressureObserver()
+    }
+}
+
+// MARK: - Navigation
+extension ImageManager {
+    /**
+     * 現在の画像のファイル名を取得する
+     */
+    func getCurrentImageName() -> String {
+        guard !imageEntryInfos.isEmpty, currentIndex >= 0, currentIndex < imageEntryInfos.count else {
+            return ""
+        }
+        return imageEntryInfos[currentIndex].filename
+    }
+
+    /**
+     * 次の画像に移動する
+     */
+    func nextImage(isSpreadMode: Bool = false) -> Bool {
+        guard !imageEntryInfos.isEmpty else { return false }
+
+        if isSpreadMode {
+            if currentIndex == 0 {
+                guard currentIndex < imageEntryInfos.count - 1 else { return false }
+                currentIndex = 1
+            } else {
+                let nextIndex = currentIndex + 2
+                guard nextIndex < imageEntryInfos.count else { return false }
+                currentIndex = nextIndex
+            }
+        } else {
+            guard currentIndex < imageEntryInfos.count - 1 else { return false }
+            currentIndex += 1
+        }
+
+        preloadAdjacentImages(isSpreadMode: false)
+        return true
+    }
+
+    /**
+     * 前の画像に移動する
+     */
+    func previousImage(isSpreadMode: Bool = false) -> Bool {
+        guard !imageEntryInfos.isEmpty, currentIndex > 0 else { return false }
+
+        if isSpreadMode {
+            if currentIndex == 1 {
+                currentIndex = 0
+            } else {
+                currentIndex = max(0, currentIndex - 2)
+            }
+        } else {
+            currentIndex -= 1
+        }
+
+        preloadAdjacentImages(isSpreadMode: false)
+        return true
+    }
+
+    /**
+     * 画像の総数を取得する
+     */
+    func getImageCount() -> Int {
+        imageEntryInfos.count
+    }
+
+    /**
+     * 現在のページ番号を取得する（1始まり）
+     */
+    func getCurrentPageNumber() -> Int {
+        currentIndex + 1
+    }
+
+    /// 指定ページへ移動（1始まり）
+    func goToPage(_ page: Int) -> Bool {
+        guard !imageEntryInfos.isEmpty else { return false }
+        let clamped = max(1, min(page, imageEntryInfos.count))
+        currentIndex = clamped - 1
+        preloadAdjacentImages()
+        return true
+    }
+
+    /**
+     * 画像があるかどうかを確認する
+     */
+    func hasImages() -> Bool {
+        !imageEntryInfos.isEmpty
+    }
+
+    /**
+     * 現在のページが表紙かどうかを判定する
+     */
+    func isCoverPage() -> Bool {
+        currentIndex == 0
     }
 }
 

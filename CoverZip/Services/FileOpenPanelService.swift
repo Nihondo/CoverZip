@@ -54,36 +54,13 @@ enum FileOpenPanelService {
 
     /// マッチング処理を実行してファイルを開く（AppDelegateと同じロジック）
     private static func routeAndOpenZip(at url: URL) {
-        guard url.pathExtension.lowercased() == "zip" else { return }
+        let decision = ZipRoutingService.route(zipURL: url, invocationContext: .openPanelRouting)
+        let isHandled = ZipRoutingService.handle(decision)
+        guard isHandled else { return }
 
-        NSLog("ZIPファイルを処理開始: \(url.lastPathComponent)")
-
-        // キーワードマッチングと外部アプリケーション起動を実行
-        let originalFileName = url.lastPathComponent
-        let settings = KeywordSettings.load()
-
-        // キーワードマッチングを実行
-        let fileName = URL(fileURLWithPath: originalFileName).deletingPathExtension().lastPathComponent
-        let parentFolder = url.deletingLastPathComponent().lastPathComponent
-        let fileExtension = url.pathExtension
-        let matchResult = KeywordMatcher.checkKeyword(for: fileName, parentFolder: parentFolder, fileExtension: fileExtension, using: settings)
-
-        // ルーティング結果に基づいて起動
-        if let application = matchResult.matchedApplication, !application.isEmpty {
-            if application.lowercased() == "internal" {
-                NSLog("内蔵ビューアで表示: internal")
-                InternalViewer.shared.show(url: url)
-                return
-            } else {
-                NSLog("外部アプリケーション起動: \(application)")
-                _ = AppLauncher.launchApplication(with: url, applicationName: application)
-            }
-        } else {
-            NSLog("デフォルトアプリケーション起動")
-            _ = AppLauncher.launchWithDefaultApplication(zipFileURL: url)
+        if ZipRoutingService.shouldTerminateAfterHandling(decision, invocationContext: .openPanelRouting) {
+            NSLog("外部アプリケーション起動、CoverZipを終了します")
+            NSApplication.shared.terminate(nil)
         }
-
-        NSLog("外部アプリケーション起動、CoverZipを終了します")
-        NSApplication.shared.terminate(nil)
     }
 }

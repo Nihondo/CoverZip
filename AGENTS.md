@@ -101,3 +101,5 @@
 - 2026-03-07 サムネイルリストの並び方向を綴じ方向に追従（左綴じ=左→右、右綴じ=右→左）
 - 2026-03-07 右綴じかつ少ページ時のサムネイルを右端寄せで表示するよう調整
 - 2026-03-07 見開き表示時はサムネイルを2件同時選択で同期するよう調整
+- 2026-03-07 Refactored ZIP routing into `ZipRoutingService` and unified app resolution via `ApplicationResolver`
+- 2026-03-07 Added `PreviewSessionStateStore` and `PreviewSessionCommandDispatcher` to reduce duplicated viewer/menu synchronization logic

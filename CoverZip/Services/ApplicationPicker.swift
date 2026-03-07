@@ -58,6 +58,9 @@ class ApplicationPicker {
         if application.hasPrefix("/") {
             return displayName(for: URL(fileURLWithPath: application))
         }
+        if let url = findURL(for: application) {
+            return displayName(for: url)
+        }
         return application.hasSuffix(".app")
             ? String(application.dropLast(4))
             : application
@@ -89,18 +92,6 @@ class ApplicationPicker {
      * アプリ名からフルパスURLを検索
      */
     static func findURL(for appName: String) -> URL? {
-        let name = appName.hasSuffix(".app") ? appName : "\(appName).app"
-        let searchDirs: [String] = [
-            "/Applications",
-            "/System/Library/CoreServices/Applications",
-            FileManager.default.urls(for: .applicationDirectory, in: .userDomainMask).first?.path ?? ""
-        ]
-        for dir in searchDirs where !dir.isEmpty {
-            let url = URL(fileURLWithPath: dir).appendingPathComponent(name)
-            if FileManager.default.fileExists(atPath: url.path) {
-                return url
-            }
-        }
-        return nil
+        ApplicationResolver.resolveApplicationURL(from: appName)
     }
 }

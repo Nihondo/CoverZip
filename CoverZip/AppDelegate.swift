@@ -57,42 +57,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func processZipFile(at url: URL) -> Bool {
-        // ZIPファイルのみを処理
-        guard url.pathExtension.lowercased() == "zip" else { 
-            NSLog("ZIPファイルではありません: \(url.lastPathComponent)")
-            return false 
+        let decision = ZipRoutingService.route(zipURL: url, invocationContext: .appLaunch)
+        let isHandled = ZipRoutingService.handle(decision)
+        guard isHandled else { return false }
+
+        if ZipRoutingService.shouldTerminateAfterHandling(decision, invocationContext: .appLaunch) {
+            NSLog("外部アプリケーション起動、CoverZipを終了します")
+            NSApplication.shared.terminate(nil)
         }
-        
-        NSLog("ZIPファイルを処理開始: \(url.lastPathComponent)")
-        
-        // キーワードマッチングと外部アプリケーション起動を実行
-        let originalFileName = url.lastPathComponent
-        let settings = KeywordSettings.load()
-        
-        // キーワードマッチングを実行
-        let fileName = URL(fileURLWithPath: originalFileName).deletingPathExtension().lastPathComponent
-        let parentFolder = url.deletingLastPathComponent().lastPathComponent
-        let fileExtension = url.pathExtension
-        let matchResult = KeywordMatcher.checkKeyword(for: fileName, parentFolder: parentFolder, fileExtension: fileExtension, using: settings)
-        
-        // ルーティング結果に基づいて起動
-        if let application = matchResult.matchedApplication, !application.isEmpty {
-            if application.lowercased() == "internal" {
-                NSLog("内蔵ビューアで表示: internal")
-                InternalViewer.shared.show(url: url)
-                return true
-            } else {
-                NSLog("外部アプリケーション起動: \(application)")
-                _ = AppLauncher.launchApplication(with: url, applicationName: application)
-            }
-        } else {
-            NSLog("デフォルトアプリケーション起動")
-            _ = AppLauncher.launchWithDefaultApplication(zipFileURL: url)
-        }
-        
-    NSLog("外部アプリケーション起動、CoverZipを終了します")
-    NSApplication.shared.terminate(nil)
-        
+
         return true
     }
 }

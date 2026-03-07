@@ -119,35 +119,16 @@ struct KeywordSettings: Codable {
         for i in rules.indices {
             let app = rules[i].application
             if app != "internal" && !app.hasPrefix("/") {
-                if let url = findApplicationURL(appName: app) {
+                if let url = ApplicationResolver.resolveApplicationURL(from: app) {
                     rules[i].application = url.path
                 }
             }
         }
         if defaultApplication != "internal" && !defaultApplication.hasPrefix("/") && !defaultApplication.isEmpty {
-            if let url = findApplicationURL(appName: defaultApplication) {
+            if let url = ApplicationResolver.resolveApplicationURL(from: defaultApplication) {
                 defaultApplication = url.path
             }
         }
-    }
-
-    /**
-     * アプリ名からフルパスURLを検索
-     */
-    private func findApplicationURL(appName: String) -> URL? {
-        let name = appName.hasSuffix(".app") ? appName : "\(appName).app"
-        let searchDirs = [
-            "/Applications",
-            "/System/Library/CoreServices/Applications",
-            (FileManager.default.urls(for: .applicationDirectory, in: .userDomainMask).first?.path ?? "")
-        ]
-        for dir in searchDirs {
-            let url = URL(fileURLWithPath: dir).appendingPathComponent(name)
-            if FileManager.default.fileExists(atPath: url.path) {
-                return url
-            }
-        }
-        return nil
     }
 
     /**

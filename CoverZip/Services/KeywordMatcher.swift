@@ -27,45 +27,18 @@ struct KeywordMatchResult {
  * ファイル名とパス名に対するキーワードマッチングを実行
  */
 class KeywordMatcher {
-    
     /**
-     * ZIPファイル名に対してキーワードマッチングを実行
-     * 
-     * @param zipFileURL ZIPファイルのURL（ファイル名取得用、必要に応じて使用）
-     * @param originalFileName 元のZIPファイル名（優先的に使用）
+     * ZIPファイルURLに対してキーワードマッチングを実行
+     *
+     * @param zipFileURL チェック対象のZIPファイルURL
      * @param settings JSON設定ファイルのキーワード設定
      * @return マッチング結果
      */
-    static func findMatchingApplication(
-        for zipFileURL: URL,
-        originalFileName: String?,
-        using settings: KeywordSettings
-    ) -> KeywordMatchResult {
-        
-        // 元のファイル名が指定されている場合はそれを使用、そうでなければURLから取得
-        let fileName: String
-        
-        if let originalFileName = originalFileName {
-            fileName = URL(fileURLWithPath: originalFileName).deletingPathExtension().lastPathComponent
-        } else {
-            fileName = zipFileURL.deletingPathExtension().lastPathComponent
-        }
-        
+    static func checkKeyword(for zipFileURL: URL, using settings: KeywordSettings) -> KeywordMatchResult {
+        let fileName = zipFileURL.deletingPathExtension().lastPathComponent
         let parentFolder = zipFileURL.deletingLastPathComponent().lastPathComponent
         let fileExtension = zipFileURL.pathExtension
-        
         return checkKeyword(for: fileName, parentFolder: parentFolder, fileExtension: fileExtension, using: settings)
-    }
-    
-    /**
-     * ファイル名とパス名に対してキーワードマッチングを実行
-     * 
-     * @param fileName チェック対象のファイル名（拡張子除去済み）
-     * @param settings JSON設定ファイルのキーワード設定
-     * @return マッチング結果
-     */
-    static func checkKeyword(for fileName: String, using settings: KeywordSettings) -> KeywordMatchResult {
-        return checkKeyword(for: fileName, parentFolder: "", fileExtension: "", using: settings)
     }
     
     /**

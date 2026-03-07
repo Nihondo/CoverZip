@@ -80,7 +80,7 @@ final class AppSettingsWriter: ObservableObject {
 
     private func notifySettingsChangedIfNeeded() {
         if !isLoadingSettings {
-            DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+            PreviewSessionCommandDispatcher.postSettingsChanged()
         }
     }
 

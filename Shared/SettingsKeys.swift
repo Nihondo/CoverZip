@@ -4,6 +4,9 @@
 //
 
 import Foundation
+#if canImport(AppKit)
+import AppKit
+#endif
 
 public enum CZLocalized {
     public static func string(_ key: String, defaultValue: String) -> String {
@@ -114,6 +117,37 @@ public enum CZPreviewContextMenuLayout {
         }
     }
 }
+
+#if canImport(AppKit)
+public enum CZPreviewContextMenuFactory {
+    public static func makeMenu(
+        target: AnyObject,
+        selectorForCommand: (CZPreviewSessionCommand) -> Selector?,
+        stateForCommand: (CZPreviewSessionCommand) -> NSControl.StateValue
+    ) -> NSMenu {
+        let menu = NSMenu()
+
+        for entry in CZPreviewContextMenuLayout.entries {
+            switch entry {
+            case .separator:
+                menu.addItem(NSMenuItem.separator())
+            case .action(let command):
+                guard let selector = selectorForCommand(command) else { continue }
+                let item = NSMenuItem(
+                    title: CZPreviewContextMenuLayout.title(for: command),
+                    action: selector,
+                    keyEquivalent: ""
+                )
+                item.target = target
+                item.state = stateForCommand(command)
+                menu.addItem(item)
+            }
+        }
+
+        return menu
+    }
+}
+#endif
 
 // Distributed notifications used to sync settings across App and Extensions
 public enum CZDistributedNotifications {

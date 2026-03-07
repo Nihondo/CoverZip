@@ -212,15 +212,18 @@ CoverZip/
 │   ├── CoverZipApp.swift        # SwiftUI Appライフサイクルエントリーポイント
 │   ├── AppDelegate.swift        # ファイル処理、アプリケーションデリゲート
 │   ├── Services/                # ビジネスロジック層
-│   │   ├── KeywordMatcher.swift    # ファイル名マッチング
-│   │   ├── AppLauncher.swift       # 外部アプリ起動
+│   │   ├── ZipRoutingService.swift  # ZIPルーティング判定・実行
+│   │   ├── KeywordMatcher.swift     # ファイル名マッチング
+│   │   ├── ApplicationResolver.swift # アプリ識別子→URL解決
+│   │   ├── AppLauncher.swift        # 外部アプリ起動
 │   │   ├── SettingsFileManager.swift # 設定ファイル管理
-│   │   └── AppSettings.swift       # App Group共有設定
+│   │   ├── AppSettings.swift        # App Group共有設定
+│   │   ├── PreviewSessionStateStore.swift # ビューア状態の共通読込
+│   │   └── PreviewSessionCommandDispatcher.swift # セッション通知送信
 │   └── Models/
 │       └── KeywordSettings.swift   # JSON設定データモデル
 ├── coverZipExtension/           # QuickLook Thumbnail Extension
 │   ├── ThumbnailProvider.swift  # サムネイル生成エントリーポイント
-│   ├── ZipProcessor.swift       # ZIP処理ロジック（純Swift実装）
 │   └── Info.plist              # Extension設定
 ├── coverZipViewer/             # QuickLook Preview Extension
 │   ├── PreviewProvider.swift   # プレビューエントリーポイント
@@ -237,8 +240,7 @@ CoverZip/
 │   ├── ImageFileFilter.swift   # 画像ファイル判定
 │   ├── SettingsKeys.swift      # 共有設定キー
 │   └── ImageIOOptions.swift    # 画像生成オプション
-├── CoverZipTests/              # Swift Testingベースのユニットテスト
-└── CoverZipUITests/            # UI自動化テスト
+└── docs/                        # 計画・運用ドキュメント
 ```
 
 ### ビルドとテスト
@@ -260,8 +262,9 @@ pluginkit -m | grep -i coverzip # 詳細なExtension情報
 
 #### アプリケーション起動フロー
 ```
-ZIPファイルドロップ → AppDelegate:application:open:urls: → 
-processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
+ZIPファイル入力 → ZipRoutingService.route(...)
+  → (internal) InternalViewer
+  → (external/default) AppLauncher → NSApplication.terminate
 ```
 
 #### ZIP解析（Extension側）

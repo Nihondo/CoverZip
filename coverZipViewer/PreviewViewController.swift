@@ -882,25 +882,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
 
     private func makeContextMenu() -> NSMenu {
-        let menu = NSMenu()
-
-        for entry in CZPreviewContextMenuLayout.entries {
-            switch entry {
-            case .separator:
-                menu.addItem(NSMenuItem.separator())
-            case .action(let command):
-                let item = NSMenuItem(
-                    title: CZPreviewContextMenuLayout.title(for: command),
-                    action: selector(for: command),
-                    keyEquivalent: ""
-                )
-                item.target = self
-                item.state = menuState(for: command)
-                menu.addItem(item)
+        CZPreviewContextMenuFactory.makeMenu(
+            target: self,
+            selectorForCommand: { [weak self] command in
+                self?.selector(for: command)
+            },
+            stateForCommand: { [weak self] command in
+                self?.menuState(for: command) ?? .off
             }
-        }
-        
-        return menu
+        )
     }
     
     private func updateContextMenuStates() {
@@ -982,10 +972,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     @objc private func setLeftToRight(_ sender: NSMenuItem) {
         applyReadingDirection(false)
-    }
-    
-    @objc private func toggleReadingDirection(_ sender: NSMenuItem) {
-        applyReadingDirection(!isRightToLeftReading)
     }
     
     @objc private func toggleSlideshow(_ sender: NSMenuItem) {
@@ -2003,13 +1989,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     // キーボード入力はQuick Lookホストに委ねる（本拡張では未処理）
     
-    // MARK: - Performance Optimization
-    
+}
+
+// MARK: - Performance Optimization
+private extension PreviewViewController {
     /// ImageManagerに現在のウィンドウサイズを設定して最適化を有効にする
     @discardableResult
-    private func updateImageManagerDisplaySize() -> Bool {
+    func updateImageManagerDisplaySize() -> Bool {
         guard let window = view.window else { return false }
-        
+
         let windowSize = window.frame.size
         let contentSize = view.bounds.size
         let backingScaleFactor = window.backingScaleFactor
@@ -2017,16 +2005,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             width: max(contentSize.width, windowSize.width),
             height: max(contentSize.height, windowSize.height)
         )
-        
-        // 最大サイズ制限（メモリ使用量を制御）
-        let maxSize: CGFloat = 3840 // 論理サイズの上限
+
+        let maxSize: CGFloat = 3840
         let limitedSize = NSSize(
             width: min(targetPointSize.width, maxSize),
             height: min(targetPointSize.height, maxSize)
         )
-        
+
         let didBucketChange = imageManager.setTargetDisplaySize(limitedSize, backingScaleFactor: backingScaleFactor)
-        
+
         NSLog(
             "[Performance] Updated display size: points=%dx%d scale=%f",
             Int(limitedSize.width),
@@ -2035,23 +2022,18 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         )
         return didBucketChange
     }
-    
-    // MARK: - Reading History Management
-    
-    /// 履歴から前回の読書位置を復元
-    private func restoreReadingPositionFromHistory() {
+}
+
+// MARK: - Reading History
+private extension PreviewViewController {
+    func restoreReadingPositionFromHistory() {
         guard !currentZipFilename.isEmpty else { return }
-        
+
         if let history = readingHistoryManager.loadReadingPosition(filename: currentZipFilename) {
             NSLog("[ReadingHistory] Restoring position for %@: page %d, viewMode %@, offset %d, rtl %@", currentZipFilename, history.page, history.viewMode, history.spreadPairOffset, history.isRightToLeftReading?.description ?? "nil")
-
-            // ページ位置を復元（遅延ロード方式では即座に復元可能）
             _ = imageManager.goToPage(history.page)
-
-            // 見開きオフセットを復元
             imageManager.setSpreadPairOffset(history.spreadPairOffset)
-            
-            // 綴じ方向を復元（履歴にあれば）
+
             if let rtl = history.isRightToLeftReading {
                 isRightToLeftReading = rtl
                 didRestoreRTLFromHistory = true
@@ -2059,30 +2041,27 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 syncSliderToCurrentPage()
                 updateContextMenuStates()
             }
-            
-            // 表示モードを履歴から復元（グローバルのデフォルトは変更しない）
+
             if let restored = ViewModePreference(rawValue: history.viewMode) {
                 userPreferredViewMode = restored
                 didRestoreViewModeFromHistory = true
                 if imageManager.hasImages() { displayCurrentImage() }
                 updateContextMenuStates()
             }
-            // 表示モードはセッションごとにデフォルトへ初期化するため、履歴からは復元しない
-            
+
             NSLog("[ReadingHistory] Position restored successfully")
         } else {
             NSLog("[ReadingHistory] No history found for %@", currentZipFilename)
         }
     }
-    
-    /// 現在の読書位置を履歴に保存
-    private func saveReadingPositionToHistory() {
+
+    func saveReadingPositionToHistory() {
         guard !currentZipFilename.isEmpty, imageManager.hasImages() else { return }
-        
+
         let currentPage = imageManager.getCurrentPageNumber()
         let currentViewMode = userPreferredViewMode.rawValue
         let currentOffset = imageManager.getSpreadPairOffset()
-        
+
         readingHistoryManager.saveReadingPosition(
             filename: currentZipFilename,
             page: currentPage,
@@ -2091,16 +2070,16 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             isRightToLeftReading: isRightToLeftReading
         )
     }
+}
 
-    // MARK: - Thumbnail Strip Height Persistence
-
-    private func loadThumbnailStripHeight() -> CGFloat {
+// MARK: - Thumbnail Strip Height Persistence
+private extension PreviewViewController {
+    func loadThumbnailStripHeight() -> CGFloat {
         let saved = CZUserDefaults.shared.double(forKey: CZSettingsKeys.thumbnailStripHeight)
         return saved > 0 ? saved : 88
     }
 
-    private func saveThumbnailStripHeight(_ height: CGFloat) {
+    func saveThumbnailStripHeight(_ height: CGFloat) {
         CZUserDefaults.shared.set(height, forKey: CZSettingsKeys.thumbnailStripHeight)
     }
-
 }

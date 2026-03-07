@@ -48,14 +48,13 @@ final class ViewMenuState: ObservableObject {
     }
 
     private func syncFromSettings() {
-        isRightToLeftReading = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
-        currentViewMode = ViewModePreference(
-            rawValue: CZUserDefaults.shared.string(forKey: CZSettingsKeys.defaultViewMode) ?? ViewModePreference.auto.rawValue
-        ) ?? .auto
-        spreadPairOffset = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
-        isTransitionEnabled = CZUserDefaults.shared.object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true
-        isSlideshowEnabled = CZSettings.shared.isSlideshowEnabled
-        isThumbnailStripVisible = CZSettings.shared.isThumbnailStripVisible
+        let state = PreviewSessionStateStore.loadState(resetSlideshowState: false)
+        isRightToLeftReading = state.isRightToLeftReading
+        currentViewMode = state.currentViewMode
+        spreadPairOffset = state.spreadPairOffset
+        isTransitionEnabled = state.isTransitionEnabled
+        isSlideshowEnabled = state.isSlideshowEnabled
+        isThumbnailStripVisible = state.isThumbnailStripVisible
     }
 
     // MARK: - Action メソッド（InternalViewer の apply メソッドに委譲）
