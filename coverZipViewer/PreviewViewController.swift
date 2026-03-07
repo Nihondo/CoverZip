@@ -63,6 +63,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var thumbnailStripHeightConstraint: NSLayoutConstraint?
     private var isThumbnailStripVisible: Bool = true
     private var lastVisibleThumbnailStripHeight: CGFloat = 88
+    private var cursorAreaOverlay: PreviewCursorAreaView?
 
     // マウスホイールスクロール管理
     private var scrollAccumulator: CGFloat = 0.0
@@ -573,6 +574,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // 自動リサイズ機能を使用するため、手動でのリサイズ処理は不要
         // レイアウト変化に応じてスライダーの可視性を見直す
         updateSliderVisibilityForContext()
+        if let overlay = cursorAreaOverlay {
+            view.window?.invalidateCursorRects(for: overlay)
+        }
         let didBucketChange = updateImageManagerDisplaySize()
         // アスペクト比変更に応じて表示モードを再評価（自動モードのみ）
         if imageManager.hasImages() {
@@ -713,7 +717,21 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         // ImageViewのフレーム設定を確認
         imageView?.imageFrameStyle = .none
         rightImageView?.imageFrameStyle = .none
-        
+
+        // カーソルオーバーレイをimageView上に配置
+        if let imageView {
+            let overlay = PreviewCursorAreaView()
+            overlay.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(overlay, positioned: .above, relativeTo: imageView)
+            NSLayoutConstraint.activate([
+                overlay.leadingAnchor.constraint(equalTo: imageView.leadingAnchor),
+                overlay.trailingAnchor.constraint(equalTo: imageView.trailingAnchor),
+                overlay.topAnchor.constraint(equalTo: imageView.topAnchor),
+                overlay.bottomAnchor.constraint(equalTo: imageView.bottomAnchor),
+            ])
+            cursorAreaOverlay = overlay
+        }
+
         // Auto Layout制約の優先度調整
         setupConstraintPriorities()
         
@@ -2081,5 +2099,48 @@ private extension PreviewViewController {
 
     func saveThumbnailStripHeight(_ height: CGFloat) {
         CZUserDefaults.shared.set(height, forKey: CZSettingsKeys.thumbnailStripHeight)
+    }
+}
+
+// MARK: - カーソル管理
+
+/// プレビュー画像エリアに左右矢印カーソルを表示するための透明オーバーレイビュー。
+private final class PreviewCursorAreaView: NSView {
+    override var acceptsFirstResponder: Bool { false }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach { removeTrackingArea($0) }
+        let ta = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(ta)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        updateCursor(for: event)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        updateCursor(for: event)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        NSCursor.arrow.set()
+    }
+
+    // ウィンドウ内でのカーソル矩形（mouseMoved が届かないケースの補完）
+    override func resetCursorRects() {
+        let half = bounds.width / 2
+        addCursorRect(NSRect(x: 0, y: 0, width: half, height: bounds.height), cursor: .resizeLeft)
+        addCursorRect(NSRect(x: half, y: 0, width: bounds.width - half, height: bounds.height), cursor: .resizeRight)
+    }
+
+    private func updateCursor(for event: NSEvent) {
+        let x = convert(event.locationInWindow, from: nil).x
+        (x < bounds.width / 2 ? NSCursor.resizeLeft : NSCursor.resizeRight).set()
     }
 }
