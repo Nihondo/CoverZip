@@ -19,19 +19,19 @@ struct CoverZipApp: App {
     var body: some Scene {
     Settings {
             TabView {
-                RoutingSettingsView()
-                    .tabItem {
-                        Label("ファイルルーティング", systemImage: "arrow.triangle.branch")
-                    }
-                
                 if #available(macOS 13.0, *) {
                     PreviewSettingsView()
                         .tabItem {
-                            Label("プレビュー設定", systemImage: "eye")
+                            Label("ビューア設定", systemImage: "eye")
                         }
                 } else {
                     // Fallback on earlier versions
                 }
+
+                RoutingSettingsView()
+                    .tabItem {
+                        Label("ファイルルーティング", systemImage: "arrow.triangle.branch")
+                    }
             }
             .frame(minWidth: 650, minHeight: 500)
         }

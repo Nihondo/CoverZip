@@ -14,7 +14,7 @@ struct PreviewSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker("デフォルトページ方向:", selection: Binding(
+                Picker("デフォルトページ方向", selection: Binding(
                     get: { settings.isRightToLeftReading },
                     set: { settings.isRightToLeftReading = $0 }
                 )) {
@@ -22,14 +22,8 @@ struct PreviewSettingsView: View {
                     Text("左綴じ").tag(false)
                 }
                 .pickerStyle(.segmented)
-            } header: {
-                Label("ページ方向", systemImage: "text.alignright")
-            } footer: {
-                Text("右綴じの場合、左クリックで次ページ、右クリックで前ページに移動します")
-            }
 
-            Section {
-                Picker("デフォルト表示モード:", selection: Binding(
+                Picker("デフォルト表示モード", selection: Binding(
                     get: { settings.defaultViewMode },
                     set: { settings.defaultViewMode = $0 }
                 )) {
@@ -44,41 +38,17 @@ struct PreviewSettingsView: View {
                     set: { settings.alwaysSinglePageForCover = $0 }
                 ))
 
-                Toggle("初期状態でサムネイルリストを表示", isOn: Binding(
+                Toggle("書類を開いた時にサムネイルリストを表示", isOn: Binding(
                     get: { settings.isThumbnailStripVisible },
                     set: { settings.isThumbnailStripVisible = $0 }
                 ))
-            } header: {
-                Label("表示モード", systemImage: "rectangle.split.2x1")
-            } footer: {
-                Text("自動モードでは、ウィンドウの縦横比に応じて表示モードを自動選択します")
-            }
 
-            Section {
-                Picker("方針:", selection: Binding(
-                    get: { settings.imageDecodeCachePolicy },
-                    set: { settings.imageDecodeCachePolicy = $0 }
-                )) {
-                    Text("しない").tag(CZImageDecodeCachePolicy.noCache)
-                    Text("遅延（推奨）").tag(CZImageDecodeCachePolicy.deferred)
-                    Text("即時（最速/メモリ多め）").tag(CZImageDecodeCachePolicy.immediate)
-                }
-                .pickerStyle(.segmented)
-            } header: {
-                Label("画像デコードキャッシュ", systemImage: "memorychip")
-            } footer: {
-                Text("遅延は初回だけデコードし、以降は再デコードを避けて滑らかに表示します。")
-            }
-
-            Section {
                 Toggle("ページ送りアニメを有効化", isOn: Binding(
                     get: { settings.pageTransitionEnabled },
                     set: { settings.pageTransitionEnabled = $0 }
                 ))
             } header: {
-                Label("ページ送りアニメ", systemImage: "sparkles")
-            } footer: {
-                Text("無効にするとページ遷移を即時表示します。")
+                Label("表示設定", systemImage: "rectangle.split.2x1")
             }
 
             Section {
@@ -117,6 +87,22 @@ struct PreviewSettingsView: View {
                 Label("ウィンドウ", systemImage: "macwindow")
             } footer: {
                 Text("有効にすると、前回のプレビューウィンドウのサイズと位置で次回開きます")
+            }
+
+            Section {
+                Picker("方針:", selection: Binding(
+                    get: { settings.imageDecodeCachePolicy },
+                    set: { settings.imageDecodeCachePolicy = $0 }
+                )) {
+                    Text("しない").tag(CZImageDecodeCachePolicy.noCache)
+                    Text("遅延（推奨）").tag(CZImageDecodeCachePolicy.deferred)
+                    Text("即時（最速/メモリ多め）").tag(CZImageDecodeCachePolicy.immediate)
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Label("画像デコードキャッシュ", systemImage: "memorychip")
+            } footer: {
+                Text("遅延は初回だけデコードし、以降は再デコードを避けて滑らかに表示します。")
             }
         }
         .formStyle(.grouped)
