@@ -226,7 +226,6 @@
 				426EFEA62E26708A00AD23E5 /* Sources */,
 				426EFEA72E26708A00AD23E5 /* Frameworks */,
 				426EFEA82E26708A00AD23E5 /* Resources */,
-				4218D1C22F5A662700ED4BC6 /* ShellScript */,
 				426EFEFC2E2670FC00AD23E5 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -356,27 +355,6 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		4218D1C22F5A662700ED4BC6 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/bash;
-			shellScript = "#!/bin/bash\n#set -euo pipefail\n\n# コミット数を取得（git -C でSRCROOTを明示指定）\ncommit_count=$(git -C \"$SRCROOT\" rev-list --count HEAD 2>/dev/null || echo \"0\")\n\n# 前回のビルド番号をカウンターファイルから取得\n# DERIVED_FILE_DIR はターゲット・構成ごとの中間ファイル置き場\ncounter_file=\"${DERIVED_FILE_DIR}/.build_counter\"\nbuild_count=1\n\nif [[ -f \"$counter_file\" ]]; then\n    saved_commit=$(awk '{print $1}' \"$counter_file\" 2>/dev/null || echo \"\")\n    saved_build=$(awk '{print $2}' \"$counter_file\" 2>/dev/null || echo \"0\")\n    if [[ \"$saved_commit\" == \"$commit_count\" ]]; then\n        build_count=$((saved_build + 1))\n    fi\nfi\n\n# カウンターファイルを更新\necho \"$commit_count $build_count\" > \"$counter_file\"\n\nnew_version=\"${commit_count}.${build_count}\"\necho \"Build version = $new_version\"\n\n# ビルド済み Info.plist の CFBundleVersion を直接更新\n# （agvtool は project.pbxproj を書き換えようとするためビルド中は使用不可）\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $new_version\" \\\n    \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\nexit 0\n";
-		};
-/* End PBXShellScriptBuildPhase section */
-
 /* Begin PBXSourcesBuildPhase section */
 		426EFEA62E26708A00AD23E5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -470,7 +448,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				MARKETING_VERSION = 1.0.3;
+				MARKETING_VERSION = 1.0.4;
 				NEW_SETTING = "";
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip;
@@ -512,7 +490,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				MARKETING_VERSION = 1.0.3;
+				MARKETING_VERSION = 1.0.4;
 				NEW_SETTING = "";
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip;
@@ -676,7 +654,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				MARKETING_VERSION = 1.0.3;
+				MARKETING_VERSION = 1.0.4;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -712,7 +690,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				MARKETING_VERSION = 1.0.3;
+				MARKETING_VERSION = 1.0.4;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -748,7 +726,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0.3;
+				MARKETING_VERSION = 1.0.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -782,7 +760,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
-				MARKETING_VERSION = 1.0.3;
+				MARKETING_VERSION = 1.0.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
