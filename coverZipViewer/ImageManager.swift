@@ -233,6 +233,14 @@ class ImageManager {
         return (leftImage, rightImage)
     }
 
+    /// 現在ページに対応する見開きペアの実インデックスを返す
+    func getCurrentSpreadPairIndices(isRightToLeft: Bool) -> (left: Int?, right: Int?) {
+        guard let pair = resolveSpreadPairIndices(baseIndex: currentIndex, isRightToLeft: isRightToLeft) else {
+            return (currentIndex, nil)
+        }
+        return pair
+    }
+
     /// 見開きのキャッシュ済み画像のみを返す（未キャッシュならnil）
     func getSpreadImagesIfCachedOnly(
         isRightToLeft: Bool,

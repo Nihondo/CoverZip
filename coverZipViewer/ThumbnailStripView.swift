@@ -128,6 +128,7 @@ class ThumbnailStripView: NSView {
     var isRightToLeft: Bool = false {
         didSet {
             guard oldValue != isRightToLeft else { return }
+            updateSectionInsetsForReadingDirection()
             collectionView.reloadData()
         }
     }
@@ -143,10 +144,13 @@ class ThumbnailStripView: NSView {
     private var zipData: Data?
     private var thumbnailCache: [Int: NSImage] = [:]
     private let decodeQueue = DispatchQueue(label: "com.dmng.coverzip.thumbnail", qos: .utility, attributes: .concurrent)
-    private var pendingVisibilityIndexPath: IndexPath?
+    private var pendingVisibilityIndexPaths: Set<IndexPath> = []
+    private let baseHorizontalSectionInset: CGFloat = 8
 
     /// プログラム側からの選択変更中はコールバックを抑制する
     private var isUpdatingSelectionProgrammatically = false
+    /// プログラム側で設定した選択セットに一致する遅延イベントを抑制する
+    private var pendingProgrammaticSelectionIndexPaths: Set<IndexPath> = []
 
     // MARK: - Initialization
 
@@ -174,7 +178,7 @@ class ThumbnailStripView: NSView {
         layout.itemSize = NSSize(width: 56, height: 68)
         layout.minimumInteritemSpacing = 4
         layout.minimumLineSpacing = 4
-        layout.sectionInset = NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
+        layout.sectionInset = NSEdgeInsets(top: 0, left: baseHorizontalSectionInset, bottom: 0, right: baseHorizontalSectionInset)
 
         let thumbnailCollectionView = ThumbnailCollectionView()
         thumbnailCollectionView.onArrowKeyPressed = { [weak self] specialKey in
@@ -183,7 +187,7 @@ class ThumbnailStripView: NSView {
         collectionView = thumbnailCollectionView
         collectionView.collectionViewLayout = layout
         collectionView.allowsEmptySelection = false
-        collectionView.allowsMultipleSelection = false
+        collectionView.allowsMultipleSelection = true
         collectionView.isSelectable = true
         collectionView.backgroundColors = [.clear]
         // サムネイル並びは isRightToLeft のみで制御し、環境レイアウト方向の自動ミラーを避ける
@@ -244,7 +248,35 @@ class ThumbnailStripView: NSView {
             layout.itemSize = newSize
             layout.invalidateLayout()
         }
+        updateSectionInsetsForReadingDirection()
         syncCollectionViewFrameToContent()
+    }
+
+    private func updateSectionInsetsForReadingDirection() {
+        guard let layout = collectionView?.collectionViewLayout as? NSCollectionViewFlowLayout else { return }
+
+        let topInset = layout.sectionInset.top
+        let bottomInset = layout.sectionInset.bottom
+        let rightInset = baseHorizontalSectionInset
+
+        let itemCount = CGFloat(entries.count)
+        let spacingCount = max(0, entries.count - 1)
+        let totalItemWidth = itemCount * layout.itemSize.width
+        let totalSpacingWidth = CGFloat(spacingCount) * layout.minimumInteritemSpacing
+        let minimumContentWidth = totalItemWidth + totalSpacingWidth + baseHorizontalSectionInset + rightInset
+        let viewportWidth = max(0, scrollView.contentView.bounds.width)
+        let extraLeadingSpace = max(0, viewportWidth - minimumContentWidth)
+        let leftInset = isRightToLeft ? baseHorizontalSectionInset + extraLeadingSpace : baseHorizontalSectionInset
+
+        let currentInset = layout.sectionInset
+        let hasInsetChanged = abs(currentInset.left - leftInset) > 0.5
+            || abs(currentInset.right - rightInset) > 0.5
+            || abs(currentInset.top - topInset) > 0.5
+            || abs(currentInset.bottom - bottomInset) > 0.5
+        guard hasInsetChanged else { return }
+
+        layout.sectionInset = NSEdgeInsets(top: topInset, left: leftInset, bottom: bottomInset, right: rightInset)
+        layout.invalidateLayout()
     }
 
     // MARK: - Index conversion
@@ -265,16 +297,36 @@ class ThumbnailStripView: NSView {
     func configure(zipData: Data, entries: [CZImageEntryInfo]) {
         self.zipData = zipData
         self.entries = entries
-        pendingVisibilityIndexPath = nil
+        pendingVisibilityIndexPaths.removeAll()
         thumbnailCache.removeAll()
+        updateSectionInsetsForReadingDirection()
         collectionView.reloadData()
     }
 
     /// 指定実インデックスのセルを選択状態にし、必要なら可視領域にスクロールする
     func selectItem(at realIdx: Int, scrollToVisible: Bool) {
-        guard realIdx >= 0 && realIdx < entries.count else { return }
-        let displayIdx = displayIndex(for: realIdx)
-        updateSelection(displayIndex: displayIdx, scrollToVisible: scrollToVisible, shouldNotify: false)
+        selectItems(at: [realIdx], primaryRealIndex: realIdx, scrollToVisible: scrollToVisible)
+    }
+
+    /// 指定実インデックス群のセルを選択状態にし、必要なら可視領域へスクロールする
+    func selectItems(at realIndices: [Int], primaryRealIndex: Int?, scrollToVisible: Bool) {
+        var seen = Set<Int>()
+        let validRealIndices = realIndices.filter { realIdx in
+            guard realIdx >= 0 && realIdx < entries.count else { return false }
+            return seen.insert(realIdx).inserted
+        }
+        guard !validRealIndices.isEmpty else { return }
+
+        let displayIndices = validRealIndices.map { displayIndex(for: $0) }
+        let indexPaths = Set(displayIndices.map { IndexPath(item: $0, section: 0) })
+        let primaryDisplayIndex: Int
+        if let primaryRealIndex, primaryRealIndex >= 0, primaryRealIndex < entries.count {
+            primaryDisplayIndex = displayIndex(for: primaryRealIndex)
+        } else {
+            primaryDisplayIndex = displayIndices[0]
+        }
+        let primaryIndexPath = IndexPath(item: primaryDisplayIndex, section: 0)
+        updateSelection(indexPaths: indexPaths, primaryIndexPath: primaryIndexPath, scrollToVisible: scrollToVisible, shouldNotify: false)
     }
 
     /// サムネイルリストへフォーカスを移す
@@ -285,14 +337,16 @@ class ThumbnailStripView: NSView {
 
     /// サムネイルキャッシュをクリアして再ロードする（ストリップ高さ変更後に呼ぶ）
     func reloadThumbnails() {
-        // 現在の選択を実インデックスで保存
-        let selectedRealIndex = collectionView.selectionIndexPaths.first.map { realIndex(for: $0.item) }
+        // 現在の選択を実インデックスで保存（見開き時の複数選択を維持）
+        let selectedDisplayIndices = collectionView.selectionIndexPaths.map(\.item).sorted()
+        let selectedRealIndices = selectedDisplayIndices.map { realIndex(for: $0) }
+        let primaryRealIndex = selectedRealIndices.first
         thumbnailCache.removeAll()
         collectionView.reloadData()
         // reloadData() 後はレイアウト完了を待ってから選択・スクロールを復元する
-        if let realIdx = selectedRealIndex {
+        if !selectedRealIndices.isEmpty {
             DispatchQueue.main.async { [weak self] in
-                self?.selectItem(at: realIdx, scrollToVisible: true)
+                self?.selectItems(at: selectedRealIndices, primaryRealIndex: primaryRealIndex, scrollToVisible: true)
             }
         }
     }
@@ -359,42 +413,68 @@ class ThumbnailStripView: NSView {
     private func updateSelection(displayIndex: Int, scrollToVisible: Bool, shouldNotify: Bool) {
         guard displayIndex >= 0 && displayIndex < entries.count else { return }
         let indexPath = IndexPath(item: displayIndex, section: 0)
+        updateSelection(indexPaths: [indexPath], primaryIndexPath: indexPath, scrollToVisible: scrollToVisible, shouldNotify: shouldNotify)
+    }
+
+    private func updateSelection(indexPaths: Set<IndexPath>,
+                                 primaryIndexPath: IndexPath,
+                                 scrollToVisible: Bool,
+                                 shouldNotify: Bool) {
+        guard !indexPaths.isEmpty else { return }
+        guard primaryIndexPath.item >= 0 && primaryIndexPath.item < entries.count else { return }
+
+        if shouldNotify {
+            pendingProgrammaticSelectionIndexPaths.removeAll()
+        } else {
+            pendingProgrammaticSelectionIndexPaths = indexPaths
+        }
 
         isUpdatingSelectionProgrammatically = true
         let previousSelection = collectionView.selectionIndexPaths
         if !previousSelection.isEmpty {
             collectionView.deselectItems(at: previousSelection)
         }
-        collectionView.selectItems(at: [indexPath], scrollPosition: [])
+        collectionView.selectItems(at: indexPaths, scrollPosition: [])
         isUpdatingSelectionProgrammatically = false
 
         if scrollToVisible {
-            pendingVisibilityIndexPath = indexPath
+            pendingVisibilityIndexPaths = indexPaths
             applyPendingSelectionVisibility(retriesLeft: 6)
+        } else {
+            pendingVisibilityIndexPaths.removeAll()
         }
 
         if shouldNotify {
-            onPageSelected?(realIndex(for: displayIndex))
+            onPageSelected?(realIndex(for: primaryIndexPath.item))
         }
     }
 
     private func applyPendingSelectionVisibility(retriesLeft: Int) {
-        guard let indexPath = pendingVisibilityIndexPath else { return }
-        guard indexPath.item >= 0 && indexPath.item < entries.count else {
-            pendingVisibilityIndexPath = nil
+        guard !pendingVisibilityIndexPaths.isEmpty else { return }
+        let validIndexPaths = pendingVisibilityIndexPaths.filter { indexPath in
+            indexPath.item >= 0 && indexPath.item < entries.count
+        }
+        guard !validIndexPaths.isEmpty else {
+            pendingVisibilityIndexPaths.removeAll()
             return
         }
+        pendingVisibilityIndexPaths = Set(validIndexPaths)
 
         collectionView.layoutSubtreeIfNeeded()
         syncCollectionViewFrameToContent()
-        guard let itemFrame = itemFrameForIndexPath(indexPath) else {
+        let itemFrames = validIndexPaths.compactMap { itemFrameForIndexPath($0) }
+        guard itemFrames.count == validIndexPaths.count else {
             scheduleSelectionVisibilityRetry(retriesLeft: retriesLeft)
             return
         }
+        guard let targetFrame = unionFrame(for: itemFrames) else {
+            pendingVisibilityIndexPaths.removeAll()
+            return
+        }
 
-        scrollItemFrameToVisible(itemFrame)
-        if isItemFrameVisible(itemFrame) {
-            pendingVisibilityIndexPath = nil
+        scrollItemFrameToVisible(targetFrame)
+        if areAllItemFramesVisible(itemFrames) {
+            pendingVisibilityIndexPaths.removeAll()
             return
         }
         scheduleSelectionVisibilityRetry(retriesLeft: retriesLeft)
@@ -444,6 +524,17 @@ class ThumbnailStripView: NSView {
         return visibleRect.minX <= itemFrame.minX && visibleRect.maxX >= itemFrame.maxX
     }
 
+    private func areAllItemFramesVisible(_ itemFrames: [NSRect]) -> Bool {
+        itemFrames.allSatisfy { isItemFrameVisible($0) }
+    }
+
+    private func unionFrame(for itemFrames: [NSRect]) -> NSRect? {
+        guard let firstFrame = itemFrames.first else { return nil }
+        return itemFrames.dropFirst().reduce(firstFrame) { partial, frame in
+            partial.union(frame)
+        }
+    }
+
     private func syncCollectionViewFrameToContent() {
         guard let layout = collectionView.collectionViewLayout else { return }
         let contentSize = layout.collectionViewContentSize
@@ -484,9 +575,22 @@ extension ThumbnailStripView: NSCollectionViewDataSource {
 extension ThumbnailStripView: NSCollectionViewDelegate {
 
     func collectionView(_ collectionView: NSCollectionView,
+                        shouldSelectItemsAt indexPaths: Set<IndexPath>) -> Set<IndexPath> {
+        guard !isUpdatingSelectionProgrammatically else { return indexPaths }
+        guard let firstIndexPath = indexPaths.sorted(by: { $0.item < $1.item }).first else { return [] }
+        return [firstIndexPath]
+    }
+
+    func collectionView(_ collectionView: NSCollectionView,
                         didSelectItemsAt indexPaths: Set<IndexPath>) {
         guard !isUpdatingSelectionProgrammatically else { return }
-        guard let indexPath = indexPaths.first else { return }
+        if !pendingProgrammaticSelectionIndexPaths.isEmpty,
+           collectionView.selectionIndexPaths == pendingProgrammaticSelectionIndexPaths {
+            pendingProgrammaticSelectionIndexPaths.removeAll()
+            return
+        }
+        pendingProgrammaticSelectionIndexPaths.removeAll()
+        guard let indexPath = indexPaths.sorted(by: { $0.item < $1.item }).first else { return }
         onPageSelected?(realIndex(for: indexPath.item))
     }
 }

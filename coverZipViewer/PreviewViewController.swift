@@ -484,10 +484,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let newRTL = AppSettings.shared.isRightToLeftReading
         if !didRestoreRTLFromHistory && newRTL != isRightToLeftReading {
             isRightToLeftReading = newRTL
+            thumbnailStripView?.isRightToLeft = isRightToLeftReading
             applySliderLayoutDirection()
             syncSliderToCurrentPage()
-            thumbnailStripView?.isRightToLeft = isRightToLeftReading
-            thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
         }
         let newThreshold = CGFloat(AppSettings.shared.sliderVisibilityWidthThreshold)
         if newThreshold != sliderVisibilityWidthThreshold { sliderVisibilityWidthThreshold = newThreshold; updateSliderVisibilityForContext() }
@@ -647,7 +646,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 if let source = imageManager.getThumbnailSourceData() {
                     thumbnailStripView?.isRightToLeft = isRightToLeftReading
                     thumbnailStripView?.configure(zipData: source.zipData, entries: source.entries)
-                    thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
+                    syncThumbnailSelection()
                 }
 
                 // マウスモニターを遅延設定（window が確実に利用可能になってから）
@@ -1004,12 +1003,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private func applyReadingDirection(_ isRightToLeft: Bool) {
         isRightToLeftReading = isRightToLeft
         didRestoreRTLFromHistory = true
+        thumbnailStripView?.isRightToLeft = isRightToLeft
 
         applySliderLayoutDirection()
         syncSliderToCurrentPage()
         displayCurrentImage()
-        thumbnailStripView?.isRightToLeft = isRightToLeft
-        thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
         updateContextMenuStates()
         saveReadingPositionToHistory()
     }
@@ -1092,10 +1090,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let newRTL = AppSettings.shared.isRightToLeftReading
         if !didRestoreRTLFromHistory && newRTL != isRightToLeftReading {
             isRightToLeftReading = newRTL
+            thumbnailStripView?.isRightToLeft = isRightToLeftReading
             applySliderLayoutDirection()
             syncSliderToCurrentPage()
-            thumbnailStripView?.isRightToLeft = isRightToLeftReading
-            thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
         }
         let newTransition = AppSettings.shared.pageTransitionEnabled
         if newTransition != isTransitionEnabled { isTransitionEnabled = newTransition }
@@ -1645,7 +1642,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
         // サムネイル選択を現在ページに同期
         if didChange {
-            thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
+            syncThumbnailSelection()
         }
 
         return didChange
@@ -1832,7 +1829,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let wasSlideshow = isSlideshowEnabled
         if wasSlideshow { stopSlideshow() }
 
-        skipThumbnailSyncOnce = true
+        skipThumbnailSyncOnce = !shouldUseSpreadMode()
         if imageManager.goToPage(page) {
             displayCurrentImage()
             saveReadingPositionToHistory()
@@ -1860,6 +1857,22 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         pageSliderChanged(slider)
     }
 
+    private func currentThumbnailSelectionIndices() -> [Int] {
+        if currentViewMode == .spread {
+            let pair = imageManager.getCurrentSpreadPairIndices(isRightToLeft: isRightToLeftReading)
+            return [pair.left, pair.right].compactMap { $0 }
+        }
+        return [imageManager.currentPageIndex]
+    }
+
+    private func syncThumbnailSelection(scrollToVisible: Bool = true) {
+        thumbnailStripView?.selectItems(
+            at: currentThumbnailSelectionIndices(),
+            primaryRealIndex: imageManager.currentPageIndex,
+            scrollToVisible: scrollToVisible
+        )
+    }
+
     // 現在ページをスライダー位置へ反映（方向反転対応）
     private func syncSliderToCurrentPage(skipThumbnailSync: Bool = false) {
         guard let slider = pageSlider else { return }
@@ -1867,7 +1880,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let current = imageManager.getCurrentPageNumber()
         slider.integerValue = current
         if !skipThumbnailSync {
-            thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
+            syncThumbnailSelection()
         }
     }
 
