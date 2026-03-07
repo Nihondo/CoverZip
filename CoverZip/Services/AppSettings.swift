@@ -14,6 +14,7 @@ final class AppSettingsWriter: ObservableObject {
     static let shared = AppSettingsWriter()
 
     private let core = CZSettings.shared
+    private var isLoadingSettings = false
 
     @Published var isRightToLeftReading: Bool = true {
         didSet { core.isRightToLeftReading = isRightToLeftReading }
@@ -43,18 +44,31 @@ final class AppSettingsWriter: ObservableObject {
         didSet { core.imageDecodeCachePolicy = imageDecodeCachePolicy }
     }
 
+    @Published var pageTransitionEnabled: Bool = true {
+        didSet {
+            core.pageTransitionEnabled = pageTransitionEnabled
+            if !isLoadingSettings {
+                DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+            }
+        }
+    }
+
     private init() {
         // Load current values from core settings
         loadSettings()
     }
 
     private func loadSettings() {
+        isLoadingSettings = true
+        defer { isLoadingSettings = false }
+
         isRightToLeftReading = core.isRightToLeftReading
         sliderVisibilityWidthThreshold = core.sliderVisibilityWidthThreshold
         alwaysSinglePageForCover = core.alwaysSinglePageForCover
         slideshowInterval = core.slideshowInterval
         restoreWindowFrameEnabled = core.restoreWindowFrameEnabled
         imageDecodeCachePolicy = core.imageDecodeCachePolicy
+        pageTransitionEnabled = core.pageTransitionEnabled
         defaultViewMode = core.defaultViewMode
     }
 

@@ -66,6 +66,17 @@ struct PreviewSettingsView: View {
             }
 
             Section {
+                Toggle("ページ送りアニメを有効化", isOn: Binding(
+                    get: { settings.pageTransitionEnabled },
+                    set: { settings.pageTransitionEnabled = $0 }
+                ))
+            } header: {
+                Label("ページ送りアニメ", systemImage: "sparkles")
+            } footer: {
+                Text("無効にするとページ遷移を即時表示します。")
+            }
+
+            Section {
                 HStack {
                     Text("ページ送り間隔:")
                     Spacer()

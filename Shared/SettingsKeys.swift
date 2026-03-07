@@ -30,10 +30,71 @@ public enum CZAppGroup {
     public static let identifier: String = "group.com.dmng.CoverZip"
 }
 
+public enum CZPreviewSessionCommand: String {
+    case setRightToLeftReading
+    case setLeftToRightReading
+    case setViewModeAuto
+    case setViewModeSingle
+    case setViewModeSpread
+    case setSpreadPairOffset
+    case setPageTransitionEnabled
+    case setSlideshowEnabled
+}
+
+public enum CZPreviewSessionCommandUserInfoKeys {
+    public static let command = "command"
+    public static let boolValue = "boolValue"
+    public static let intValue = "intValue"
+}
+
+public enum CZPreviewContextMenuEntry: Equatable {
+    case action(CZPreviewSessionCommand)
+    case separator
+}
+
+public enum CZPreviewContextMenuLayout {
+    public static let entries: [CZPreviewContextMenuEntry] = [
+        .action(.setRightToLeftReading),
+        .action(.setLeftToRightReading),
+        .separator,
+        .action(.setViewModeAuto),
+        .action(.setViewModeSingle),
+        .action(.setViewModeSpread),
+        .separator,
+        .action(.setSpreadPairOffset),
+        .separator,
+        .action(.setPageTransitionEnabled),
+        .action(.setSlideshowEnabled),
+    ]
+
+    public static func title(for command: CZPreviewSessionCommand) -> String {
+        switch command {
+        case .setRightToLeftReading:
+            return "右綴じ"
+        case .setLeftToRightReading:
+            return "左綴じ"
+        case .setViewModeAuto:
+            return "自動"
+        case .setViewModeSingle:
+            return "単ページ"
+        case .setViewModeSpread:
+            return "見開き"
+        case .setSpreadPairOffset:
+            return "見開きの左右を補正"
+        case .setPageTransitionEnabled:
+            return "ページ送りアニメ"
+        case .setSlideshowEnabled:
+            return "スライドショー"
+        }
+    }
+}
+
 // Distributed notifications used to sync settings across App and Extensions
 public enum CZDistributedNotifications {
     // Post this when App-side settings have changed and should be reflected in extensions
     public static let settingsChanged = Notification.Name("com.dmng.CoverZip.settingsChanged")
     // Post this when slider operation completed in Preview Extension (for keyboard focus restoration)
     public static let sliderOperationCompleted = Notification.Name("com.dmng.CoverZip.sliderOperationCompleted")
+    // Post this when App-side internal viewer menu operation should be reflected in Preview Extension session state
+    public static let previewSessionCommand = Notification.Name("com.dmng.CoverZip.previewSessionCommand")
 }

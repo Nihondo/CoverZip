@@ -10,10 +10,18 @@ import Foundation
 
 final class InternalViewer: NSObject {
     static let shared = InternalViewer()
-    
+    private var isRightToLeftReading = true
+    private var currentViewMode: ViewModePreference = .auto
+    private var spreadPairOffset = 0
+    private var isTransitionEnabled = true
+    private var isSlideshowEnabled = false
+    private var settingsObserver: NSObjectProtocol?
 
     // 公開API: 内蔵ビューアでZIPを表示（QLPreviewInputDriver に委譲）
     func show(url: URL) {
+        syncSessionStateFromSharedDefaults(resetSlideshowState: true)
+        setupSettingsObserverIfNeeded()
+
         // アプリを前面に
         NSApp.activate(ignoringOtherApps: true)
         // 右クリックのメニューをアプリ側から供給
@@ -27,121 +35,169 @@ final class InternalViewer: NSObject {
 
     func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
-
-        // 読み方向
-        let isRTL = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
-        let rightToLeftItem = NSMenuItem(title: "右綴じ", action: #selector(setRightToLeft(_:)), keyEquivalent: "")
-        rightToLeftItem.target = self
-        rightToLeftItem.state = isRTL ? .on : .off
-        menu.addItem(rightToLeftItem)
-
-        let leftToRightItem = NSMenuItem(title: "左綴じ", action: #selector(setLeftToRight(_:)), keyEquivalent: "")
-        leftToRightItem.target = self
-        leftToRightItem.state = !isRTL ? .on : .off
-        menu.addItem(leftToRightItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // 表示モード
-        let currentMode = CZUserDefaults.shared.string(forKey: CZSettingsKeys.defaultViewMode) ?? "auto"
-        let autoModeItem = NSMenuItem(title: "自動", action: #selector(setViewModeAuto(_:)), keyEquivalent: "")
-        autoModeItem.target = self
-        autoModeItem.state = currentMode == "auto" ? .on : .off
-        menu.addItem(autoModeItem)
-
-        let singleModeItem = NSMenuItem(title: "単ページ", action: #selector(setViewModeSingle(_:)), keyEquivalent: "")
-        singleModeItem.target = self
-        singleModeItem.state = currentMode == "single" ? .on : .off
-        menu.addItem(singleModeItem)
-
-        let spreadModeItem = NSMenuItem(title: "見開き", action: #selector(setViewModeSpread(_:)), keyEquivalent: "")
-        spreadModeItem.target = self
-        spreadModeItem.state = currentMode == "spread" ? .on : .off
-        menu.addItem(spreadModeItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // 見開きの左右を補正
-        let currentOffset = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
-        let spreadOffsetItem = NSMenuItem(title: "見開きの左右を補正", action: #selector(toggleSpreadPairOffset(_:)), keyEquivalent: "")
-        spreadOffsetItem.target = self
-        spreadOffsetItem.state = currentOffset == 1 ? .on : .off
-        menu.addItem(spreadOffsetItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // ページ送りアニメ
-        let transitionEnabled = CZUserDefaults.shared.object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true
-        let transitionItem = NSMenuItem(title: "ページ送りアニメ", action: #selector(toggleTransition(_:)), keyEquivalent: "")
-        transitionItem.target = self
-        transitionItem.state = transitionEnabled ? .on : .off
-        menu.addItem(transitionItem)
-
-        // スライドショー
-        let slideshowItem = NSMenuItem(title: "スライドショー", action: #selector(toggleSlideshow(_:)), keyEquivalent: "")
-        slideshowItem.target = self
-        // 状態はプレイヤの状態に依存するためオフで開始
-        slideshowItem.state = .off
-        menu.addItem(slideshowItem)
+        for entry in CZPreviewContextMenuLayout.entries {
+            switch entry {
+            case .separator:
+                menu.addItem(NSMenuItem.separator())
+            case .action(let command):
+                let item = NSMenuItem(
+                    title: CZPreviewContextMenuLayout.title(for: command),
+                    action: selector(for: command),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.state = menuState(for: command)
+                menu.addItem(item)
+            }
+        }
 
         return menu
     }
 
-    // MARK: Actions (App側)
+    // MARK: - Actions (App側)
     @objc func setRightToLeft(_ sender: NSMenuItem) {
-        CZUserDefaults.shared.set(true, forKey: CZSettingsKeys.isRightToLeftReading)
-        sender.state = .on
-        (sender.menu?.item(withTitle: "左綴じ"))?.state = .off
-        // 反映は拡張側に任せる（Shared Defaults参照）
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        applyReadingDirection(isRightToLeft: true)
+        postSessionCommand(.setRightToLeftReading)
     }
 
     @objc func setLeftToRight(_ sender: NSMenuItem) {
-        CZUserDefaults.shared.set(false, forKey: CZSettingsKeys.isRightToLeftReading)
-        sender.state = .on
-        (sender.menu?.item(withTitle: "右綴じ"))?.state = .off
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        applyReadingDirection(isRightToLeft: false)
+        postSessionCommand(.setLeftToRightReading)
     }
 
     @objc func setViewModeAuto(_ sender: NSMenuItem) {
-        CZUserDefaults.shared.set("auto", forKey: CZSettingsKeys.defaultViewMode)
-        updateModeStates(sender)
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        applyViewMode(.auto)
+        postSessionCommand(.setViewModeAuto)
     }
+
     @objc func setViewModeSingle(_ sender: NSMenuItem) {
-        CZUserDefaults.shared.set("single", forKey: CZSettingsKeys.defaultViewMode)
-        updateModeStates(sender)
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        applyViewMode(.single)
+        postSessionCommand(.setViewModeSingle)
     }
+
     @objc func setViewModeSpread(_ sender: NSMenuItem) {
-        CZUserDefaults.shared.set("spread", forKey: CZSettingsKeys.defaultViewMode)
-        updateModeStates(sender)
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
-    }
-    private func updateModeStates(_ sender: NSMenuItem) {
-        for t in ["自動","単ページ","見開き"] { sender.menu?.item(withTitle: t)?.state = .off }
-        sender.state = .on
+        applyViewMode(.spread)
+        postSessionCommand(.setViewModeSpread)
     }
 
     @objc func toggleTransition(_ sender: NSMenuItem) {
-        let cur = CZUserDefaults.shared.object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true
-        let next = !cur
-        CZUserDefaults.shared.set(next, forKey: CZSettingsKeys.pageTransitionEnabled)
-        sender.state = next ? .on : .off
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        let next = !isTransitionEnabled
+        applyTransitionEnabled(next)
+        postSessionCommand(.setPageTransitionEnabled, boolValue: next)
     }
 
     @objc func toggleSlideshow(_ sender: NSMenuItem) {
-        // この場では状態のみ表示を切替。実動作は拡張側/プレビュー側で。
-        sender.state = (sender.state == .on) ? .off : .on
+        let next = !isSlideshowEnabled
+        applySlideshowEnabled(next)
+        postSessionCommand(.setSlideshowEnabled, boolValue: next)
     }
 
     @objc func toggleSpreadPairOffset(_ sender: NSMenuItem) {
-        let current = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
-        let next = 1 - current  // 0 ↔ 1 をトグル
-        CZUserDefaults.shared.set(next, forKey: CZSettingsKeys.spreadPairOffset)
-        sender.state = next == 1 ? .on : .off
-        // Preview Extension側への反映通知
-        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
+        let next = 1 - spreadPairOffset
+        applySpreadPairOffset(next)
+        postSessionCommand(.setSpreadPairOffset, intValue: next)
+    }
+
+    // MARK: - Private
+
+    private func setupSettingsObserverIfNeeded() {
+        guard settingsObserver == nil else { return }
+        settingsObserver = DistributedNotificationCenter.default().addObserver(
+            forName: CZDistributedNotifications.settingsChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.syncSessionStateFromSharedDefaults(resetSlideshowState: false)
+        }
+    }
+
+    private func syncSessionStateFromSharedDefaults(resetSlideshowState: Bool) {
+        isRightToLeftReading = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
+        currentViewMode = ViewModePreference(rawValue: CZUserDefaults.shared.string(forKey: CZSettingsKeys.defaultViewMode) ?? ViewModePreference.auto.rawValue) ?? .auto
+        spreadPairOffset = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
+        isTransitionEnabled = CZUserDefaults.shared.object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true
+        if resetSlideshowState {
+            isSlideshowEnabled = false
+        }
+    }
+
+    private func selector(for command: CZPreviewSessionCommand) -> Selector {
+        switch command {
+        case .setRightToLeftReading:
+            return #selector(setRightToLeft(_:))
+        case .setLeftToRightReading:
+            return #selector(setLeftToRight(_:))
+        case .setViewModeAuto:
+            return #selector(setViewModeAuto(_:))
+        case .setViewModeSingle:
+            return #selector(setViewModeSingle(_:))
+        case .setViewModeSpread:
+            return #selector(setViewModeSpread(_:))
+        case .setSpreadPairOffset:
+            return #selector(toggleSpreadPairOffset(_:))
+        case .setPageTransitionEnabled:
+            return #selector(toggleTransition(_:))
+        case .setSlideshowEnabled:
+            return #selector(toggleSlideshow(_:))
+        }
+    }
+
+    private func menuState(for command: CZPreviewSessionCommand) -> NSControl.StateValue {
+        switch command {
+        case .setRightToLeftReading:
+            return isRightToLeftReading ? .on : .off
+        case .setLeftToRightReading:
+            return isRightToLeftReading ? .off : .on
+        case .setViewModeAuto:
+            return currentViewMode == .auto ? .on : .off
+        case .setViewModeSingle:
+            return currentViewMode == .single ? .on : .off
+        case .setViewModeSpread:
+            return currentViewMode == .spread ? .on : .off
+        case .setSpreadPairOffset:
+            return spreadPairOffset == 1 ? .on : .off
+        case .setPageTransitionEnabled:
+            return isTransitionEnabled ? .on : .off
+        case .setSlideshowEnabled:
+            return isSlideshowEnabled ? .on : .off
+        }
+    }
+
+    private func applyReadingDirection(isRightToLeft: Bool) {
+        isRightToLeftReading = isRightToLeft
+    }
+
+    private func applyViewMode(_ mode: ViewModePreference) {
+        currentViewMode = mode
+    }
+
+    private func applySpreadPairOffset(_ offset: Int) {
+        spreadPairOffset = (offset % 2 + 2) % 2
+    }
+
+    private func applyTransitionEnabled(_ enabled: Bool) {
+        isTransitionEnabled = enabled
+    }
+
+    private func applySlideshowEnabled(_ enabled: Bool) {
+        isSlideshowEnabled = enabled
+    }
+
+    private func postSessionCommand(_ command: CZPreviewSessionCommand, boolValue: Bool? = nil, intValue: Int? = nil) {
+        var userInfo: [String: Any] = [
+            CZPreviewSessionCommandUserInfoKeys.command: command.rawValue
+        ]
+        if let boolValue {
+            userInfo[CZPreviewSessionCommandUserInfoKeys.boolValue] = boolValue
+        }
+        if let intValue {
+            userInfo[CZPreviewSessionCommandUserInfoKeys.intValue] = intValue
+        }
+
+        DistributedNotificationCenter.default().post(
+            name: CZDistributedNotifications.previewSessionCommand,
+            object: nil,
+            userInfo: userInfo
+        )
     }
 }

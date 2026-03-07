@@ -559,12 +559,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             if !self.didRestoreViewModeFromHistory && newViewMode != self.userPreferredViewMode {
                 self.userPreferredViewMode = newViewMode
             }
-            // 見開きの左右を補正設定の適用
-            let newSpreadOffset = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
-            if self.imageManager.getSpreadPairOffset() != newSpreadOffset {
-                self.imageManager.setSpreadPairOffset(newSpreadOffset)
-                self.displayCurrentImage()  // 表示を更新
-            }
             // 表示更新
             if self.imageManager.hasImages() {
                 self.displayCurrentImage()
@@ -573,6 +567,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             self.updateContextMenuStates()
         }
         distributedObservers.append(distObs)
+
+        let sessionCommandObserver = DistributedNotificationCenter.default().addObserver(
+            forName: CZDistributedNotifications.previewSessionCommand,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.handlePreviewSessionCommand(notification)
+        }
+        distributedObservers.append(sessionCommandObserver)
 
         // サムネイルストリップのコールバックを設定
         thumbnailStripView?.onPageSelected = { [weak self] index in
@@ -905,80 +908,22 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     private func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
-        
-        // 読み方向選択
-        let rightToLeftItem = NSMenuItem(title: "右綴じ", action: #selector(setRightToLeft(_:)), keyEquivalent: "")
-        rightToLeftItem.target = self
-        rightToLeftItem.state = isRightToLeftReading ? .on : .off
-        menu.addItem(rightToLeftItem)
-        
-        let leftToRightItem = NSMenuItem(title: "左綴じ", action: #selector(setLeftToRight(_:)), keyEquivalent: "")
-        leftToRightItem.target = self
-        leftToRightItem.state = !isRightToLeftReading ? .on : .off
-        menu.addItem(leftToRightItem)
-        
-        menu.addItem(NSMenuItem.separator())
 
-        // 表示モード選択
-        let autoModeItem = NSMenuItem(title: "自動", action: #selector(setViewModeAuto(_:)), keyEquivalent: "")
-        autoModeItem.target = self
-        autoModeItem.state = userPreferredViewMode == .auto ? .on : .off
-        menu.addItem(autoModeItem)
-        
-        let singleModeItem = NSMenuItem(title: "単ページ", action: #selector(setViewModeSingle(_:)), keyEquivalent: "")
-        singleModeItem.target = self
-        singleModeItem.state = userPreferredViewMode == .single ? .on : .off
-        menu.addItem(singleModeItem)
-        
-        let spreadModeItem = NSMenuItem(title: "見開き", action: #selector(setViewModeSpread(_:)), keyEquivalent: "")
-        spreadModeItem.target = self
-        spreadModeItem.state = userPreferredViewMode == .spread ? .on : .off
-        menu.addItem(spreadModeItem)
-        
-        menu.addItem(NSMenuItem.separator())
-        
-        // 見開き補正メニュー
-        let spreadOffsetItem = NSMenuItem(title: "見開きの左右を補正", action: #selector(toggleSpreadPairingOffset(_:)), keyEquivalent: "")
-        spreadOffsetItem.target = self
-        spreadOffsetItem.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
-        menu.addItem(spreadOffsetItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // ページ送りアニメ ON/OFF
-        let transitionItem = NSMenuItem(title: "ページ送りアニメ", action: #selector(toggleTransition(_:)), keyEquivalent: "")
-        transitionItem.target = self
-        transitionItem.state = isTransitionEnabled ? .on : .off
-        menu.addItem(transitionItem)
-        
-        // スライドショーメニュー
-        let slideshowItem = NSMenuItem(title: "スライドショー", action: #selector(toggleSlideshow(_:)), keyEquivalent: "")
-        slideshowItem.target = self
-        slideshowItem.state = isSlideshowEnabled ? .on : .off
-        menu.addItem(slideshowItem)
-
-        // デコードキャッシュ方針（プレビュー表示のパフォーマンス最適化）
-        let cacheMenuItem = NSMenuItem(title: "画像デコードキャッシュ", action: nil, keyEquivalent: "")
-        let cacheMenu = NSMenu()
-        let policy = AppSettings.shared.imageDecodeCachePolicy
-        let noCache = NSMenuItem(title: "しない（最小メモリ）", action: #selector(setDecodeCacheNoCache(_:)), keyEquivalent: "")
-        noCache.target = self
-        noCache.state = policy == .noCache ? .on : .off
-        cacheMenu.addItem(noCache)
-
-        let deferred = NSMenuItem(title: "遅延（推奨）", action: #selector(setDecodeCacheDeferred(_:)), keyEquivalent: "")
-        deferred.target = self
-        deferred.state = policy == .deferred ? .on : .off
-        cacheMenu.addItem(deferred)
-
-        let immediate = NSMenuItem(title: "即時（最速/メモリ多め）", action: #selector(setDecodeCacheImmediate(_:)), keyEquivalent: "")
-        immediate.target = self
-        immediate.state = policy == .immediate ? .on : .off
-        cacheMenu.addItem(immediate)
-
-        cacheMenuItem.submenu = cacheMenu
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(cacheMenuItem)
+        for entry in CZPreviewContextMenuLayout.entries {
+            switch entry {
+            case .separator:
+                menu.addItem(NSMenuItem.separator())
+            case .action(let command):
+                let item = NSMenuItem(
+                    title: CZPreviewContextMenuLayout.title(for: command),
+                    action: selector(for: command),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.state = menuState(for: command)
+                menu.addItem(item)
+            }
+        }
         
         return menu
     }
@@ -988,120 +933,151 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         view.menu = makeContextMenu()
     }
 
+    private func selector(for command: CZPreviewSessionCommand) -> Selector {
+        switch command {
+        case .setRightToLeftReading:
+            return #selector(setRightToLeft(_:))
+        case .setLeftToRightReading:
+            return #selector(setLeftToRight(_:))
+        case .setViewModeAuto:
+            return #selector(setViewModeAuto(_:))
+        case .setViewModeSingle:
+            return #selector(setViewModeSingle(_:))
+        case .setViewModeSpread:
+            return #selector(setViewModeSpread(_:))
+        case .setSpreadPairOffset:
+            return #selector(toggleSpreadPairingOffset(_:))
+        case .setPageTransitionEnabled:
+            return #selector(toggleTransition(_:))
+        case .setSlideshowEnabled:
+            return #selector(toggleSlideshow(_:))
+        }
+    }
+
+    private func menuState(for command: CZPreviewSessionCommand) -> NSControl.StateValue {
+        switch command {
+        case .setRightToLeftReading:
+            return isRightToLeftReading ? .on : .off
+        case .setLeftToRightReading:
+            return isRightToLeftReading ? .off : .on
+        case .setViewModeAuto:
+            return userPreferredViewMode == .auto ? .on : .off
+        case .setViewModeSingle:
+            return userPreferredViewMode == .single ? .on : .off
+        case .setViewModeSpread:
+            return userPreferredViewMode == .spread ? .on : .off
+        case .setSpreadPairOffset:
+            return imageManager.getSpreadPairOffset() == 1 ? .on : .off
+        case .setPageTransitionEnabled:
+            return isTransitionEnabled ? .on : .off
+        case .setSlideshowEnabled:
+            return isSlideshowEnabled ? .on : .off
+        }
+    }
+
     @objc private func toggleSpreadPairingOffset(_ sender: NSMenuItem) {
-        imageManager.toggleSpreadPairOffset()
-        // チェックマークを更新
-        sender.state = imageManager.getSpreadPairOffset() == 1 ? .on : .off
-        // 再描画（見開き時に効果、単ページでも次の見開きで反映）
-        displayCurrentImage()
+        applySpreadPairOffset(1 - imageManager.getSpreadPairOffset())
     }
     
     // 表示モード切替アクション
     @objc private func setViewModeAuto(_ sender: NSMenuItem) {
-        userPreferredViewMode = .auto
-        didRestoreViewModeFromHistory = true
-        displayCurrentImage()
-        updateContextMenuStates()
-        // 履歴を保存（表示モード変更）
-        saveReadingPositionToHistory()
+        applyViewModePreference(.auto)
     }
     
     @objc private func setViewModeSingle(_ sender: NSMenuItem) {
-        userPreferredViewMode = .single
-        didRestoreViewModeFromHistory = true
-        displayCurrentImage()
-        updateContextMenuStates()
-        // 履歴を保存（表示モード変更）
-        saveReadingPositionToHistory()
+        applyViewModePreference(.single)
     }
     
     @objc private func setViewModeSpread(_ sender: NSMenuItem) {
-        userPreferredViewMode = .spread
-        didRestoreViewModeFromHistory = true
-        displayCurrentImage()
-        updateContextMenuStates()
-        // 履歴を保存（表示モード変更）
-        saveReadingPositionToHistory()
+        applyViewModePreference(.spread)
     }
     
     // 読み方向切替アクション
     @objc private func setRightToLeft(_ sender: NSMenuItem) {
-        isRightToLeftReading = true
-        didRestoreRTLFromHistory = true
-
-        // UI要素を即座に更新
-        applySliderLayoutDirection()
-        syncSliderToCurrentPage()
-        displayCurrentImage()
-        thumbnailStripView?.isRightToLeft = true
-        thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
-        updateContextMenuStates()
-        // 履歴を保存
-        saveReadingPositionToHistory()
+        applyReadingDirection(true)
     }
 
     @objc private func setLeftToRight(_ sender: NSMenuItem) {
-        isRightToLeftReading = false
-        didRestoreRTLFromHistory = true
-
-        // UI要素を即座に更新
-        applySliderLayoutDirection()
-        syncSliderToCurrentPage()
-        displayCurrentImage()
-        thumbnailStripView?.isRightToLeft = false
-        thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
-        updateContextMenuStates()
-        // 履歴を保存
-        saveReadingPositionToHistory()
+        applyReadingDirection(false)
     }
     
     @objc private func toggleReadingDirection(_ sender: NSMenuItem) {
-        // 読み方向を切り替え
-        isRightToLeftReading.toggle()
-        didRestoreRTLFromHistory = true
-        
-        // チェックマークを更新（左綴じ時にチェック）
-        sender.state = !isRightToLeftReading ? .on : .off
-        
-        // 設定を保存
-        // セッション内のみ反映（永続化しない）
-        
-        // UI要素を即座に更新
-        applySliderLayoutDirection()
-        syncSliderToCurrentPage()
-        displayCurrentImage()
-        // 履歴を保存
-        saveReadingPositionToHistory()
+        applyReadingDirection(!isRightToLeftReading)
     }
     
     @objc private func toggleSlideshow(_ sender: NSMenuItem) {
-        if isSlideshowEnabled {
-            stopSlideshow()
-        } else {
-            startSlideshow()
-        }
-        // チェックマークを更新
-        sender.state = isSlideshowEnabled ? .on : .off
+        applySlideshowEnabled(!isSlideshowEnabled)
     }
 
-    // MARK: - Decode cache policy actions
-    @objc private func setDecodeCacheNoCache(_ sender: NSMenuItem) {
-        AppSettings.shared.imageDecodeCachePolicy = .noCache
-        imageManager.clearCache()
+    private func applyViewModePreference(_ viewMode: ViewModePreference) {
+        userPreferredViewMode = viewMode
+        didRestoreViewModeFromHistory = true
+        displayCurrentImage()
+        updateContextMenuStates()
+        saveReadingPositionToHistory()
+    }
+
+    private func applyReadingDirection(_ isRightToLeft: Bool) {
+        isRightToLeftReading = isRightToLeft
+        didRestoreRTLFromHistory = true
+
+        applySliderLayoutDirection()
+        syncSliderToCurrentPage()
+        displayCurrentImage()
+        thumbnailStripView?.isRightToLeft = isRightToLeft
+        thumbnailStripView?.selectItem(at: imageManager.currentPageIndex, scrollToVisible: true)
+        updateContextMenuStates()
+        saveReadingPositionToHistory()
+    }
+
+    private func applySpreadPairOffset(_ offset: Int) {
+        imageManager.setSpreadPairOffset((offset % 2 + 2) % 2)
         displayCurrentImage()
         updateContextMenuStates()
     }
-    @objc private func setDecodeCacheDeferred(_ sender: NSMenuItem) {
-        AppSettings.shared.imageDecodeCachePolicy = .deferred
-        imageManager.clearCache()
-        displayCurrentImage()
+
+    private func applyTransitionEnabled(_ enabled: Bool) {
+        isTransitionEnabled = enabled
         updateContextMenuStates()
     }
-    @objc private func setDecodeCacheImmediate(_ sender: NSMenuItem) {
-        AppSettings.shared.imageDecodeCachePolicy = .immediate
-        imageManager.clearCache()
-        displayCurrentImage()
+
+    private func applySlideshowEnabled(_ enabled: Bool) {
+        if enabled {
+            startSlideshow()
+        } else {
+            stopSlideshow()
+        }
         updateContextMenuStates()
+    }
+
+    private func handlePreviewSessionCommand(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let commandRaw = userInfo[CZPreviewSessionCommandUserInfoKeys.command] as? String,
+              let command = CZPreviewSessionCommand(rawValue: commandRaw) else {
+            return
+        }
+
+        switch command {
+        case .setRightToLeftReading:
+            applyReadingDirection(true)
+        case .setLeftToRightReading:
+            applyReadingDirection(false)
+        case .setViewModeAuto:
+            applyViewModePreference(.auto)
+        case .setViewModeSingle:
+            applyViewModePreference(.single)
+        case .setViewModeSpread:
+            applyViewModePreference(.spread)
+        case .setSpreadPairOffset:
+            let offset = userInfo[CZPreviewSessionCommandUserInfoKeys.intValue] as? Int ?? (1 - imageManager.getSpreadPairOffset())
+            applySpreadPairOffset(offset)
+        case .setPageTransitionEnabled:
+            let enabled = userInfo[CZPreviewSessionCommandUserInfoKeys.boolValue] as? Bool ?? !isTransitionEnabled
+            applyTransitionEnabled(enabled)
+        case .setSlideshowEnabled:
+            let enabled = userInfo[CZPreviewSessionCommandUserInfoKeys.boolValue] as? Bool ?? !isSlideshowEnabled
+            applySlideshowEnabled(enabled)
+        }
     }
     
     private func startSlideshow() {
@@ -1591,8 +1567,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     // トランジションのON/OFF切替
     @objc private func toggleTransition(_ sender: NSMenuItem) {
-        isTransitionEnabled.toggle()
-        sender.state = isTransitionEnabled ? .on : .off
+        applyTransitionEnabled(!isTransitionEnabled)
     }
 
     // 保存フレーム読み出し/保存（共有UserDefaultsに統一）

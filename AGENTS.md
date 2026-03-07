@@ -39,7 +39,8 @@
 - キー入力処理は `KeyForwardingView`（First Responder 専用の薄いビュー）で受け取り、プレビュー領域の左右半分への左クリック（ダウン/アップ）を合成してページ送りを駆動（正式: `QLPreviewInputDriver`）。
 - `QLPreviewView` 自体を First Responder にしない（クローズ時の解放競合を回避）。
 - クローズ時は OS の標準解放順序（`shouldCloseWithWindow = true`）に委ね、独自のビュー破棄は行わない。
-- コンテキストメニュー項目（読み方向/表示モード/アニメ等）は共有 UserDefaults を介して同期。
+- Context menu items (reading direction / view mode / animation / slideshow) are unified between the app-side internal viewer and Quick Look viewer via shared menu definitions.
+- Runtime menu operations from the internal viewer are propagated to the Quick Look viewer via distributed session-command notifications (not direct shared-UserDefaults writes for each click).
 
 ## 実装ポリシー（変更方針）
 - 変更は最小限・局所的・既存スタイルに合わせる。無関係な最適化や一括リネームは禁止。
@@ -96,3 +97,4 @@
 - 2025-09-06 QLPreviewSmokeTest を正式化し `QLPreviewInputDriver` として採用
 - 2025-09-06 内蔵ビューアの入力経路を `QLPreviewInputDriver` に統一（セーフ入力モード分岐を廃止）
 - 2025-09-17 Preview Extension にマウスホイールスクロール対応を追加
+- 2026-03-07 コンテキストメニュー定義を共通化し、内蔵ビューア→Preview Extension のセッション操作を分散通知で同期
