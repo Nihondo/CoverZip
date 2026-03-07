@@ -48,13 +48,12 @@ struct RoutingSettingsView: View {
             fileAssociationSection
 
             Section {
+                columnHeaderView
+                    .moveDisabled(true)
+
                 if settings.rules.isEmpty {
                     emptyRulesView
                 } else {
-                    columnHeaderView
-                        .moveDisabled(true)
-                        .listRowBackground(Color(NSColor.controlBackgroundColor).opacity(0.5))
-
                     ForEach($settings.rules) { $rule in
                         RuleRowView(
                             rule: $rule,
@@ -66,6 +65,13 @@ struct RoutingSettingsView: View {
                     .onMove(perform: moveRules)
                 }
 
+                DefaultRuleRowView(
+                    application: $settings.defaultApplication,
+                    usedApplications: usedApplications,
+                    onChange: saveCurrentSettings
+                )
+                .moveDisabled(true)
+
                 Button(action: addNewRule) {
                     Label(CZLocalized.string("routing.rules.add", defaultValue: "New Rule"), systemImage: "plus")
                 }
@@ -75,17 +81,6 @@ struct RoutingSettingsView: View {
                 Text(CZLocalized.string(
                     "routing.rules.footer",
                     defaultValue: "Rules are evaluated from top to bottom, and the first match is applied."
-                ))
-            }
-
-            Section {
-                defaultAppRow
-            } header: {
-                Label(CZLocalized.string("routing.default.section", defaultValue: "Default Application"), systemImage: "app")
-            } footer: {
-                Text(CZLocalized.string(
-                    "routing.default.footer",
-                    defaultValue: "Used when no rule matches."
                 ))
             }
 
@@ -129,23 +124,6 @@ struct RoutingSettingsView: View {
             }
         } header: {
             Label(CZLocalized.string("routing.association.section", defaultValue: "ZIP File Association"), systemImage: "link")
-        }
-    }
-
-    // MARK: - 既定アプリ行
-
-    private var defaultAppRow: some View {
-        HStack {
-            Text(CZLocalized.string("routing.default.label", defaultValue: "Default"))
-                .foregroundColor(.secondary)
-            Spacer()
-            Text("→")
-                .foregroundColor(.secondary)
-            AppPickerMenu(
-                application: $settings.defaultApplication,
-                usedApplications: usedApplications,
-                onChange: saveCurrentSettings
-            )
         }
     }
 
@@ -382,6 +360,38 @@ struct RuleRowView: View {
             .buttonStyle(.borderless)
             .help(CZLocalized.string("routing.help.delete", defaultValue: "Delete"))
             .frame(width: ColumnWidth.deleteButton)
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
+struct DefaultRuleRowView: View {
+    @Binding var application: String
+    let usedApplications: [String]
+    let onChange: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(CZLocalized.string("routing.default.label", defaultValue: "Default"))
+                .foregroundColor(.secondary)
+                .frame(width: ColumnWidth.typePicker, alignment: .leading)
+
+            Text("—")
+                .foregroundColor(.secondary)
+                .frame(width: ColumnWidth.matchMode, alignment: .leading)
+
+            Text("—")
+                .foregroundColor(.secondary)
+                .frame(width: ColumnWidth.keywordField, alignment: .leading)
+
+            AppPickerMenu(
+                application: $application,
+                usedApplications: usedApplications,
+                onChange: onChange
+            )
+            .frame(width: ColumnWidth.applicationPicker, alignment: .leading)
+
+            Spacer().frame(width: ColumnWidth.deleteButton)
         }
         .padding(.horizontal, 4)
     }

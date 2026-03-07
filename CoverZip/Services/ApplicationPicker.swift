@@ -77,7 +77,9 @@ class ApplicationPicker {
      * application文字列（フルパスまたは"internal"）からアイコンを返す
      */
     static func icon(for application: String) -> NSImage? {
-        guard application != "internal" else { return nil }
+        if application == "internal" {
+            return icon(for: Bundle.main.bundleURL)
+        }
         if application.hasPrefix("/") {
             return icon(for: URL(fileURLWithPath: application))
         }
