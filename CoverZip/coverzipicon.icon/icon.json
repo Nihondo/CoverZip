@@ -19,17 +19,14 @@
     {
       "layers" : [
         {
-          "blend-mode" : "normal",
-          "fill" : "none",
           "glass" : false,
-          "hidden" : false,
           "image-name" : "coverzipicon.png",
           "name" : "coverzipicon",
           "position" : {
-            "scale" : 1.5,
+            "scale" : 0.85,
             "translation-in-points" : [
-              3,
-              -4.5
+              11,
+              -8
             ]
           }
         }
