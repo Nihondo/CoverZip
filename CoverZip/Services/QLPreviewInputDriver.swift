@@ -24,6 +24,13 @@ private class WeakRef<T: AnyObject> {
 
 /// Quick Look 埋め込みの入力制御を提供するユーティリティ（正式版）
 enum QLPreviewInputDriver {
+    /// ビューアウィンドウの開閉状態が変化したときに `NotificationCenter.default` へ投稿する通知名。
+    /// userInfo なし。`hasOpenViewerWindow` で現在の状態を取得できる。
+    static let viewerWindowStateChanged = Notification.Name("com.dmng.CoverZip.viewerWindowStateChanged")
+
+    /// 現在ビューアウィンドウが1つ以上開いているかどうか
+    static var hasOpenViewerWindow: Bool { !retainedWindows.isEmpty }
+
     /// テスト用ウィンドウを保持（早期解放を防ぐ）
     private static var retainedWindows: [NSWindow] = []
     /// KeyForwardingViewの弱参照を保持（Focus復帰用）
@@ -132,19 +139,6 @@ enum QLPreviewInputDriver {
         return AXIsProcessTrusted()
     }
 
-    /// オープンパネルを出して ZIP を選択し、最小構成の QLPreviewView ウィンドウを開く
-    /// - Note: 開発メニューや動作確認用のユーティリティ。
-    static func presentAndOpen() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.zip]
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            openQuickLookWindow(url: url)
-        }
-    }
-
     /// 指定 URL を QLPreviewView 単体で表示するウィンドウを開く
     /// - Parameter url: 表示する ZIP の URL
     static func openQuickLookWindow(url: URL) {
@@ -168,6 +162,8 @@ enum QLPreviewInputDriver {
                 defer: false
             )
             window.title = "Preview – " + url.lastPathComponent
+            window.tabbingMode = .disallowed
+            window.collectionBehavior = [.managed, .participatesInCycle]
 
             // 保存されたフレームがない場合のみ中央配置
             if loadSavedWindowFrame() == nil {
@@ -231,9 +227,11 @@ enum QLPreviewInputDriver {
                 NotificationCenter.default.removeObserver(moveObserver)
                 // 参照解放
                 retainedWindows.removeAll { $0 == window }
+                NotificationCenter.default.post(name: viewerWindowStateChanged, object: nil)
             }
 
             retainedWindows.append(window)
+            NotificationCenter.default.post(name: viewerWindowStateChanged, object: nil)
             window.makeKeyAndOrderFront(nil)
             if let f = forwarderRef {
                 // キー化後に改めて First Responder をセット（QL が奪うのを防ぐ）

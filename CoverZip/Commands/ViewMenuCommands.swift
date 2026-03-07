@@ -23,17 +23,27 @@ final class ViewMenuState: ObservableObject {
     @Published var isTransitionEnabled: Bool = true
     @Published var isSlideshowEnabled: Bool = false
     @Published var isThumbnailStripVisible: Bool = true
+    @Published var isViewerOpen: Bool = false
 
     private var settingsObserver: NSObjectProtocol?
+    private var windowStateObserver: NSObjectProtocol?
 
     private init() {
         syncFromSettings()
+        isViewerOpen = QLPreviewInputDriver.hasOpenViewerWindow
         settingsObserver = DistributedNotificationCenter.default().addObserver(
             forName: CZDistributedNotifications.settingsChanged,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             self?.syncFromSettings()
+        }
+        windowStateObserver = NotificationCenter.default.addObserver(
+            forName: QLPreviewInputDriver.viewerWindowStateChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.isViewerOpen = QLPreviewInputDriver.hasOpenViewerWindow
         }
     }
 
@@ -102,67 +112,70 @@ struct ViewMenuCommands: Commands {
     @ObservedObject private var state = ViewMenuState.shared
 
     var body: some Commands {
-        CommandMenu("表示") {
-            // 読み方向
-            Toggle("右綴じ", isOn: Binding(
-                get: { state.isRightToLeftReading },
-                set: { if $0 { state.setRightToLeft() } }
-            ))
+        CommandGroup(after: .toolbar) {
+            Group {
+                // 読み方向
+                Toggle("右綴じ", isOn: Binding(
+                    get: { state.isRightToLeftReading },
+                    set: { if $0 { state.setRightToLeft() } }
+                ))
 
-            Toggle("左綴じ", isOn: Binding(
-                get: { !state.isRightToLeftReading },
-                set: { if $0 { state.setLeftToRight() } }
-            ))
+                Toggle("左綴じ", isOn: Binding(
+                    get: { !state.isRightToLeftReading },
+                    set: { if $0 { state.setLeftToRight() } }
+                ))
 
-            Divider()
+                Divider()
 
-            // 表示モード
-            Toggle("自動", isOn: Binding(
-                get: { state.currentViewMode == .auto },
-                set: { if $0 { state.setViewModeAuto() } }
-            ))
-            .keyboardShortcut("0")
+                // 表示モード
+                Toggle("自動", isOn: Binding(
+                    get: { state.currentViewMode == .auto },
+                    set: { if $0 { state.setViewModeAuto() } }
+                ))
+                .keyboardShortcut("0")
 
-            Toggle("単ページ", isOn: Binding(
-                get: { state.currentViewMode == .single },
-                set: { if $0 { state.setViewModeSingle() } }
-            ))
-            .keyboardShortcut("1")
+                Toggle("単ページ", isOn: Binding(
+                    get: { state.currentViewMode == .single },
+                    set: { if $0 { state.setViewModeSingle() } }
+                ))
+                .keyboardShortcut("1")
 
-            Toggle("見開き", isOn: Binding(
-                get: { state.currentViewMode == .spread },
-                set: { if $0 { state.setViewModeSpread() } }
-            ))
-            .keyboardShortcut("2")
+                Toggle("見開き", isOn: Binding(
+                    get: { state.currentViewMode == .spread },
+                    set: { if $0 { state.setViewModeSpread() } }
+                ))
+                .keyboardShortcut("2")
 
-            Divider()
+                Divider()
 
-            // 補助設定
-            Toggle("見開きの左右を補正", isOn: Binding(
-                get: { state.spreadPairOffset == 1 },
-                set: { _ in state.toggleSpreadPairOffset() }
-            ))
-            .keyboardShortcut("f")
+                // 補助設定
+                Toggle("見開きの左右を補正", isOn: Binding(
+                    get: { state.spreadPairOffset == 1 },
+                    set: { _ in state.toggleSpreadPairOffset() }
+                ))
+                .keyboardShortcut("f")
 
-            Toggle("サムネイルリスト表示", isOn: Binding(
-                get: { state.isThumbnailStripVisible },
-                set: { _ in state.toggleThumbnailStrip() }
-            ))
-            .keyboardShortcut("l")
+                Toggle("サムネイルリスト表示", isOn: Binding(
+                    get: { state.isThumbnailStripVisible },
+                    set: { _ in state.toggleThumbnailStrip() }
+                ))
+                .keyboardShortcut("l")
 
-            Divider()
+                Divider()
 
-            // ページ送り / スライドショー
-            Toggle("ページ送りアニメ", isOn: Binding(
-                get: { state.isTransitionEnabled },
-                set: { _ in state.toggleTransition() }
-            ))
+                // ページ送り / スライドショー
+                Toggle("ページ送りアニメ", isOn: Binding(
+                    get: { state.isTransitionEnabled },
+                    set: { _ in state.toggleTransition() }
+                ))
 
-            Toggle("スライドショー", isOn: Binding(
-                get: { state.isSlideshowEnabled },
-                set: { _ in state.toggleSlideshow() }
-            ))
-            .keyboardShortcut("s")
+                Toggle("スライドショー", isOn: Binding(
+                    get: { state.isSlideshowEnabled },
+                    set: { _ in state.toggleSlideshow() }
+                ))
+                .keyboardShortcut("s")
+            }
+            .disabled(!state.isViewerOpen)
         }
     }
 }
