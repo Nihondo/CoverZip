@@ -356,22 +356,14 @@ enum QLPreviewInputDriver {
             NSLog("[QLInputDriver] Cannot synthesize click: Accessibility permission not granted")
             return
         }
-        let screenPoint = window.convertPoint(toScreen: pointInWindow)
-        let totalMaxY = NSScreen.screens.map { $0.frame.maxY }.max() ?? screenPoint.y
-        let cgPoint = CGPoint(x: screenPoint.x, y: totalMaxY - screenPoint.y)
-
-        // クリック合成中はカーソルを隠し、終了後に元の位置へ戻す
-        let originalPos = NSEvent.mouseLocation
-        let cgOriginalPoint = CGPoint(x: originalPos.x, y: totalMaxY - originalPos.y)
-        NSCursor.hide()
-        if let down = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: cgPoint, mouseButton: .left),
-           let up   = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,   mouseCursorPosition: cgPoint, mouseButton: .left) {
-            down.post(tap: .cghidEventTap)
-            up.post(tap: .cghidEventTap)
-        }
-        // CGWarpMouseCursorPosition はマウスイベントを生成せずカーソルだけ移動する
-        CGWarpMouseCursorPosition(cgOriginalPoint)
-        NSCursor.unhide()
+            let screenPoint = window.convertPoint(toScreen: pointInWindow)
+            let totalMaxY = NSScreen.screens.map { $0.frame.maxY }.max() ?? screenPoint.y
+            let cgPoint = CGPoint(x: screenPoint.x, y: totalMaxY - screenPoint.y)
+            if let down = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: cgPoint, mouseButton: .left),
+               let up = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: cgPoint, mouseButton: .left) {
+                down.post(tap: .cghidEventTap)
+                up.post(tap: .cghidEventTap)
+            }
     }
 }
 
