@@ -42,6 +42,9 @@ public enum CZPreviewSessionCommand: String {
     case setThumbnailStripVisible
     case setPageTransitionEnabled
     case setSlideshowEnabled
+    case goToFirstPage
+    case goToLastPage
+    case jumpRelativePages  // intValue に相対量（正=前進、負=後退）
 }
 
 public enum CZPreviewSessionCommandUserInfoKeys {
@@ -91,6 +94,12 @@ public enum CZPreviewContextMenuLayout {
             return "ページ送りアニメ"
         case .setSlideshowEnabled:
             return "スライドショー"
+        case .goToFirstPage:
+            return "最初のページ"
+        case .goToLastPage:
+            return "最後のページ"
+        case .jumpRelativePages:
+            return "ページジャンプ"
         }
     }
 }

@@ -37,6 +37,7 @@ struct CoverZipApp: App {
         }
         .commands {
             FileMenuCommands()
+            ViewMenuCommands()
             #if DEBUG
             DebugMenuCommands()
             #endif

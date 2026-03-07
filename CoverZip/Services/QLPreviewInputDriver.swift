@@ -312,14 +312,51 @@ enum QLPreviewInputDriver {
         override func keyDown(with event: NSEvent) {
             NSLog("[QLInputDriver] keyDown code=%d flags=%lu", Int(event.keyCode), event.modifierFlags.rawValue)
             switch Int(event.keyCode) {
-            case 123: handler(true)  // ← 左半分クリック
-            case 124: handler(false) // → 右半分クリック
+            case 123, 124: // ← or →
+                let isLeft  = (Int(event.keyCode) == 123)
+                let isCmd   = event.modifierFlags.contains(.command)
+                let isShift = event.modifierFlags.contains(.shift)
+                if isCmd || isShift {
+                    let isRTL = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
+                    let isForward = (isLeft == isRTL)  // RTL: ←=前進, LTR: →=前進
+                    if isCmd {
+                        QLPreviewInputDriver.postSessionCommand(isForward ? .goToLastPage : .goToFirstPage)
+                    } else {
+                        QLPreviewInputDriver.postSessionCommand(.jumpRelativePages, intValue: isForward ? +10 : -10)
+                    }
+                } else {
+                    handler(isLeft)
+                }
+            case 49:  // Space: 読み方向に応じてページ送り/戻し
+                let isRTL = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
+                let goForward = !event.modifierFlags.contains(.shift)
+                // RTL: 前進=左クリック / LTR: 前進=右クリック
+                handler(goForward == isRTL)
+            case 115: QLPreviewInputDriver.postSessionCommand(.goToFirstPage)               // Home
+            case 119: QLPreviewInputDriver.postSessionCommand(.goToLastPage)                // End
+            case 116: QLPreviewInputDriver.postSessionCommand(.jumpRelativePages, intValue: -10) // Page Up
+            case 121: QLPreviewInputDriver.postSessionCommand(.jumpRelativePages, intValue: +10) // Page Down
             default: super.keyDown(with: event)
             }
         }
         override func menu(for event: NSEvent) -> NSMenu? {
             return QLPreviewInputDriver.contextMenuProvider?()
         }
+    }
+
+    private static func postSessionCommand(_ command: CZPreviewSessionCommand, intValue: Int? = nil) {
+        var userInfo: [String: Any] = [
+            CZPreviewSessionCommandUserInfoKeys.command: command.rawValue
+        ]
+        if let intValue {
+            userInfo[CZPreviewSessionCommandUserInfoKeys.intValue] = intValue
+        }
+        DistributedNotificationCenter.default().postNotificationName(
+            CZDistributedNotifications.previewSessionCommand,
+            object: command.rawValue,
+            userInfo: userInfo,
+            deliverImmediately: true
+        )
     }
 
     private static func synthesizeClick(in previewView: QLPreviewView, window: NSWindow, onLeftHalf: Bool) {

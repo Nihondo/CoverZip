@@ -1,0 +1,168 @@
+//
+//  ViewMenuCommands.swift
+//  CoverZip
+//
+//  メニューバー「表示」メニューの定義。右クリックメニューと同じ InternalViewer のアクションに合流する。
+//
+
+import AppKit
+import Combine
+import SwiftUI
+
+// MARK: - ViewMenuState
+
+/// メニューバー「表示」メニューの状態を管理する ObservableObject。
+/// CZDistributedNotifications.settingsChanged を購読し、InternalViewer の
+/// セッション状態と常に同期される。
+final class ViewMenuState: ObservableObject {
+    static let shared = ViewMenuState()
+
+    @Published var isRightToLeftReading: Bool = true
+    @Published var currentViewMode: ViewModePreference = .auto
+    @Published var spreadPairOffset: Int = 0
+    @Published var isTransitionEnabled: Bool = true
+    @Published var isSlideshowEnabled: Bool = false
+    @Published var isThumbnailStripVisible: Bool = true
+
+    private var settingsObserver: NSObjectProtocol?
+
+    private init() {
+        syncFromSettings()
+        settingsObserver = DistributedNotificationCenter.default().addObserver(
+            forName: CZDistributedNotifications.settingsChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.syncFromSettings()
+        }
+    }
+
+    private func syncFromSettings() {
+        isRightToLeftReading = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
+        currentViewMode = ViewModePreference(
+            rawValue: CZUserDefaults.shared.string(forKey: CZSettingsKeys.defaultViewMode) ?? ViewModePreference.auto.rawValue
+        ) ?? .auto
+        spreadPairOffset = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
+        isTransitionEnabled = CZUserDefaults.shared.object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true
+        isSlideshowEnabled = CZSettings.shared.isSlideshowEnabled
+        isThumbnailStripVisible = CZSettings.shared.isThumbnailStripVisible
+    }
+
+    // MARK: - Action メソッド（InternalViewer の apply メソッドに委譲）
+
+    func setRightToLeft() {
+        isRightToLeftReading = true
+        InternalViewer.shared.applySetRightToLeft()
+    }
+
+    func setLeftToRight() {
+        isRightToLeftReading = false
+        InternalViewer.shared.applySetLeftToRight()
+    }
+
+    func setViewModeAuto() {
+        currentViewMode = .auto
+        InternalViewer.shared.applySetViewModeAuto()
+    }
+
+    func setViewModeSingle() {
+        currentViewMode = .single
+        InternalViewer.shared.applySetViewModeSingle()
+    }
+
+    func setViewModeSpread() {
+        currentViewMode = .spread
+        InternalViewer.shared.applySetViewModeSpread()
+    }
+
+    func toggleTransition() {
+        isTransitionEnabled.toggle()
+        InternalViewer.shared.applyToggleTransition()
+    }
+
+    func toggleSlideshow() {
+        isSlideshowEnabled.toggle()
+        InternalViewer.shared.applyToggleSlideshow()
+    }
+
+    func toggleSpreadPairOffset() {
+        spreadPairOffset = 1 - spreadPairOffset
+        InternalViewer.shared.applyToggleSpreadPairOffset()
+    }
+
+    func toggleThumbnailStrip() {
+        isThumbnailStripVisible.toggle()
+        InternalViewer.shared.applyToggleThumbnailStrip()
+    }
+}
+
+// MARK: - ViewMenuCommands
+
+struct ViewMenuCommands: Commands {
+    @ObservedObject private var state = ViewMenuState.shared
+
+    var body: some Commands {
+        CommandMenu("表示") {
+            // 読み方向
+            Toggle("右綴じ", isOn: Binding(
+                get: { state.isRightToLeftReading },
+                set: { if $0 { state.setRightToLeft() } }
+            ))
+
+            Toggle("左綴じ", isOn: Binding(
+                get: { !state.isRightToLeftReading },
+                set: { if $0 { state.setLeftToRight() } }
+            ))
+
+            Divider()
+
+            // 表示モード
+            Toggle("自動", isOn: Binding(
+                get: { state.currentViewMode == .auto },
+                set: { if $0 { state.setViewModeAuto() } }
+            ))
+            .keyboardShortcut("0")
+
+            Toggle("単ページ", isOn: Binding(
+                get: { state.currentViewMode == .single },
+                set: { if $0 { state.setViewModeSingle() } }
+            ))
+            .keyboardShortcut("1")
+
+            Toggle("見開き", isOn: Binding(
+                get: { state.currentViewMode == .spread },
+                set: { if $0 { state.setViewModeSpread() } }
+            ))
+            .keyboardShortcut("2")
+
+            Divider()
+
+            // 補助設定
+            Toggle("見開きの左右を補正", isOn: Binding(
+                get: { state.spreadPairOffset == 1 },
+                set: { _ in state.toggleSpreadPairOffset() }
+            ))
+            .keyboardShortcut("f")
+
+            Toggle("サムネイルリスト表示", isOn: Binding(
+                get: { state.isThumbnailStripVisible },
+                set: { _ in state.toggleThumbnailStrip() }
+            ))
+            .keyboardShortcut("l")
+
+            Divider()
+
+            // ページ送り / スライドショー
+            Toggle("ページ送りアニメ", isOn: Binding(
+                get: { state.isTransitionEnabled },
+                set: { _ in state.toggleTransition() }
+            ))
+
+            Toggle("スライドショー", isOn: Binding(
+                get: { state.isSlideshowEnabled },
+                set: { _ in state.toggleSlideshow() }
+            ))
+            .keyboardShortcut("s")
+        }
+    }
+}

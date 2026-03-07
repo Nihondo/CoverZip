@@ -908,7 +908,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         view.menu = makeContextMenu()
     }
 
-    private func selector(for command: CZPreviewSessionCommand) -> Selector {
+    private func selector(for command: CZPreviewSessionCommand) -> Selector? {
         switch command {
         case .setRightToLeftReading:
             return #selector(setRightToLeft(_:))
@@ -928,6 +928,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return #selector(toggleTransition(_:))
         case .setSlideshowEnabled:
             return #selector(toggleSlideshow(_:))
+        case .goToFirstPage, .goToLastPage, .jumpRelativePages:
+            return nil
         }
     }
 
@@ -951,6 +953,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return isTransitionEnabled ? .on : .off
         case .setSlideshowEnabled:
             return isSlideshowEnabled ? .on : .off
+        case .goToFirstPage, .goToLastPage, .jumpRelativePages:
+            return .off
         }
     }
 
@@ -1156,6 +1160,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             let enabled = userInfo[CZPreviewSessionCommandUserInfoKeys.boolValue] as? Bool ?? !isSlideshowEnabled
             NSLog("[DEBUG] Received setSlideshowEnabled command: %d", enabled ? 1 : 0)
             applySlideshowEnabled(enabled)
+        case .goToFirstPage:
+            moveToPageFromThumbnail(1)
+        case .goToLastPage:
+            moveToPageFromThumbnail(imageManager.getImageCount())
+        case .jumpRelativePages:
+            let delta = userInfo[CZPreviewSessionCommandUserInfoKeys.intValue] as? Int ?? 0
+            let target = imageManager.getCurrentPageNumber() + delta
+            let clamped = max(1, min(target, imageManager.getImageCount()))
+            moveToPageFromThumbnail(clamped)
         }
     }
     

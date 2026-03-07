@@ -56,42 +56,53 @@ final class InternalViewer: NSObject {
     }
 
     // MARK: - Actions (App側)
-    @objc func setRightToLeft(_ sender: NSMenuItem) {
+    @objc func setRightToLeft(_ sender: NSMenuItem) { applySetRightToLeft() }
+    @objc func setLeftToRight(_ sender: NSMenuItem) { applySetLeftToRight() }
+    @objc func setViewModeAuto(_ sender: NSMenuItem) { applySetViewModeAuto() }
+    @objc func setViewModeSingle(_ sender: NSMenuItem) { applySetViewModeSingle() }
+    @objc func setViewModeSpread(_ sender: NSMenuItem) { applySetViewModeSpread() }
+    @objc func toggleTransition(_ sender: NSMenuItem) { applyToggleTransition() }
+    @objc func toggleSlideshow(_ sender: NSMenuItem) { applyToggleSlideshow() }
+    @objc func toggleSpreadPairOffset(_ sender: NSMenuItem) { applyToggleSpreadPairOffset() }
+    @objc func toggleThumbnailStripVisibility(_ sender: NSMenuItem) { applyToggleThumbnailStrip() }
+
+    // MARK: - Public Action Implementation (SwiftUI からも呼び出し可能)
+    func applySetRightToLeft() {
         applyReadingDirection(isRightToLeft: true)
         CZUserDefaults.shared.set(true, forKey: CZSettingsKeys.isRightToLeftReading)
         postSettingsChanged()
         postSessionCommand(.setRightToLeftReading)
     }
 
-    @objc func setLeftToRight(_ sender: NSMenuItem) {
+    func applySetLeftToRight() {
         applyReadingDirection(isRightToLeft: false)
         CZUserDefaults.shared.set(false, forKey: CZSettingsKeys.isRightToLeftReading)
         postSettingsChanged()
         postSessionCommand(.setLeftToRightReading)
     }
 
-    @objc func setViewModeAuto(_ sender: NSMenuItem) {
+    func applySetViewModeAuto() {
         applyViewMode(.auto)
         CZUserDefaults.shared.set(ViewModePreference.auto.rawValue, forKey: CZSettingsKeys.defaultViewMode)
         postSettingsChanged()
         postSessionCommand(.setViewModeAuto)
     }
 
-    @objc func setViewModeSingle(_ sender: NSMenuItem) {
+    func applySetViewModeSingle() {
         applyViewMode(.single)
         CZUserDefaults.shared.set(ViewModePreference.single.rawValue, forKey: CZSettingsKeys.defaultViewMode)
         postSettingsChanged()
         postSessionCommand(.setViewModeSingle)
     }
 
-    @objc func setViewModeSpread(_ sender: NSMenuItem) {
+    func applySetViewModeSpread() {
         applyViewMode(.spread)
         CZUserDefaults.shared.set(ViewModePreference.spread.rawValue, forKey: CZSettingsKeys.defaultViewMode)
         postSettingsChanged()
         postSessionCommand(.setViewModeSpread)
     }
 
-    @objc func toggleTransition(_ sender: NSMenuItem) {
+    func applyToggleTransition() {
         let next = !isTransitionEnabled
         applyTransitionEnabled(next)
         CZUserDefaults.shared.set(next, forKey: CZSettingsKeys.pageTransitionEnabled)
@@ -99,7 +110,7 @@ final class InternalViewer: NSObject {
         postSessionCommand(.setPageTransitionEnabled, boolValue: next)
     }
 
-    @objc func toggleSlideshow(_ sender: NSMenuItem) {
+    func applyToggleSlideshow() {
         let next = !isSlideshowEnabled
         NSLog("[InternalViewer] toggleSlideshow next=%d", next ? 1 : 0)
         applySlideshowEnabled(next)
@@ -108,7 +119,7 @@ final class InternalViewer: NSObject {
         postSessionCommand(.setSlideshowEnabled, boolValue: next)
     }
 
-    @objc func toggleSpreadPairOffset(_ sender: NSMenuItem) {
+    func applyToggleSpreadPairOffset() {
         let next = 1 - spreadPairOffset
         applySpreadPairOffset(next)
         CZUserDefaults.shared.set(next, forKey: CZSettingsKeys.spreadPairOffset)
@@ -116,7 +127,7 @@ final class InternalViewer: NSObject {
         postSessionCommand(.setSpreadPairOffset, intValue: next)
     }
 
-    @objc func toggleThumbnailStripVisibility(_ sender: NSMenuItem) {
+    func applyToggleThumbnailStrip() {
         let next = !isThumbnailStripVisible
         applyThumbnailStripVisibility(next)
         CZSettings.shared.isThumbnailStripVisible = next
@@ -150,7 +161,7 @@ final class InternalViewer: NSObject {
         }
     }
 
-    private func selector(for command: CZPreviewSessionCommand) -> Selector {
+    private func selector(for command: CZPreviewSessionCommand) -> Selector? {
         switch command {
         case .setRightToLeftReading:
             return #selector(setRightToLeft(_:))
@@ -170,6 +181,8 @@ final class InternalViewer: NSObject {
             return #selector(toggleTransition(_:))
         case .setSlideshowEnabled:
             return #selector(toggleSlideshow(_:))
+        case .goToFirstPage, .goToLastPage, .jumpRelativePages:
+            return nil
         }
     }
 
@@ -193,6 +206,8 @@ final class InternalViewer: NSObject {
             return isTransitionEnabled ? .on : .off
         case .setSlideshowEnabled:
             return isSlideshowEnabled ? .on : .off
+        case .goToFirstPage, .goToLastPage, .jumpRelativePages:
+            return .off
         }
     }
 
