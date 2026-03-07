@@ -76,7 +76,10 @@ class AppLauncher {
             let error = NSError(
                 domain: "AppLauncher",
                 code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "ファイルを開けませんでした"]
+                userInfo: [NSLocalizedDescriptionKey: CZLocalized.string(
+                    "error.app_launcher.cannot_open_file",
+                    defaultValue: "Could not open file"
+                )]
             )
             return .launchFailed(error)
         }
@@ -138,7 +141,10 @@ class AppLauncher {
             return NSError(
                 domain: "AppLauncher",
                 code: -2,
-                userInfo: [NSLocalizedDescriptionKey: "アプリケーション起動がタイムアウトしました"]
+                userInfo: [NSLocalizedDescriptionKey: CZLocalized.string(
+                    "error.app_launcher.launch_timeout",
+                    defaultValue: "Application launch timed out"
+                )]
             )
         }
         return launchError

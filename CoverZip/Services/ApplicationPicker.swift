@@ -18,8 +18,8 @@ class ApplicationPicker {
      */
     static func pickApplication(completion: @escaping (URL?) -> Void) {
         let panel = NSOpenPanel()
-        panel.title = "アプリケーションを選択"
-        panel.message = "ZIPファイルを開くアプリケーションを選択してください"
+        panel.title = CZLocalized.string("app_picker.panel.title", defaultValue: "Select Application")
+        panel.message = CZLocalized.string("app_picker.panel.message", defaultValue: "Select an application to open ZIP files")
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
@@ -52,7 +52,9 @@ class ApplicationPicker {
      * application文字列（フルパスまたは"internal"）から表示名を返す
      */
     static func displayName(for application: String) -> String {
-        if application == "internal" { return "内蔵ビューア" }
+        if application == "internal" {
+            return CZLocalized.string("application.internal_viewer", defaultValue: "Built-in Viewer")
+        }
         if application.hasPrefix("/") {
             return displayName(for: URL(fileURLWithPath: application))
         }

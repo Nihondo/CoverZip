@@ -115,12 +115,12 @@ struct ViewMenuCommands: Commands {
         CommandGroup(after: .toolbar) {
             Group {
                 // 読み方向
-                Toggle("右綴じ", isOn: Binding(
+                Toggle(CZPreviewContextMenuLayout.title(for: .setRightToLeftReading), isOn: Binding(
                     get: { state.isRightToLeftReading },
                     set: { if $0 { state.setRightToLeft() } }
                 ))
 
-                Toggle("左綴じ", isOn: Binding(
+                Toggle(CZPreviewContextMenuLayout.title(for: .setLeftToRightReading), isOn: Binding(
                     get: { !state.isRightToLeftReading },
                     set: { if $0 { state.setLeftToRight() } }
                 ))
@@ -128,19 +128,19 @@ struct ViewMenuCommands: Commands {
                 Divider()
 
                 // 表示モード
-                Toggle("自動", isOn: Binding(
+                Toggle(CZPreviewContextMenuLayout.title(for: .setViewModeAuto), isOn: Binding(
                     get: { state.currentViewMode == .auto },
                     set: { if $0 { state.setViewModeAuto() } }
                 ))
                 .keyboardShortcut("0")
 
-                Toggle("単ページ", isOn: Binding(
+                Toggle(CZPreviewContextMenuLayout.title(for: .setViewModeSingle), isOn: Binding(
                     get: { state.currentViewMode == .single },
                     set: { if $0 { state.setViewModeSingle() } }
                 ))
                 .keyboardShortcut("1")
 
-                Toggle("見開き", isOn: Binding(
+                Toggle(CZPreviewContextMenuLayout.title(for: .setViewModeSpread), isOn: Binding(
                     get: { state.currentViewMode == .spread },
                     set: { if $0 { state.setViewModeSpread() } }
                 ))
@@ -149,13 +149,13 @@ struct ViewMenuCommands: Commands {
                 Divider()
 
                 // 補助設定
-                Toggle("見開きの左右を補正", isOn: Binding(
+                Toggle(CZPreviewContextMenuLayout.title(for: .setSpreadPairOffset), isOn: Binding(
                     get: { state.spreadPairOffset == 1 },
                     set: { _ in state.toggleSpreadPairOffset() }
                 ))
                 .keyboardShortcut("f")
 
-                Toggle("サムネイルリスト表示", isOn: Binding(
+                Toggle(CZPreviewContextMenuLayout.title(for: .setThumbnailStripVisible), isOn: Binding(
                     get: { state.isThumbnailStripVisible },
                     set: { _ in state.toggleThumbnailStrip() }
                 ))
@@ -164,12 +164,12 @@ struct ViewMenuCommands: Commands {
                 Divider()
 
                 // ページ送り / スライドショー
-                Toggle("ページ送りアニメ", isOn: Binding(
+                Toggle(CZPreviewContextMenuLayout.title(for: .setPageTransitionEnabled), isOn: Binding(
                     get: { state.isTransitionEnabled },
                     set: { _ in state.toggleTransition() }
                 ))
 
-                Toggle("スライドショー", isOn: Binding(
+                Toggle(CZPreviewContextMenuLayout.title(for: .setSlideshowEnabled), isOn: Binding(
                     get: { state.isSlideshowEnabled },
                     set: { _ in state.toggleSlideshow() }
                 ))

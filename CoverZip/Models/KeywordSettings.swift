@@ -17,9 +17,12 @@ enum KeywordType: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .filename:      return "ファイル名が"
-        case .pathname:      return "フォルダ名が"
-        case .fileExtension: return "拡張子が"
+        case .filename:
+            return CZLocalized.string("routing.rule.type.filename", defaultValue: "Filename")
+        case .pathname:
+            return CZLocalized.string("routing.rule.type.pathname", defaultValue: "Folder Name")
+        case .fileExtension:
+            return CZLocalized.string("routing.rule.type.extension", defaultValue: "File Extension")
         }
     }
 }
@@ -36,11 +39,16 @@ enum MatchMode: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .contains:   return "次を含む"
-        case .startsWith: return "次で始まる"
-        case .endsWith:   return "次で終わる"
-        case .wildcard:   return "ワイルドカードに一致"
-        case .regex:      return "正規表現に一致"
+        case .contains:
+            return CZLocalized.string("routing.rule.match.contains", defaultValue: "contains")
+        case .startsWith:
+            return CZLocalized.string("routing.rule.match.starts_with", defaultValue: "starts with")
+        case .endsWith:
+            return CZLocalized.string("routing.rule.match.ends_with", defaultValue: "ends with")
+        case .wildcard:
+            return CZLocalized.string("routing.rule.match.wildcard", defaultValue: "matches wildcard")
+        case .regex:
+            return CZLocalized.string("routing.rule.match.regex", defaultValue: "matches regex")
         }
     }
 }
@@ -147,7 +155,14 @@ struct KeywordSettings: Codable {
      */
     func save() throws {
         guard let appSupportURL = KeywordSettings.getApplicationSupportDirectory() else {
-            throw NSError(domain: "KeywordSettings", code: 1, userInfo: [NSLocalizedDescriptionKey: "Application Support directory not found"])
+            throw NSError(
+                domain: "KeywordSettings",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: CZLocalized.string(
+                    "error.keyword_settings.app_support_not_found",
+                    defaultValue: "Application Support directory not found"
+                )]
+            )
         }
 
         let settingsURL = appSupportURL.appendingPathComponent("settings.json")
@@ -206,4 +221,3 @@ struct KeywordSettings: Codable {
         }
     }
 }
-

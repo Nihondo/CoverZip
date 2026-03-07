@@ -66,31 +66,37 @@ struct RoutingSettingsView: View {
                 }
 
                 Button(action: addNewRule) {
-                    Label("新規ルール", systemImage: "plus")
+                    Label(CZLocalized.string("routing.rules.add", defaultValue: "New Rule"), systemImage: "plus")
                 }
             } header: {
-                Label("ルール一覧", systemImage: "list.bullet")
+                Label(CZLocalized.string("routing.rules.section", defaultValue: "Rules"), systemImage: "list.bullet")
             } footer: {
-                Text("ルールは上から順に評価され、最初にマッチしたルールが適用されます。")
+                Text(CZLocalized.string(
+                    "routing.rules.footer",
+                    defaultValue: "Rules are evaluated from top to bottom, and the first match is applied."
+                ))
             }
 
             Section {
                 defaultAppRow
             } header: {
-                Label("デフォルトアプリケーション", systemImage: "app")
+                Label(CZLocalized.string("routing.default.section", defaultValue: "Default Application"), systemImage: "app")
             } footer: {
-                Text("ルールにマッチしない場合に使用されます。")
+                Text(CZLocalized.string(
+                    "routing.default.footer",
+                    defaultValue: "Used when no rule matches."
+                ))
             }
 
             Section {
                 HStack {
-                    Button("保存") { saveSettings() }
+                    Button(CZLocalized.string("routing.actions.save", defaultValue: "Save")) { saveSettings() }
                         .buttonStyle(.borderedProminent)
                         .disabled(!hasUnsavedChanges)
-                    Button("リセット") { resetSettings() }
+                    Button(CZLocalized.string("routing.actions.reset", defaultValue: "Reset")) { resetSettings() }
                         .disabled(!hasUnsavedChanges)
                     Spacer()
-                    Button("JSONファイルを編集") {
+                    Button(CZLocalized.string("routing.actions.edit_json", defaultValue: "Edit JSON File")) {
                         let _ = SettingsFileManager.openSettingsFileInExternalEditor()
                     }
                 }
@@ -98,8 +104,8 @@ struct RoutingSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(minWidth: 760, minHeight: 480)
-        .alert("通知", isPresented: $showingAlert) {
-            Button("OK", role: .cancel) { }
+        .alert(CZLocalized.string("routing.alert.title", defaultValue: "Notice"), isPresented: $showingAlert) {
+            Button(CZLocalized.string("common.ok", defaultValue: "OK"), role: .cancel) { }
         } message: {
             Text(alertMessage)
         }
@@ -113,22 +119,28 @@ struct RoutingSettingsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isDefaultHandler
-                        ? "CoverZipがZIPファイルのデフォルトアプリです"
-                        : "CoverZipはZIPファイルのデフォルトアプリではありません"
+                        ? CZLocalized.string("routing.association.status.is_default", defaultValue: "CoverZip is the default app for ZIP files")
+                        : CZLocalized.string("routing.association.status.is_not_default", defaultValue: "CoverZip is not the default app for ZIP files")
                     )
                     if !currentDefaultAppName.isEmpty && !isDefaultHandler {
-                        Text("現在のデフォルト: \(currentDefaultAppName)")
+                        Text(CZLocalized.formatted(
+                            "routing.association.current_default_format",
+                            defaultValue: "Current default: %@",
+                            currentDefaultAppName
+                        ))
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
                 Spacer()
-                Button(isDefaultHandler ? "デフォルトを解除" : "デフォルトに設定") {
+                Button(isDefaultHandler
+                       ? CZLocalized.string("routing.association.action.unset_default", defaultValue: "Unset Default")
+                       : CZLocalized.string("routing.association.action.set_default", defaultValue: "Set as Default")) {
                     toggleDefaultHandler()
                 }
             }
         } header: {
-            Label("ZIPファイルの関連付け", systemImage: "link")
+            Label(CZLocalized.string("routing.association.section", defaultValue: "ZIP File Association"), systemImage: "link")
         }
     }
 
@@ -136,7 +148,7 @@ struct RoutingSettingsView: View {
 
     private var defaultAppRow: some View {
         HStack {
-            Text("デフォルト")
+            Text(CZLocalized.string("routing.default.label", defaultValue: "Default"))
                 .foregroundColor(.secondary)
             Spacer()
             Text("→")
@@ -156,9 +168,9 @@ struct RoutingSettingsView: View {
             Image(systemName: "doc.text.magnifyingglass")
                 .font(.system(size: 36))
                 .foregroundColor(.secondary)
-            Text("ルールがありません")
+            Text(CZLocalized.string("routing.rules.empty.title", defaultValue: "No Rules"))
                 .foregroundColor(.secondary)
-            Text("「新規ルール」ボタンをクリックして追加してください")
+            Text(CZLocalized.string("routing.rules.empty.subtitle", defaultValue: "Click \"New Rule\" to add one."))
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -168,13 +180,13 @@ struct RoutingSettingsView: View {
     private var columnHeaderView: some View {
         HStack(spacing: 8) {
             Spacer().frame(width: 20)
-            Text("対象")
+            Text(CZLocalized.string("routing.rules.header.target", defaultValue: "Target"))
                 .frame(width: ColumnWidth.typePicker, alignment: .leading)
-            Text("条件")
+            Text(CZLocalized.string("routing.rules.header.condition", defaultValue: "Condition"))
                 .frame(width: ColumnWidth.matchMode, alignment: .leading)
-            Text("キーワード")
+            Text(CZLocalized.string("routing.rules.header.keyword", defaultValue: "Keyword"))
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text("アプリケーション")
+            Text(CZLocalized.string("routing.rules.header.application", defaultValue: "Application"))
                 .frame(minWidth: 140, alignment: .leading)
             Spacer().frame(width: ColumnWidth.deleteButton)
         }
@@ -203,10 +215,10 @@ struct RoutingSettingsView: View {
     private func saveSettings() {
         if SettingsFileManager.saveSettings(settings) {
             hasUnsavedChanges = false
-            alertMessage = "設定を保存しました"
+            alertMessage = CZLocalized.string("routing.alert.save_success", defaultValue: "Settings saved.")
             showingAlert = true
         } else {
-            alertMessage = "設定の保存に失敗しました"
+            alertMessage = CZLocalized.string("routing.alert.save_failed", defaultValue: "Failed to save settings.")
             showingAlert = true
         }
     }
@@ -240,7 +252,10 @@ struct RoutingSettingsView: View {
     private func toggleDefaultHandler() {
         if isDefaultHandler {
             guard let archiveUtilityURL = resolveArchiveUtilityURL() else {
-                alertMessage = "Archive Utility が見つからないため、デフォルトを解除できませんでした"
+                alertMessage = CZLocalized.string(
+                    "routing.alert.archive_utility_not_found",
+                    defaultValue: "Could not unset default because Archive Utility was not found."
+                )
                 showingAlert = true
                 return
             }
@@ -252,7 +267,10 @@ struct RoutingSettingsView: View {
 
     private func setDefaultHandler(to appURL: URL) {
         guard let bundleID = Bundle(url: appURL)?.bundleIdentifier else {
-            alertMessage = "アプリケーション識別子の取得に失敗しました"
+            alertMessage = CZLocalized.string(
+                "routing.alert.bundle_id_failed",
+                defaultValue: "Failed to get application identifier."
+            )
             showingAlert = true
             return
         }
@@ -277,7 +295,11 @@ struct RoutingSettingsView: View {
 
         let fallbackResult = applyLaunchServicesDefaultHandler(bundleID: bundleID)
         if !fallbackResult.isSuccess {
-            alertMessage = "ZIP関連付けの変更に失敗しました (\(fallbackResult.statusDetails.joined(separator: ", ")))"
+            alertMessage = CZLocalized.formatted(
+                "routing.alert.ls_change_failed_status_format",
+                defaultValue: "Failed to change ZIP file association (%@)",
+                fallbackResult.statusDetails.joined(separator: ", ")
+            )
             showingAlert = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -301,7 +323,14 @@ struct RoutingSettingsView: View {
 
     private func makeDefaultHandlerErrorMessage(error: NSError, statusDetails: [String]) -> String {
         let statusText = statusDetails.joined(separator: ", ")
-        return "ZIP関連付けの変更に失敗しました: \(error.localizedDescription) [\(error.domain):\(error.code)] (\(statusText))"
+        return CZLocalized.formatted(
+            "routing.alert.ls_change_failed_detail_format",
+            defaultValue: "Failed to change ZIP file association: %@ [%@:%d] (%@)",
+            error.localizedDescription,
+            error.domain,
+            error.code,
+            statusText
+        )
     }
 
     private func updateDefaultHandlerState(handlerID: String, bundleID: String) {
@@ -377,7 +406,7 @@ struct RuleRowView: View {
                 Image(systemName: "trash").foregroundColor(.red)
             }
             .buttonStyle(.borderless)
-            .help("削除")
+            .help(CZLocalized.string("routing.help.delete", defaultValue: "Delete"))
             .frame(width: ColumnWidth.deleteButton)
         }
         .padding(.horizontal, 4)
@@ -417,7 +446,7 @@ struct AppPickerMenu: View {
 
             Divider()
 
-            Button("アプリを選択...") {
+            Button(CZLocalized.string("routing.app_picker.choose_app", defaultValue: "Choose App...")) {
                 ApplicationPicker.pickApplication { url in
                     if let url = url {
                         application = url.path

@@ -22,7 +22,7 @@ struct CoverZipApp: App {
                 if #available(macOS 13.0, *) {
                     PreviewSettingsView()
                         .tabItem {
-                            Label("ビューア設定", systemImage: "eye")
+                            Label(CZLocalized.string("app.tab.viewer", defaultValue: "Viewer Settings"), systemImage: "eye")
                         }
                 } else {
                     // Fallback on earlier versions
@@ -30,7 +30,7 @@ struct CoverZipApp: App {
 
                 RoutingSettingsView()
                     .tabItem {
-                        Label("ファイルルーティング", systemImage: "arrow.triangle.branch")
+                        Label(CZLocalized.string("app.tab.routing", defaultValue: "File Routing"), systemImage: "arrow.triangle.branch")
                     }
             }
             .frame(minWidth: 650, minHeight: 500)

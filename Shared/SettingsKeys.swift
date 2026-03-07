@@ -5,6 +5,17 @@
 
 import Foundation
 
+public enum CZLocalized {
+    public static func string(_ key: String, defaultValue: String) -> String {
+        NSLocalizedString(key, tableName: "Localizable", bundle: .main, value: defaultValue, comment: "")
+    }
+
+    public static func formatted(_ key: String, defaultValue: String, _ arguments: CVarArg...) -> String {
+        let format = string(key, defaultValue: defaultValue)
+        return String(format: format, locale: Locale.current, arguments: arguments)
+    }
+}
+
 public enum CZSettingsKeys {
     public static let isRightToLeftReading = "isRightToLeftReading"
     public static let sliderVisibilityWidthThreshold = "sliderVisibilityWidthThreshold"
@@ -77,29 +88,29 @@ public enum CZPreviewContextMenuLayout {
     public static func title(for command: CZPreviewSessionCommand) -> String {
         switch command {
         case .setRightToLeftReading:
-            return "右綴じ"
+            return CZLocalized.string("context.menu.reading.rtl", defaultValue: "Right to Left")
         case .setLeftToRightReading:
-            return "左綴じ"
+            return CZLocalized.string("context.menu.reading.ltr", defaultValue: "Left to Right")
         case .setViewModeAuto:
-            return "自動"
+            return CZLocalized.string("context.menu.view.auto", defaultValue: "Auto")
         case .setViewModeSingle:
-            return "単ページ"
+            return CZLocalized.string("context.menu.view.single", defaultValue: "Single Page")
         case .setViewModeSpread:
-            return "見開き"
+            return CZLocalized.string("context.menu.view.spread", defaultValue: "Spread")
         case .setSpreadPairOffset:
-            return "見開きの左右を補正"
+            return CZLocalized.string("context.menu.spread.offset", defaultValue: "Adjust Spread Pairing")
         case .setThumbnailStripVisible:
-            return "サムネイルリスト表示"
+            return CZLocalized.string("context.menu.thumbnail.visible", defaultValue: "Show Thumbnail List")
         case .setPageTransitionEnabled:
-            return "ページ送りアニメ"
+            return CZLocalized.string("context.menu.page_transition.enabled", defaultValue: "Page Transition Animation")
         case .setSlideshowEnabled:
-            return "スライドショー"
+            return CZLocalized.string("context.menu.slideshow.enabled", defaultValue: "Slideshow")
         case .goToFirstPage:
-            return "最初のページ"
+            return CZLocalized.string("context.menu.page.first", defaultValue: "First Page")
         case .goToLastPage:
-            return "最後のページ"
+            return CZLocalized.string("context.menu.page.last", defaultValue: "Last Page")
         case .jumpRelativePages:
-            return "ページジャンプ"
+            return CZLocalized.string("context.menu.page.jump", defaultValue: "Jump Pages")
         }
     }
 }

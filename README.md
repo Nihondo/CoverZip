@@ -317,6 +317,19 @@ processZipFile → KeywordMatcher → AppLauncher → NSApplication.terminate
 - 初回起動時のデフォルト設定自動生成
 - App Group (`group.com.dmng.CoverZip`) による Extension との設定共有
 
+## ローカライズ運用（日英）
+
+- 対応言語: 日本語 (`ja`) / 英語 (`en`)
+- 開発基準言語: 英語（`developmentRegion = en`）
+- 文言管理: `Localizable.xcstrings`（`CoverZip/` と `coverZipViewer/` に配置）
+- キー方針: 意味ベースキー（例: `settings.display.section`, `routing.actions.save`）
+- 共有メニュー文言（右クリックメニュー/表示メニュー）は `Shared/SettingsKeys.swift` の `CZPreviewContextMenuLayout.title(for:)` で一元管理
+
+### 新規文言追加手順
+1. `Localizable.xcstrings` にキーを追加し、`en`/`ja` の両方を登録
+2. コード側は文字列リテラルを直接書かず、`CZLocalized.string(...)` または `CZLocalized.formatted(...)` を使用
+3. 右クリックメニュー関連は `CZPreviewContextMenuLayout.title(for:)` のキーを更新し、アプリ/拡張の表示を揃える
+
 ## 制限事項
 
 - **暗号化ZIP**: パスワード付きZIPファイルは未対応
