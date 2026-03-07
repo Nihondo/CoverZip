@@ -161,7 +161,8 @@ enum QLPreviewInputDriver {
                 backing: .buffered,
                 defer: false
             )
-            window.title = "Preview – " + url.lastPathComponent
+            window.title = url.lastPathComponent
+            window.representedURL = url
             window.tabbingMode = .disallowed
             window.collectionBehavior = [.managed, .participatesInCycle]
 
