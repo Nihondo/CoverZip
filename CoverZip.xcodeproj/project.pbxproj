@@ -435,7 +435,6 @@
 			baseConfigurationReference = 427734762F5C5F7E008CAEBA /* DevelopmentTeam.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = coverzipicon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = CoverZip/CoverZip.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -477,7 +476,6 @@
 			baseConfigurationReference = 427734762F5C5F7E008CAEBA /* DevelopmentTeam.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = coverzipicon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = CoverZip/CoverZip.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";

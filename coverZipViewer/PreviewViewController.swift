@@ -2108,6 +2108,24 @@ private extension PreviewViewController {
 private final class PreviewCursorAreaView: NSView {
     override var acceptsFirstResponder: Bool { false }
 
+    // カーソル画像を初回のみ生成（フォールバックあり）
+    // ホットスポット: 32×32pt 画像の矢印先端を想定。実際の画像に合わせて調整してください。
+    private static let cursorLeft: NSCursor = {
+        let bundle = Bundle(for: PreviewCursorAreaView.self)
+        if let img = bundle.image(forResource: "cursor-left") {
+            return NSCursor(image: img, hotSpot: NSPoint(x: 2, y: 16))
+        }
+        return .resizeLeft
+    }()
+
+    private static let cursorRight: NSCursor = {
+        let bundle = Bundle(for: PreviewCursorAreaView.self)
+        if let img = bundle.image(forResource: "cursor-right") {
+            return NSCursor(image: img, hotSpot: NSPoint(x: 29, y: 16))
+        }
+        return .resizeRight
+    }()
+
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         trackingAreas.forEach { removeTrackingArea($0) }
@@ -2135,12 +2153,12 @@ private final class PreviewCursorAreaView: NSView {
     // ウィンドウ内でのカーソル矩形（mouseMoved が届かないケースの補完）
     override func resetCursorRects() {
         let half = bounds.width / 2
-        addCursorRect(NSRect(x: 0, y: 0, width: half, height: bounds.height), cursor: .resizeLeft)
-        addCursorRect(NSRect(x: half, y: 0, width: bounds.width - half, height: bounds.height), cursor: .resizeRight)
+        addCursorRect(NSRect(x: 0, y: 0, width: half, height: bounds.height), cursor: Self.cursorLeft)
+        addCursorRect(NSRect(x: half, y: 0, width: bounds.width - half, height: bounds.height), cursor: Self.cursorRight)
     }
 
     private func updateCursor(for event: NSEvent) {
         let x = convert(event.locationInWindow, from: nil).x
-        (x < bounds.width / 2 ? NSCursor.resizeLeft : NSCursor.resizeRight).set()
+        (x < bounds.width / 2 ? Self.cursorLeft : Self.cursorRight).set()
     }
 }
