@@ -8,6 +8,7 @@
 import SwiftUI
 import AppKit
 import CoreServices
+import UniformTypeIdentifiers
 
 // MARK: - Column Width Constants
 
@@ -20,6 +21,9 @@ private enum ColumnWidth {
 // MARK: - RoutingSettingsView
 
 struct RoutingSettingsView: View {
+    private let zipContentTypeIdentifiers = ["public.zip-archive", "com.pkware.zip-archive"]
+    private let archiveUtilityBundleIdentifier = "com.apple.archiveutility"
+
     @State private var settings: KeywordSettings = SettingsFileManager.loadSettings()
     @State private var hasUnsavedChanges = false
     @State private var showingAlert = false
@@ -216,24 +220,112 @@ struct RoutingSettingsView: View {
 
     private func refreshDefaultHandlerStatus() {
         guard let bundleID = Bundle.main.bundleIdentifier else { return }
-        guard let result = LSCopyDefaultRoleHandlerForContentType("public.zip-archive" as CFString, .all) else { return }
-        let handlerID = result.takeRetainedValue() as String
-        isDefaultHandler = (handlerID == bundleID)
-        if !isDefaultHandler, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: handlerID) {
-            currentDefaultAppName = ApplicationPicker.displayName(for: url)
+        if #available(macOS 12.0, *), let appURL = NSWorkspace.shared.urlForApplication(toOpen: .zip),
+           let handlerID = Bundle(url: appURL)?.bundleIdentifier {
+            updateDefaultHandlerState(handlerID: handlerID, bundleID: bundleID)
+            return
         }
+
+        for contentTypeIdentifier in zipContentTypeIdentifiers {
+            guard let result = LSCopyDefaultRoleHandlerForContentType(contentTypeIdentifier as CFString, .viewer) else { continue }
+            let handlerID = result.takeRetainedValue() as String
+            updateDefaultHandlerState(handlerID: handlerID, bundleID: bundleID)
+            return
+        }
+
+        isDefaultHandler = false
+        currentDefaultAppName = ""
     }
 
     private func toggleDefaultHandler() {
         if isDefaultHandler {
-            let archivePath = "/System/Library/CoreServices/Applications/Archive Utility.app"
-            if let archiveBundleID = Bundle(path: archivePath)?.bundleIdentifier {
-                LSSetDefaultRoleHandlerForContentType("public.zip-archive" as CFString, .all, archiveBundleID as CFString)
+            guard let archiveUtilityURL = resolveArchiveUtilityURL() else {
+                alertMessage = "Archive Utility が見つからないため、デフォルトを解除できませんでした"
+                showingAlert = true
+                return
             }
-        } else if let bundleID = Bundle.main.bundleIdentifier {
-            LSSetDefaultRoleHandlerForContentType("public.zip-archive" as CFString, .all, bundleID as CFString)
+            setDefaultHandler(to: archiveUtilityURL)
+        } else {
+            setDefaultHandler(to: Bundle.main.bundleURL)
         }
-        refreshDefaultHandlerStatus()
+    }
+
+    private func setDefaultHandler(to appURL: URL) {
+        guard let bundleID = Bundle(url: appURL)?.bundleIdentifier else {
+            alertMessage = "アプリケーション識別子の取得に失敗しました"
+            showingAlert = true
+            return
+        }
+
+        LSRegisterURL(appURL as CFURL, true)
+
+        if #available(macOS 12.0, *) {
+            NSWorkspace.shared.setDefaultApplication(at: appURL, toOpen: .zip) { error in
+                DispatchQueue.main.async {
+                    if let error {
+                        let fallbackResult = self.applyLaunchServicesDefaultHandler(bundleID: bundleID)
+                        if !fallbackResult.isSuccess {
+                            self.alertMessage = self.makeDefaultHandlerErrorMessage(error: error as NSError, statusDetails: fallbackResult.statusDetails)
+                            self.showingAlert = true
+                        }
+                    }
+                    self.refreshDefaultHandlerStatus()
+                }
+            }
+            return
+        }
+
+        let fallbackResult = applyLaunchServicesDefaultHandler(bundleID: bundleID)
+        if !fallbackResult.isSuccess {
+            alertMessage = "ZIP関連付けの変更に失敗しました (\(fallbackResult.statusDetails.joined(separator: ", ")))"
+            showingAlert = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            refreshDefaultHandlerStatus()
+        }
+    }
+
+    private func applyLaunchServicesDefaultHandler(bundleID: String) -> (isSuccess: Bool, statusDetails: [String]) {
+        var hasSuccess = false
+        var statusDetails: [String] = []
+        for contentTypeIdentifier in zipContentTypeIdentifiers {
+            let viewerStatus = LSSetDefaultRoleHandlerForContentType(contentTypeIdentifier as CFString, .viewer, bundleID as CFString)
+            let allRolesStatus = LSSetDefaultRoleHandlerForContentType(contentTypeIdentifier as CFString, .all, bundleID as CFString)
+            statusDetails.append("\(contentTypeIdentifier)(viewer=\(viewerStatus),all=\(allRolesStatus))")
+            if viewerStatus == noErr || allRolesStatus == noErr {
+                hasSuccess = true
+            }
+        }
+        return (hasSuccess, statusDetails)
+    }
+
+    private func makeDefaultHandlerErrorMessage(error: NSError, statusDetails: [String]) -> String {
+        let statusText = statusDetails.joined(separator: ", ")
+        return "ZIP関連付けの変更に失敗しました: \(error.localizedDescription) [\(error.domain):\(error.code)] (\(statusText))"
+    }
+
+    private func updateDefaultHandlerState(handlerID: String, bundleID: String) {
+        isDefaultHandler = (handlerID == bundleID)
+        if isDefaultHandler {
+            currentDefaultAppName = ""
+            return
+        }
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: handlerID) {
+            currentDefaultAppName = ApplicationPicker.displayName(for: url)
+            return
+        }
+        currentDefaultAppName = handlerID
+    }
+
+    private func resolveArchiveUtilityURL() -> URL? {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: archiveUtilityBundleIdentifier) {
+            return url
+        }
+        let fallbackURL = URL(fileURLWithPath: "/System/Library/CoreServices/Applications/Archive Utility.app")
+        if FileManager.default.fileExists(atPath: fallbackURL.path) {
+            return fallbackURL
+        }
+        return nil
     }
 }
 
