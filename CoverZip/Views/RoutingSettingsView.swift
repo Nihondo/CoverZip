@@ -10,7 +10,7 @@ import AppKit
 import CoreServices
 import UniformTypeIdentifiers
 
-// MARK: - Column Width Constants
+// MARK: - 列幅定数
 
 private enum ColumnWidth {
     static let typePicker: CGFloat = 115
@@ -18,7 +18,7 @@ private enum ColumnWidth {
     static let deleteButton: CGFloat = 28
 }
 
-// MARK: - RoutingSettingsView
+// MARK: - RoutingSettingsView 本体
 
 struct RoutingSettingsView: View {
     private let zipContentTypeIdentifiers = ["public.zip-archive", "com.pkware.zip-archive"]
@@ -98,7 +98,7 @@ struct RoutingSettingsView: View {
         .onAppear { refreshDefaultHandlerStatus() }
     }
 
-    // MARK: - File Association Section
+    // MARK: - ファイル関連付けセクション
 
     private var fileAssociationSection: some View {
         Section {
@@ -130,7 +130,7 @@ struct RoutingSettingsView: View {
         }
     }
 
-    // MARK: - Default App Row
+    // MARK: - 既定アプリ行
 
     private var defaultAppRow: some View {
         HStack {
@@ -147,7 +147,7 @@ struct RoutingSettingsView: View {
         }
     }
 
-    // MARK: - Rules Views
+    // MARK: - ルール表示
 
     private var emptyRulesView: some View {
         VStack(spacing: 8) {
@@ -181,7 +181,7 @@ struct RoutingSettingsView: View {
         .padding(.horizontal, 4)
     }
 
-    // MARK: - Helper Methods
+    // MARK: - 補助メソッド
 
     private func addNewRule() {
         settings.rules.append(KeywordRule(keyword: "", type: .filename, application: "internal", matchMode: .contains))
@@ -204,7 +204,7 @@ struct RoutingSettingsView: View {
         }
     }
 
-    // MARK: - File Association
+    // MARK: - ファイル関連付け
 
     private func refreshDefaultHandlerStatus() {
         guard let bundleID = Bundle.main.bundleIdentifier else { return }
@@ -334,7 +334,7 @@ struct RoutingSettingsView: View {
     }
 }
 
-// MARK: - Rule Row View
+// MARK: - ルール行ビュー
 
 struct RuleRowView: View {
     @Binding var rule: KeywordRule
@@ -389,7 +389,7 @@ struct RuleRowView: View {
     }
 }
 
-// MARK: - App Picker Menu
+// MARK: - アプリ選択メニュー
 
 struct AppPickerMenu: View {
     @Binding var application: String
@@ -469,7 +469,7 @@ struct AppPickerMenu: View {
     }
 }
 
-// MARK: - Leading-aligned TextField (NSViewRepresentable)
+// MARK: - 左寄せ TextField（NSViewRepresentable）
 
 /// macOS Form の右揃え強制を回避し、テキストを左揃えで表示する TextField
 private struct LeadingTextField: NSViewRepresentable {
@@ -507,7 +507,7 @@ private struct LeadingTextField: NSViewRepresentable {
     }
 }
 
-// MARK: - Preview
+// MARK: - プレビュー
 
 #Preview {
     RoutingSettingsView()

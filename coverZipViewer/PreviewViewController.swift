@@ -13,7 +13,7 @@ import Compression
 import QuartzCore
 import os.signpost
 
-// MARK: - Preview View Controller
+// MARK: - プレビュー View Controller
 
 class PreviewViewController: NSViewController, QLPreviewingController {
     
@@ -112,7 +112,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-    // UserDefaultsから設定をロード
+    // 共有設定（UserDefaults）から設定をロード
     isRightToLeftReading = AppSettings.shared.isRightToLeftReading
     sliderVisibilityWidthThreshold = CGFloat(AppSettings.shared.sliderVisibilityWidthThreshold)
     // ユーザー設定の表示モードを初期ロード
@@ -156,7 +156,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         hideLoadingIndicator()
     }
 
-    // MARK: - Mouse Monitor Management
+    // MARK: - マウスモニター管理
     
     /// マウスイベントモニターを設定
     private func setupMouseMonitors() {
@@ -595,10 +595,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     /*
     func preparePreviewOfSearchableItem(identifier: String, queryString: String?) async throws {
-        // Implement this method and set QLSupportsSearchableItems to YES in the Info.plist of the extension if you support CoreSpotlight.
+        // CoreSpotlight 対応時はこのメソッドを実装し、拡張の Info.plist で QLSupportsSearchableItems を YES に設定する。
 
-        // Perform any setup necessary in order to prepare the view.
-        // Quick Look will display a loading spinner until this returns.
+        // ビューの準備に必要な初期化をここで行う。
+        // Quick Look はこの処理が返るまでローディングスピナーを表示する。
     }
     */
 
@@ -664,7 +664,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         }
     }
 
-    // MARK: - Loading Indicator
+    // MARK: - ローディングインジケータ
     private func ensureLoadingIndicator() {
         guard loadingIndicator == nil else { return }
         let spinner = NSProgressIndicator()
@@ -696,7 +696,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         hideLoadingIndicator()
     }
     
-    // MARK: - UI Setup
+    // MARK: - UI 設定
     
     private func setupUI() {
         // ImageViewの設定
@@ -1268,7 +1268,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     // ダブルクリック時は何もしない（シングルクリックハンドラで検知して無視）
     
-    // MARK: - Image Display
+    // MARK: - 画像表示
 
     private func buildCurrentDisplayKey() -> String {
         let modeToken = currentViewMode == .spread ? "spread" : "single"
@@ -1533,7 +1533,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     pageSlider?.isEnabled = false
     }
 
-    // MARK: - Simple page push transition
+    // MARK: - シンプルなページ押し出しトランジション
     private func applyTransition(forward: Bool) {
     // トランジションが無効なら適用しない（ユーザー指定優先）
     if !isTransitionEnabled { return }
@@ -1564,7 +1564,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         }
     }
 
-    // MARK: - Mouse Wheel Scroll Handling
+    // MARK: - マウスホイールスクロール処理
 
     private func handleScrollEvent(_ event: NSEvent) -> Bool {
         let currentTime = CACurrentMediaTime()
@@ -1991,7 +1991,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
 }
 
-// MARK: - Performance Optimization
+// MARK: - パフォーマンス最適化
 private extension PreviewViewController {
     /// ImageManagerに現在のウィンドウサイズを設定して最適化を有効にする
     @discardableResult
@@ -2024,7 +2024,7 @@ private extension PreviewViewController {
     }
 }
 
-// MARK: - Reading History
+// MARK: - 読書履歴
 private extension PreviewViewController {
     func restoreReadingPositionFromHistory() {
         guard !currentZipFilename.isEmpty else { return }
@@ -2072,7 +2072,7 @@ private extension PreviewViewController {
     }
 }
 
-// MARK: - Thumbnail Strip Height Persistence
+// MARK: - サムネイルストリップ高さの永続化
 private extension PreviewViewController {
     func loadThumbnailStripHeight() -> CGFloat {
         let saved = CZUserDefaults.shared.double(forKey: CZSettingsKeys.thumbnailStripHeight)

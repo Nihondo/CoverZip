@@ -127,6 +127,6 @@ struct PreviewSettingsView: View {
     if #available(macOS 13.0, *) {
         PreviewSettingsView()
     } else {
-        // Fallback on earlier versions
+        // 旧バージョン向けフォールバック
     }
 }

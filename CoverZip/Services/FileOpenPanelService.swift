@@ -29,7 +29,7 @@ enum FileOpenPanelService {
         }
     }
 
-    // MARK: - Private Methods
+    // MARK: - 非公開メソッド
 
     /// NSOpenPanelを作成
     private static func createOpenPanel() -> NSOpenPanel {

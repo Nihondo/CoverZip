@@ -2,7 +2,7 @@
 //  ImageUtilities.swift
 //  CoverZip Shared
 //
-//  Image processing utilities shared across all targets
+//  全ターゲットで共有する画像処理ユーティリティ
 //
 
 import Foundation

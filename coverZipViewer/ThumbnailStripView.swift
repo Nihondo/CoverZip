@@ -113,7 +113,7 @@ final class ThumbnailCollectionView: NSCollectionView {
 /// 画面下部に表示するページサムネイルストリップ
 class ThumbnailStripView: NSView {
 
-    // MARK: - Public interface
+    // MARK: - 公開インターフェース
 
     /// セルが選択されたときに呼ばれるコールバック（0始まりの実インデックス）
     var onPageSelected: ((Int) -> Void)?
@@ -136,7 +136,7 @@ class ThumbnailStripView: NSView {
     /// フォーカス取得のためにinternalアクセスを許可
     private(set) var collectionView: NSCollectionView!
 
-    // MARK: - Private
+    // MARK: - 非公開
 
     private let resizeHandle: ThumbnailResizeHandle
     private let scrollView: NSScrollView
@@ -152,7 +152,7 @@ class ThumbnailStripView: NSView {
     /// プログラム側で設定した選択セットに一致する遅延イベントを抑制する
     private var pendingProgrammaticSelectionIndexPaths: Set<IndexPath> = []
 
-    // MARK: - Initialization
+    // MARK: - 初期化
 
     override init(frame frameRect: NSRect) {
         resizeHandle = ThumbnailResizeHandle()
@@ -229,7 +229,7 @@ class ThumbnailStripView: NSView {
         ])
     }
 
-    // MARK: - Layout
+    // MARK: - レイアウト
 
     override func layout() {
         super.layout()
@@ -279,7 +279,7 @@ class ThumbnailStripView: NSView {
         layout.invalidateLayout()
     }
 
-    // MARK: - Index conversion
+    // MARK: - インデックス変換
 
     /// 実インデックス（0始まりのページ番号）→ 表示インデックス（CollectionView上の位置）
     private func displayIndex(for realIndex: Int) -> Int {
@@ -291,7 +291,7 @@ class ThumbnailStripView: NSView {
         isRightToLeft ? (entries.count - 1 - displayIndex) : displayIndex
     }
 
-    // MARK: - Public methods
+    // MARK: - 公開メソッド
 
     /// ZIPデータとエントリー情報を設定し、サムネイルの非同期読み込みを開始する
     func configure(zipData: Data, entries: [CZImageEntryInfo]) {
@@ -351,7 +351,7 @@ class ThumbnailStripView: NSView {
         }
     }
 
-    // MARK: - Thumbnail loading
+    // MARK: - サムネイル読み込み
 
     private func loadThumbnail(at realIdx: Int) {
         guard thumbnailCache[realIdx] == nil,
@@ -388,7 +388,7 @@ class ThumbnailStripView: NSView {
         }
     }
 
-    // MARK: - Keyboard navigation
+    // MARK: - キーボードナビゲーション
 
     private func handleArrowKeyNavigation(_ specialKey: NSEvent.SpecialKey) -> Bool {
         guard !entries.isEmpty else { return true }

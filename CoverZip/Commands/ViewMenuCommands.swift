@@ -57,7 +57,7 @@ final class ViewMenuState: ObservableObject {
         isThumbnailStripVisible = state.isThumbnailStripVisible
     }
 
-    // MARK: - Action メソッド（InternalViewer の apply メソッドに委譲）
+    // MARK: - 操作メソッド（InternalViewer の apply メソッドへ委譲）
 
     func setRightToLeft() {
         isRightToLeftReading = true

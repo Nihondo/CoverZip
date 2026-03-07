@@ -2,7 +2,7 @@
 //  ReadingHistoryManager.swift
 //  coverZipViewer
 //
-//  Reading position history management with LRU-based cleanup
+//  LRU ベースの読書位置履歴管理
 //
 
 import Foundation
@@ -100,7 +100,7 @@ final class ReadingHistoryManager {
         return loadAllHistories().count
     }
     
-    // MARK: - Private Methods
+    // MARK: - 非公開メソッド
     
     private func normalizeFilename(_ filename: String) -> String {
         // パスからファイル名のみを抽出

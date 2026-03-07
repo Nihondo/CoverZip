@@ -2,7 +2,7 @@
 //  UserDefaultsHelper.swift
 //  CoverZip Shared
 //
-//  Centralized UserDefaults access for App Group
+//  App Group 用 UserDefaults アクセスの共通化
 //
 
 import Foundation

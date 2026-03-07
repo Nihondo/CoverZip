@@ -2,7 +2,7 @@
 //  AppSettings.swift
 //  CoverZip (App target)
 //
-//  ObservableObject wrapper around unified settings for SwiftUI
+//  SwiftUI 向けに統一設定を公開する ObservableObject ラッパー
 //
 
 import Foundation
@@ -59,7 +59,7 @@ final class AppSettingsWriter: ObservableObject {
     }
 
     private init() {
-        // Load current values from core settings
+        // コア設定から現在値を読み込む
         loadSettings()
     }
 

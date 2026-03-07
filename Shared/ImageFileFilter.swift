@@ -1,6 +1,6 @@
 //
 //  ImageFileFilter.swift
-//  Shared utilities for image path filtering
+//  画像パス判定の共有ユーティリティ
 //
 
 import Foundation
@@ -10,11 +10,11 @@ public enum ImageFileFilter {
         ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".ico", ".icns"
     ]
 
-    /// Returns true if the path looks like an image file we support.
-    /// Rules:
-    /// - ignore __MACOSX folder contents
-    /// - ignore hidden files (basename starts with ".")
-    /// - allow known image extensions (case-insensitive)
+    /// 対応画像ファイルらしいパスかどうかを判定する。
+    /// 判定ルール:
+    /// - `__MACOSX` フォルダ配下は除外
+    /// - 隠しファイル（ベース名が `.` で始まる）は除外
+    /// - 既知の画像拡張子のみ許可（大文字小文字は無視）
     public static func isImagePath(_ path: String) -> Bool {
         let lower = path.lowercased()
         if lower.contains("__macosx") { return false }

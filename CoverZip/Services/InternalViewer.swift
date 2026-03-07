@@ -46,7 +46,7 @@ final class InternalViewer: NSObject {
         )
     }
 
-    // MARK: - Actions (App側)
+    // MARK: - アクション（App側）
     @objc func setRightToLeft(_ sender: NSMenuItem) { applySetRightToLeft() }
     @objc func setLeftToRight(_ sender: NSMenuItem) { applySetLeftToRight() }
     @objc func setViewModeAuto(_ sender: NSMenuItem) { applySetViewModeAuto() }
@@ -57,7 +57,7 @@ final class InternalViewer: NSObject {
     @objc func toggleSpreadPairOffset(_ sender: NSMenuItem) { applyToggleSpreadPairOffset() }
     @objc func toggleThumbnailStripVisibility(_ sender: NSMenuItem) { applyToggleThumbnailStrip() }
 
-    // MARK: - Public Action Implementation (SwiftUI からも呼び出し可能)
+    // MARK: - 公開アクション実装（SwiftUI からも呼び出し可能）
     func applySetRightToLeft() {
         applyReadingDirection(isRightToLeft: true)
         CZUserDefaults.shared.set(true, forKey: CZSettingsKeys.isRightToLeftReading)
@@ -126,7 +126,7 @@ final class InternalViewer: NSObject {
         PreviewSessionCommandDispatcher.post(command: .setThumbnailStripVisible, boolValue: next)
     }
 
-    // MARK: - Private
+    // MARK: - 非公開
 
     private func setupSettingsObserverIfNeeded() {
         guard settingsObserver == nil else { return }

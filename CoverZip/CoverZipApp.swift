@@ -25,7 +25,7 @@ struct CoverZipApp: App {
                             Label(CZLocalized.string("app.tab.viewer", defaultValue: "Viewer Settings"), systemImage: "eye")
                         }
                 } else {
-                    // Fallback on earlier versions
+                    // 旧バージョン向けフォールバック
                 }
 
                 RoutingSettingsView()

@@ -2,7 +2,7 @@
 //  UnifiedAppSettings.swift
 //  CoverZip Shared
 //
-//  Unified settings access layer shared across all targets
+//  全ターゲットで共有する統一設定アクセスレイヤー
 //
 
 import Foundation
@@ -11,7 +11,7 @@ import Foundation
 /// App Group経由でUserDefaultsにアクセスし、全ターゲットで一貫した設定管理を提供
 public final class CZSettings {
 
-    // MARK: - Shared Instance
+    // MARK: - 共有インスタンス
     public static let shared = CZSettings()
 
     private let defaults: UserDefaults
@@ -25,7 +25,7 @@ public final class CZSettings {
         registerDefaults()
     }
 
-    // MARK: - Default Registration
+    // MARK: - 既定値登録
     private func registerDefaults() {
         defaults.register(defaults: [
             CZSettingsKeys.isRightToLeftReading: true,
@@ -43,30 +43,30 @@ public final class CZSettings {
         ])
     }
 
-    // MARK: - Direct Access to UserDefaults
+    // MARK: - UserDefaults 直接アクセス
     public var userDefaults: UserDefaults {
         return defaults
     }
 
-    // MARK: - Reading Direction
+    // MARK: - 読み方向
     public var isRightToLeftReading: Bool {
         get { defaults.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true }
         set { defaults.set(newValue, forKey: CZSettingsKeys.isRightToLeftReading) }
     }
 
-    // MARK: - UI Threshold
+    // MARK: - UI しきい値
     public var sliderVisibilityWidthThreshold: Double {
         get { defaults.object(forKey: CZSettingsKeys.sliderVisibilityWidthThreshold) as? Double ?? 600.0 }
         set { defaults.set(newValue, forKey: CZSettingsKeys.sliderVisibilityWidthThreshold) }
     }
 
-    // MARK: - Cover Page Handling
+    // MARK: - 表紙ページ処理
     public var alwaysSinglePageForCover: Bool {
         get { defaults.object(forKey: CZSettingsKeys.alwaysSinglePageForCover) as? Bool ?? true }
         set { defaults.set(newValue, forKey: CZSettingsKeys.alwaysSinglePageForCover) }
     }
 
-    // MARK: - View Mode
+    // MARK: - 表示モード
     public var defaultViewMode: ViewModePreference {
         get {
             let raw = defaults.string(forKey: CZSettingsKeys.defaultViewMode) ?? "auto"
@@ -75,7 +75,7 @@ public final class CZSettings {
         set { defaults.set(newValue.rawValue, forKey: CZSettingsKeys.defaultViewMode) }
     }
 
-    // MARK: - Slideshow
+    // MARK: - スライドショー
     public var slideshowInterval: Double {
         get { defaults.object(forKey: CZSettingsKeys.slideshowInterval) as? Double ?? 3.0 }
         set { defaults.set(newValue, forKey: CZSettingsKeys.slideshowInterval) }
@@ -91,7 +91,7 @@ public final class CZSettings {
         set { defaults.set(newValue, forKey: CZSettingsKeys.thumbnailStripVisible) }
     }
 
-    // MARK: - Window Frame Persistence
+    // MARK: - ウィンドウフレーム永続化
     public var restoreWindowFrameEnabled: Bool {
         get { defaults.object(forKey: CZSettingsKeys.restoreWindowFrameEnabled) as? Bool ?? true }
         set { defaults.set(newValue, forKey: CZSettingsKeys.restoreWindowFrameEnabled) }
@@ -108,13 +108,13 @@ public final class CZSettings {
         }
     }
 
-    // MARK: - Reading History
+    // MARK: - 読書履歴
     public var readingHistoryEnabled: Bool {
         get { defaults.object(forKey: CZSettingsKeys.readingHistoryEnabled) as? Bool ?? true }
         set { defaults.set(newValue, forKey: CZSettingsKeys.readingHistoryEnabled) }
     }
 
-    // MARK: - Image Decode Cache Policy
+    // MARK: - 画像デコードキャッシュ方針
     public var imageDecodeCachePolicy: CZImageDecodeCachePolicy {
         get {
             let raw = defaults.string(forKey: CZSettingsKeys.imageDecodeCachePolicy) ?? CZImageDecodeCachePolicy.deferred.rawValue
@@ -123,13 +123,13 @@ public final class CZSettings {
         set { defaults.set(newValue.rawValue, forKey: CZSettingsKeys.imageDecodeCachePolicy) }
     }
 
-    // MARK: - Spread Pair Offset
+    // MARK: - 見開きペア補正
     public var spreadPairOffset: Int {
         get { defaults.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0 }
         set { defaults.set(newValue, forKey: CZSettingsKeys.spreadPairOffset) }
     }
 
-    // MARK: - Page Transition
+    // MARK: - ページ遷移
     public var pageTransitionEnabled: Bool {
         get { defaults.object(forKey: CZSettingsKeys.pageTransitionEnabled) as? Bool ?? true }
         set { defaults.set(newValue, forKey: CZSettingsKeys.pageTransitionEnabled) }

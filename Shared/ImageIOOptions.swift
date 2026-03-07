@@ -1,6 +1,6 @@
 //
 //  ImageIOOptions.swift
-//  Shared helpers for ImageIO decode/cache policies
+//  ImageIO のデコード/キャッシュ方針に関する共有ヘルパー
 //
 
 import Foundation

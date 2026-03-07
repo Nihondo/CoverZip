@@ -2,7 +2,7 @@
 //  Settings.swift
 //  coverZipViewer
 //
-//  Lightweight wrapper around unified settings for Preview Extension
+//  Preview Extension 向け統一設定の軽量ラッパー
 //
 
 import Foundation

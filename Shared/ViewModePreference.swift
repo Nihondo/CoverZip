@@ -2,7 +2,7 @@
 //  ViewModePreference.swift
 //  CoverZip Shared
 //
-//  View mode preference enumeration shared across all targets
+//  全ターゲットで共有する表示モード列挙
 //
 
 import Foundation

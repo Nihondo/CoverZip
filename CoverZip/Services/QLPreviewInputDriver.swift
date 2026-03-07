@@ -3,7 +3,7 @@
 //  CoverZip
 //
 //  Quick Look 埋め込みの入力ドライバ（正式実装）。
-//  - First Responder 専用のフォワーダビューで左右キーを受け取り、
+//  - First Responder 専用フォワーダビューで左右キーを受け取り、
 //    プレビュー領域左右半分へのクリック（ダウン/アップ）を合成してページ送りを駆動
 //  - 入力はフォワーダビュー経由に統一（ローカルイベントモニタは廃止）。
 //  - クリック注入は CGEvent を使用（アクセシビリティ権限が必要）。
@@ -33,7 +33,7 @@ enum QLPreviewInputDriver {
 
     /// テスト用ウィンドウを保持（早期解放を防ぐ）
     private static var retainedWindows: [NSWindow] = []
-    /// KeyForwardingViewの弱参照を保持（Focus復帰用）
+    /// KeyForwardingView の弱参照を保持（フォーカス復帰用）
     private static var keyForwarders: [WeakRef<KeyForwardingView>] = []
     // ローカルイベントモニタは廃止（フォワーダ方式に一本化）
     private static var didPromptAX: Bool = false
@@ -42,14 +42,14 @@ enum QLPreviewInputDriver {
     /// 共有パネル用データソースを強参照で保持（QLPreviewPanel.dataSourceはunowned）
     private static var retainedPanelDataSource: SimplePanelDataSource?
 
-    // MARK: - Keyboard Focus Management
+    // MARK: - キーボードフォーカス管理
 
-    /// KeyForwardingViewにキーボードフォーカスを復帰させる
+    /// KeyForwardingView にキーボードフォーカスを復帰させる
     private static func restoreKeyboardFocus() {
         // 無効な弱参照を削除
         keyForwarders.removeAll { $0.value == nil }
 
-        // 有効なForwarderにFocusを復帰
+        // 有効なフォワーダへフォーカスを復帰
         for weakRef in keyForwarders {
             if let forwarder = weakRef.value,
                let window = forwarder.window {
@@ -68,14 +68,14 @@ enum QLPreviewInputDriver {
             queue: .main
         ) { _ in
             NSLog("[QLInputDriver] Received slider operation completed notification")
-            // 少し遅延を入れてFocus復帰（スライダーの処理完了を待つ）
+            // 少し遅延を入れてフォーカス復帰（スライダー処理完了を待つ）
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 restoreKeyboardFocus()
             }
         }
     }
 
-    // MARK: - Window Frame Management
+    // MARK: - ウィンドウフレーム管理
 
     /// ウィンドウフレーム復元が有効かどうか
     private static func isRestoreWindowFrameEnabled() -> Bool {
@@ -234,7 +234,7 @@ enum QLPreviewInputDriver {
             NotificationCenter.default.post(name: viewerWindowStateChanged, object: nil)
             window.makeKeyAndOrderFront(nil)
             if let f = forwarderRef {
-                // キー化後に改めて First Responder をセット（QL が奪うのを防ぐ）
+                // キー化後に改めて First Responder を設定（QL に奪われるのを防ぐ）
                 DispatchQueue.main.async { window.makeFirstResponder(f) }
                 // ウィンドウがキーになったタイミングで再設定
                 let obs = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { _ in
@@ -252,7 +252,7 @@ enum QLPreviewInputDriver {
     /// - Note: 内蔵ビューアの埋め込み `QLPreviewView` に対して矢印キー→クリック合成を提供する。
     static func attachInputForwarder(to window: NSWindow, previewView: QLPreviewView) {
         guard let forwarder = addKeyForwarder(window: window, previewView: previewView) else { return }
-        // キー化後に改めて First Responder をセット（QL が奪うのを防ぐ）
+        // キー化後に改めて First Responder を設定（QL に奪われるのを防ぐ）
         DispatchQueue.main.async { window.makeFirstResponder(forwarder) }
         let obs = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { _ in
             window.makeFirstResponder(forwarder)
@@ -264,7 +264,7 @@ enum QLPreviewInputDriver {
 
     // ローカルイベントモニタ方式は削除（安定構成へ統一）
 
-    // 方式2: First Responder フォワーダ（推奨）
+    // 方式2: First Responder フォワーダ方式（推奨）
     private static func addKeyForwarder(window: NSWindow, previewView: QLPreviewView) -> KeyForwardingView? {
         let forwarder = KeyForwardingView { isLeft in
             synthesizeClick(in: previewView, window: window, onLeftHalf: isLeft)
@@ -283,7 +283,7 @@ enum QLPreviewInputDriver {
         ])
         window.initialFirstResponder = forwarder
 
-        // KeyForwardingViewの弱参照を登録
+        // KeyForwardingView の弱参照を登録
         keyForwarders.append(WeakRef(forwarder))
         NSLog("[QLInputDriver] Registered KeyForwardingView for focus management")
 

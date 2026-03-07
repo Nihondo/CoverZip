@@ -1,6 +1,6 @@
 //
 //  SettingsKeys.swift
-//  Shared settings keys and App Group identifier
+//  共有設定キーと App Group 識別子
 //
 
 import Foundation
@@ -29,22 +29,22 @@ public enum CZSettingsKeys {
     public static let thumbnailStripVisible = "thumbnailStripVisible"
     public static let pageTransitionEnabled = "pageTransitionEnabled"
     public static let spreadPairOffset = "spreadPairOffset" // 見開きの左右を補正 (0 or 1)
-    // Window frame persistence
+    // ウィンドウフレーム永続化
     public static let restoreWindowFrameEnabled = "restoreWindowFrameEnabled"
     public static let savedWindowFrameString = "savedWindowFrameString"
-    // Reading history
+    // 読書履歴
     public static let readingHistoryEnabled = "readingHistoryEnabled"
     public static let readingHistoryData = "readingHistoryData"
-    // Image decode/cache policy for preview extension ("noCache" | "deferred" | "immediate")
+    // Preview Extension 向け画像デコード/キャッシュ方針（"noCache" | "deferred" | "immediate"）
     public static let imageDecodeCachePolicy = "imageDecodeCachePolicy"
-    // Thumbnail strip height in the preview extension (CGFloat, default 88)
+    // Preview Extension のサムネイルストリップ高さ（CGFloat、既定値 88）
     public static let thumbnailStripHeight = "thumbnailStripHeight"
-    // File routing settings payload (JSON-encoded KeywordSettings)
+    // ファイルルーティング設定ペイロード（JSON エンコードされた KeywordSettings）
     public static let routingSettingsData = "routingSettingsData"
 }
 
 public enum CZAppGroup {
-    /// Must match the App Group in entitlements for both App and Extensions
+    /// App / Extensions の Entitlements に設定された App Group と一致させること
     public static let identifier: String = "group.com.dmng.CoverZip"
 }
 
@@ -151,12 +151,12 @@ public enum CZPreviewContextMenuFactory {
 }
 #endif
 
-// Distributed notifications used to sync settings across App and Extensions
+// App と Extensions 間で設定を同期するための分散通知
 public enum CZDistributedNotifications {
-    // Post this when App-side settings have changed and should be reflected in extensions
+    // App 側設定が変更され、Extensions 側へ反映すべきときに送信
     public static let settingsChanged = Notification.Name("com.dmng.CoverZip.settingsChanged")
-    // Post this when slider operation completed in Preview Extension (for keyboard focus restoration)
+    // Preview Extension のスライダー操作完了時に送信（キーボードフォーカス復帰用）
     public static let sliderOperationCompleted = Notification.Name("com.dmng.CoverZip.sliderOperationCompleted")
-    // Post this when App-side internal viewer menu operation should be reflected in Preview Extension session state
+    // App 側内蔵ビューアのメニュー操作を Preview Extension セッション状態へ反映するときに送信
     public static let previewSessionCommand = Notification.Name("com.dmng.CoverZip.previewSessionCommand")
 }

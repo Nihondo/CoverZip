@@ -261,7 +261,7 @@ class ImageManager {
 
     func getSpreadPairOffset() -> Int { spreadPairOffset }
 
-    // MARK: - GPU Prerender Access
+    // MARK: - GPU 事前描画アクセス
 
     func getCurrentPrerenderedLayer() -> CALayer? {
         let request = buildDecodeRequest(isSpreadMode: false)
@@ -373,7 +373,7 @@ class ImageManager {
         }
     }
 
-    // MARK: - Cache Management
+    // MARK: - キャッシュ管理
 
     func preloadAdjacentImages(isSpreadMode: Bool = false, isRightToLeft: Bool = true) {
         let indicesToLoad: [Int]
@@ -414,7 +414,7 @@ class ImageManager {
         NSLog("[ImageManager] All image cache cleared")
     }
 
-    // MARK: - Private
+    // MARK: - 非公開
 
     private func getImageAtIndex(
         _ index: Int,
@@ -743,7 +743,7 @@ class ImageManager {
         return nil
     }
 
-    // MARK: - Memory Management
+    // MARK: - メモリ管理
 
     private func setupMemoryPressureMonitoring() {
         removeMemoryPressureObserver()
@@ -835,7 +835,7 @@ class ImageManager {
     }
 }
 
-// MARK: - Navigation
+// MARK: - ナビゲーション
 extension ImageManager {
     /**
      * 現在の画像のファイル名を取得する
@@ -929,7 +929,7 @@ extension ImageManager {
     }
 }
 
-// MARK: - Image decode helper
+// MARK: - 画像デコード補助
 extension ImageManager {
     /// ImageIOを用いてNSImageへデコード（キャッシュ方針は設定に追従）
     private func decodeImage(data: Data, maxPixelSize: Int) -> NSImage? {
@@ -1004,7 +1004,7 @@ extension ImageManager {
     }
 }
 
-// MARK: - Prerendered Layer Cache
+// MARK: - 事前描画レイヤーキャッシュ
 private final class PrerenderedLayerCache {
     struct SingleKey: Hashable {
         let pageIndex: Int
