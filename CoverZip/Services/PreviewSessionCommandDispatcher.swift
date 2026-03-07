@@ -8,6 +8,7 @@
 import Foundation
 
 enum PreviewSessionCommandDispatcher {
+    /// 設定変更通知を App/Extension 間へ即時配信する。
     static func postSettingsChanged() {
         DistributedNotificationCenter.default().postNotificationName(
             CZDistributedNotifications.settingsChanged,
@@ -22,6 +23,7 @@ enum PreviewSessionCommandDispatcher {
         boolValue: Bool? = nil,
         intValue: Int? = nil
     ) {
+        // 受信側が型安全に解釈できるよう、command/bool/int の固定キーで payload を構成する。
         var userInfo: [String: Any] = [
             CZPreviewSessionCommandUserInfoKeys.command: command.rawValue
         ]
@@ -35,6 +37,7 @@ enum PreviewSessionCommandDispatcher {
 
         DistributedNotificationCenter.default().postNotificationName(
             CZDistributedNotifications.previewSessionCommand,
+            // object にも command を重複格納し、古い受信経路との互換性を維持する。
             object: command.rawValue,
             userInfo: userInfo,
             deliverImmediately: true

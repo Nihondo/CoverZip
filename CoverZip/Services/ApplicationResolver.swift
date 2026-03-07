@@ -10,6 +10,8 @@ import Foundation
 
 enum ApplicationResolver {
 
+    /// アプリ識別子を URL に解決する。
+    /// 解決順序は「絶対パス → Bundle ID → ディレクトリ探索」で、曖昧さの少ないものを優先する。
     static func resolveApplicationURL(from applicationIdentifier: String) -> URL? {
         let normalizedIdentifier = applicationIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedIdentifier.isEmpty else { return nil }
@@ -29,6 +31,7 @@ enum ApplicationResolver {
         return nil
     }
 
+    /// `/` で始まる絶対パス指定を解決する。
     private static func resolveAbsolutePath(from applicationIdentifier: String) -> URL? {
         guard applicationIdentifier.hasPrefix("/") else { return nil }
         let appURL = URL(fileURLWithPath: applicationIdentifier)
@@ -36,12 +39,16 @@ enum ApplicationResolver {
         return appURL
     }
 
+    /// Bundle ID らしい文字列（`com.example.App` 形式）を解決する。
+    /// - Note: `.app` で終わる名前は Bundle ID ではなくアプリ名として後段に回す。
     private static func resolveBundleIdentifier(from applicationIdentifier: String) -> URL? {
         let hasBundleIdentifierShape = applicationIdentifier.contains(".") && !applicationIdentifier.hasSuffix(".app")
         guard hasBundleIdentifierShape else { return nil }
         return NSWorkspace.shared.urlForApplication(withBundleIdentifier: applicationIdentifier)
     }
 
+    /// 既知のアプリ配置ディレクトリを順に探索して解決する。
+    /// - Note: ユーザ指定名と `.app` 補完名の両方を候補として試行する。
     private static func resolveByDirectorySearch(from applicationIdentifier: String) -> URL? {
         let candidateNames = applicationNameCandidates(from: applicationIdentifier).map { normalizedApplicationName(from: $0) }
         let searchDirectories = applicationSearchDirectories()
@@ -57,6 +64,7 @@ enum ApplicationResolver {
         return nil
     }
 
+    /// 入力名そのまま / `.app` 補完名 の候補を作る。
     private static func applicationNameCandidates(from applicationIdentifier: String) -> [String] {
         let normalizedName = normalizedApplicationName(from: applicationIdentifier)
         if normalizedName == applicationIdentifier {
@@ -65,10 +73,13 @@ enum ApplicationResolver {
         return [applicationIdentifier, normalizedName]
     }
 
+    /// `.app` が欠けている場合のみ補完する。
     private static func normalizedApplicationName(from applicationIdentifier: String) -> String {
         applicationIdentifier.hasSuffix(".app") ? applicationIdentifier : "\(applicationIdentifier).app"
     }
 
+    /// 走査対象ディレクトリの優先順を返す。
+    /// - Note: システム領域を先にしつつ、最後にユーザ領域も含める。
     private static func applicationSearchDirectories() -> [URL] {
         var searchDirectories: [URL] = [
             URL(fileURLWithPath: "/Applications"),

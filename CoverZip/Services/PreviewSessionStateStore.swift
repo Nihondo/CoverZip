@@ -17,6 +17,9 @@ struct PreviewSessionState {
 }
 
 enum PreviewSessionStateStore {
+    /// 共有設定から Preview セッションの初期状態を読み出す。
+    /// - Parameter resetSlideshowState: true の場合は読み出し時に `isSlideshowEnabled` を false へ戻す。
+    /// - Note: 呼び出し時に副作用（スライドショー状態のリセット）が発生する点に注意。
     static func loadState(resetSlideshowState: Bool) -> PreviewSessionState {
         let isRightToLeftReading = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
         let currentViewMode = ViewModePreference(
@@ -28,6 +31,7 @@ enum PreviewSessionStateStore {
         let isSlideshowEnabled: Bool
 
         if resetSlideshowState {
+            // 新しいセッション開始時は前回のスライドショー継続を防ぐため、強制的に停止状態へ戻す。
             CZSettings.shared.isSlideshowEnabled = false
             isSlideshowEnabled = false
         } else {
