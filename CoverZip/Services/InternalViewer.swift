@@ -57,32 +57,44 @@ final class InternalViewer: NSObject {
     // MARK: - Actions (App側)
     @objc func setRightToLeft(_ sender: NSMenuItem) {
         applyReadingDirection(isRightToLeft: true)
+        CZUserDefaults.shared.set(true, forKey: CZSettingsKeys.isRightToLeftReading)
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
         postSessionCommand(.setRightToLeftReading)
     }
 
     @objc func setLeftToRight(_ sender: NSMenuItem) {
         applyReadingDirection(isRightToLeft: false)
+        CZUserDefaults.shared.set(false, forKey: CZSettingsKeys.isRightToLeftReading)
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
         postSessionCommand(.setLeftToRightReading)
     }
 
     @objc func setViewModeAuto(_ sender: NSMenuItem) {
         applyViewMode(.auto)
+        CZUserDefaults.shared.set(ViewModePreference.auto.rawValue, forKey: CZSettingsKeys.defaultViewMode)
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
         postSessionCommand(.setViewModeAuto)
     }
 
     @objc func setViewModeSingle(_ sender: NSMenuItem) {
         applyViewMode(.single)
+        CZUserDefaults.shared.set(ViewModePreference.single.rawValue, forKey: CZSettingsKeys.defaultViewMode)
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
         postSessionCommand(.setViewModeSingle)
     }
 
     @objc func setViewModeSpread(_ sender: NSMenuItem) {
         applyViewMode(.spread)
+        CZUserDefaults.shared.set(ViewModePreference.spread.rawValue, forKey: CZSettingsKeys.defaultViewMode)
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
         postSessionCommand(.setViewModeSpread)
     }
 
     @objc func toggleTransition(_ sender: NSMenuItem) {
         let next = !isTransitionEnabled
         applyTransitionEnabled(next)
+        CZUserDefaults.shared.set(next, forKey: CZSettingsKeys.pageTransitionEnabled)
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
         postSessionCommand(.setPageTransitionEnabled, boolValue: next)
     }
 
@@ -95,6 +107,8 @@ final class InternalViewer: NSObject {
     @objc func toggleSpreadPairOffset(_ sender: NSMenuItem) {
         let next = 1 - spreadPairOffset
         applySpreadPairOffset(next)
+        CZUserDefaults.shared.set(next, forKey: CZSettingsKeys.spreadPairOffset)
+        DistributedNotificationCenter.default().post(name: CZDistributedNotifications.settingsChanged, object: nil)
         postSessionCommand(.setSpreadPairOffset, intValue: next)
     }
 
@@ -196,7 +210,7 @@ final class InternalViewer: NSObject {
 
         DistributedNotificationCenter.default().post(
             name: CZDistributedNotifications.previewSessionCommand,
-            object: nil,
+            object: command.rawValue,
             userInfo: userInfo
         )
     }

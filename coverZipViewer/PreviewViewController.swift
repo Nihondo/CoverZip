@@ -559,6 +559,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             if !self.didRestoreViewModeFromHistory && newViewMode != self.userPreferredViewMode {
                 self.userPreferredViewMode = newViewMode
             }
+            let newSpreadOffset = CZUserDefaults.shared.object(forKey: CZSettingsKeys.spreadPairOffset) as? Int ?? 0
+            if self.imageManager.getSpreadPairOffset() != newSpreadOffset {
+                self.imageManager.setSpreadPairOffset(newSpreadOffset)
+            }
             // 表示更新
             if self.imageManager.hasImages() {
                 self.displayCurrentImage()
@@ -1051,8 +1055,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
 
     private func handlePreviewSessionCommand(_ notification: Notification) {
-        guard let userInfo = notification.userInfo,
-              let commandRaw = userInfo[CZPreviewSessionCommandUserInfoKeys.command] as? String,
+        let userInfo = notification.userInfo ?? [:]
+        let commandRaw = (userInfo[CZPreviewSessionCommandUserInfoKeys.command] as? String) ?? (notification.object as? String)
+        guard let commandRaw,
               let command = CZPreviewSessionCommand(rawValue: commandRaw) else {
             return
         }
