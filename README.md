@@ -39,12 +39,12 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
 - **キーボードナビゲーション**: 左右矢印キーでのページ送り（合成クリック方式）
 - **コンテキストメニュー**: 右クリックで読書方向/表示モード/見開き補正/サムネイルリスト表示/ページ送りアニメ/スライドショーを切り替え（QuickLookビューアと同一構成）
 - **複数ウィンドウ対応**: 複数のZIPファイルを同時に表示可能
-- **"internal"キーワード**: 設定ファイルで内蔵ビューアを指定可能
+- **"internal"キーワード**: ルーティング設定で内蔵ビューアを指定可能
 - **Cmd+O対応**: メニューまたはキーボードショートカットで直接開く
 
 ### ファイルルーティング機能
 - **キーワードマッチング**: ZIPファイル名に基づいた自動アプリケーション起動
-- **JSON設定**: 柔軟なキーワード→アプリケーション マッピング設定
+- **設定画面で即時保存**: ルール追加・編集・削除のたびに自動保存
 - **バックグラウンド動作**: 不要なウィンドウ生成なしでの処理
 - **自動終了**: 外部アプリケーション起動後の即座終了（内蔵ビューア使用時は継続）
 
@@ -126,61 +126,10 @@ xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUI
 3. 設定に応じて適切な外部アプリケーションが自動起動
 4. CoverZipは自動的に終了
 
-## 設定ファイル
+## ファイルルーティング設定
 
-ファイルルーティング機能は、JSON設定ファイルで制御されます。
-
-### 設定ファイルの場所
-```
-~/Library/Application Support/CoverZip/settings.json
-```
-
-### 設定例
-
-アプリケーション初回起動時に、以下の内容でデフォルトの設定ファイルが自動生成されます。このファイルは後から自由に編集できます。
-
-```json
-{
-  "keywords": {
-    "コミック": {
-      "type": "filename",
-      "application": "SimpleComicViewer.app",
-      "matchMode": "contains"
-    },
-    "manga": {
-      "type": "filename",
-      "application": "SimpleComicViewer.app",
-      "matchMode": "contains"
-    },
-    "comic": {
-      "type": "pathname",
-      "application": "SimpleComicViewer.app",
-      "matchMode": "contains"
-    },
-    "vol*": {
-      "type": "filename",
-      "application": "SimpleComicViewer.app",
-      "matchMode": "wildcard"
-    },
-    "^backup_\\d+$": {
-      "type": "pathname",
-      "application": "Archive Utility.app",
-      "matchMode": "regex"
-    },
-    "写真": {
-      "type": "filename",
-      "application": "Photos.app",
-      "matchMode": "contains"
-    },
-    "photo": {
-      "type": "pathname",
-      "application": "Photos.app",
-      "matchMode": "contains"
-    }
-  },
-  "default": "Archive Utility.app"
-}
-```
+ファイルルーティング機能は、設定画面（`CoverZip > Settings... > File Routing`）で管理します。  
+他の設定項目と同様に、変更は App Group の UserDefaults に即時保存されます。
 
 #### マッチング方式の説明
 - **contains** (デフォルト): 部分一致検索
@@ -198,9 +147,8 @@ xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUI
 
 ### 設定の編集
 1. Cmd+, または アプリメニューから CoverZip > Settings... を選択
-2. 設定画面で「設定ファイルを編集」ボタンをクリック
-3. 外部エディタで settings.json を編集
-4. 変更は次回のファイル処理時に自動反映
+2. 「File Routing」タブでルールを追加・編集・削除
+3. 変更はその場で自動保存され、次回のファイル処理から反映
 
 ## 開発
 
@@ -216,12 +164,12 @@ CoverZip/
 │   │   ├── KeywordMatcher.swift     # ファイル名マッチング
 │   │   ├── ApplicationResolver.swift # アプリ識別子→URL解決
 │   │   ├── AppLauncher.swift        # 外部アプリ起動
-│   │   ├── SettingsFileManager.swift # 設定ファイル管理
+│   │   ├── SettingsFileManager.swift # ルーティング設定の読み書きラッパー
 │   │   ├── AppSettings.swift        # App Group共有設定
 │   │   ├── PreviewSessionStateStore.swift # ビューア状態の共通読込
 │   │   └── PreviewSessionCommandDispatcher.swift # セッション通知送信
 │   └── Models/
-│       └── KeywordSettings.swift   # JSON設定データモデル
+│       └── KeywordSettings.swift   # ルーティング設定データモデル（UserDefaults）
 ├── coverZipExtension/           # QuickLook Thumbnail Extension
 │   ├── ThumbnailProvider.swift  # サムネイル生成エントリーポイント
 │   └── Info.plist              # Extension設定
@@ -295,7 +243,7 @@ ZIPファイル入力 → ZipRoutingService.route(...)
 #### Settings Scene アーキテクチャ
 - WindowGroupの代替としてSettings sceneを使用
 - 不要なウィンドウ生成を回避しバックグラウンド処理に最適化
-- Cmd+,でアクセス可能な設定ファイル編集機能
+- Cmd+, でアクセス可能な統合設定UI
 
 ## アーキテクチャの特徴
 
@@ -315,9 +263,8 @@ ZIPファイル入力 → ZipRoutingService.route(...)
 - 外部アプリ起動後の即座終了でリソース解放
 
 ### 設定管理
-- JSON設定ファイルによる柔軟なキーワードマッピング
-- 外部エディタでの設定編集機能
-- 初回起動時のデフォルト設定自動生成
+- ルーティング設定の即時保存（UserDefaults）
+- 初回起動時のサンプルルーティング設定投入
 - App Group (`group.com.dmng.CoverZip`) による Extension との設定共有
 
 ## ローカライズ運用（日英）
@@ -325,7 +272,7 @@ ZIPファイル入力 → ZipRoutingService.route(...)
 - 対応言語: 日本語 (`ja`) / 英語 (`en`)
 - 開発基準言語: 英語（`developmentRegion = en`）
 - 文言管理: `Localizable.xcstrings`（`CoverZip/` と `coverZipViewer/` に配置）
-- キー方針: 意味ベースキー（例: `settings.display.section`, `routing.actions.save`）
+- キー方針: 意味ベースキー（例: `settings.display.section`, `routing.rules.section`）
 - 共有メニュー文言（右クリックメニュー/表示メニュー）は `Shared/SettingsKeys.swift` の `CZPreviewContextMenuLayout.title(for:)` で一元管理
 
 ### 新規文言追加手順

@@ -12,8 +12,8 @@ struct CoverZipApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     init() {
-        // 初回起動時にデフォルト設定ファイルを作成
-        createDefaultSettingsIfNeeded()
+        // 初回起動時にルーティング設定の初期値を投入
+        seedRoutingSettingsIfNeeded()
     }
     
     var body: some Scene {
@@ -41,15 +41,8 @@ struct CoverZipApp: App {
         }
     }
     
-    /**
-     * デフォルト設定ファイルが存在しない場合に作成する
-     */
-    private func createDefaultSettingsIfNeeded() {
-        let settings = KeywordSettings.load()
-
-        // デフォルト設定（空）の場合は、サンプル設定を作成
-        if settings.rules.isEmpty && settings.defaultApplication.isEmpty {
-            KeywordSettings.createDefaultSettingsFile()
-        }
+    /// ルーティング設定が未設定の場合にサンプル設定を投入する
+    private func seedRoutingSettingsIfNeeded() {
+        KeywordSettings.seedDefaultSettingsIfNeeded()
     }
 }

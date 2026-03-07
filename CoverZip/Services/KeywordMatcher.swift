@@ -31,7 +31,7 @@ class KeywordMatcher {
      * ZIPファイルURLに対してキーワードマッチングを実行
      *
      * @param zipFileURL チェック対象のZIPファイルURL
-     * @param settings JSON設定ファイルのキーワード設定
+     * @param settings ルーティング設定
      * @return マッチング結果
      */
     static func checkKeyword(for zipFileURL: URL, using settings: KeywordSettings) -> KeywordMatchResult {
@@ -46,7 +46,7 @@ class KeywordMatcher {
      *
      * @param fileName チェック対象のファイル名（拡張子除去済み）
      * @param fullPath チェック対象のフルパス
-     * @param settings JSON設定ファイルのキーワード設定
+     * @param settings ルーティング設定
      * @return マッチング結果
      */
     static func checkKeyword(for fileName: String, parentFolder: String, fileExtension: String, using settings: KeywordSettings) -> KeywordMatchResult {

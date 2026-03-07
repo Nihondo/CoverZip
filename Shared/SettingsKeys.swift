@@ -39,6 +39,8 @@ public enum CZSettingsKeys {
     public static let imageDecodeCachePolicy = "imageDecodeCachePolicy"
     // Thumbnail strip height in the preview extension (CGFloat, default 88)
     public static let thumbnailStripHeight = "thumbnailStripHeight"
+    // File routing settings payload (JSON-encoded KeywordSettings)
+    public static let routingSettingsData = "routingSettingsData"
 }
 
 public enum CZAppGroup {

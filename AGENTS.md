@@ -28,10 +28,7 @@
 - 設定 UI/保存: アプリ側は `CoverZip/Views/*` + `CoverZip/Services/AppSettings.swift`。拡張側は `coverZipViewer/Settings.swift`。
 
 ## ファイルルーティング仕様（重要）
-- 設定ファイルは `Application Support/CoverZip/settings.json` を最優先し、無ければアプリバンドルの `settings.json`、それも無ければデフォルト（空）を使用（`CoverZip/Models/KeywordSettings.swift`）。
-- 設定スキーマ:
-  - `keywords: { pattern: { type: "filename"|"pathname", application: String, matchMode: "contains"|"wildcard"|"regex" } }`
-  - `default: String`（マッチなし時のアプリ名。`"internal"` 指定で内蔵ビューア）。
+- 設定は App Group UserDefaults（`CZSettingsKeys.routingSettingsData`）に保存する（`CoverZip/Models/KeywordSettings.swift`）。
 - マッチングは先勝ち。`contains` は大文字小文字無視、`wildcard` は `*`/`?`、`regex` は NSRegularExpression（無効時は contains フォールバック）。
 
 ## 内蔵ビューアと拡張の連携
@@ -88,7 +85,7 @@
 ## ビルド・動作の目安
 - Xcode 14+（macOS 13+ 推奨）。Targets: `CoverZip`, `coverZipViewer`, `coverZipExtension`。
 - App/Extensions の Entitlements に同一 App Group を設定。
-- 初回起動時、`CoverZip` は `settings.json` のデフォルト生成を試みる（Application Support）。
+- 初回起動時、`CoverZip` はルーティング設定が空の場合にサンプル値を UserDefaults へ投入する。
 
 ---
 更新履歴:
@@ -103,3 +100,5 @@
 - 2026-03-07 見開き表示時はサムネイルを2件同時選択で同期するよう調整
 - 2026-03-07 Refactored ZIP routing into `ZipRoutingService` and unified app resolution via `ApplicationResolver`
 - 2026-03-07 Added `PreviewSessionStateStore` and `PreviewSessionCommandDispatcher` to reduce duplicated viewer/menu synchronization logic
+- 2026-03-07 File routing settings are persisted in App Group UserDefaults; removed JSON-edit/save-button workflow
+- 2026-03-07 Removed legacy `settings.json` migration/fallback path from routing settings load logic

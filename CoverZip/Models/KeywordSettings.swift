@@ -73,7 +73,7 @@ struct KeywordRule: Codable, Identifiable {
 }
 
 /**
- * JSON設定ファイルに対応したキーワード設定モデル（配列ベース）
+ * ファイルルーティング設定モデル（配列ベース）
  */
 struct KeywordSettings: Codable {
     var rules: [KeywordRule]
@@ -84,121 +84,99 @@ struct KeywordSettings: Codable {
         defaultApplication: ""
     )
 
+    static let sampleSettings = KeywordSettings(
+        rules: [
+            KeywordRule(keyword: "コミック", type: .filename, application: "internal", matchMode: .contains),
+            KeywordRule(keyword: "manga", type: .filename, application: "internal", matchMode: .contains),
+            KeywordRule(keyword: "vol*", type: .filename, application: "internal", matchMode: .wildcard)
+        ],
+        defaultApplication: "Archive Utility.app"
+    )
+
     /**
-     * settings.jsonファイルから設定を読み込む
-     * ユーザーが編集可能なApplication Supportディレクトリの設定を優先する
+     * 設定を読み込む
+     * 1. App Group UserDefaults
+     * 2. 既定値（空）
      */
     static func load() -> KeywordSettings {
-        // 1. アプリケーションサポートディレクトリのsettings.jsonを試す
-        if let appSupportURL = getApplicationSupportDirectory(),
-           let data = try? Data(contentsOf: appSupportURL.appendingPathComponent("settings.json")),
-           var settings = try? JSONDecoder().decode(KeywordSettings.self, from: data) {
-            NSLog("ユーザー設定ファイルを読み込みました: \(appSupportURL.appendingPathComponent("settings.json").path)")
-            settings.migrateApplicationPaths()
+        if var settings = loadFromSharedDefaults() {
+            if settings.migrateApplicationPaths() {
+                try? saveToSharedDefaults(settings)
+            }
             return settings
         }
 
-        // 2. アプリケーションバンドル内のsettings.jsonを試す
-        if let bundlePath = Bundle.main.path(forResource: "settings", ofType: "json"),
-           let data = try? Data(contentsOf: URL(fileURLWithPath: bundlePath)),
-           var settings = try? JSONDecoder().decode(KeywordSettings.self, from: data) {
-            NSLog("バンドル内のデフォルト設定ファイルを読み込みました: \(bundlePath)")
-            settings.migrateApplicationPaths()
-            return settings
-        }
-
-        // 3. デフォルト設定を返す
-        NSLog("有効な設定ファイルが見つからなかったため、デフォルト設定を返します")
+        NSLog("ルーティング設定が見つからなかったため、既定値を返します")
         return defaultSettings
     }
 
     /**
      * アプリ名のみの設定（旧形式）をフルパスに変換する後方互換処理
      */
-    private mutating func migrateApplicationPaths() {
+    @discardableResult
+    private mutating func migrateApplicationPaths() -> Bool {
+        var hasUpdated = false
+
         for i in rules.indices {
             let app = rules[i].application
             if app != "internal" && !app.hasPrefix("/") {
                 if let url = ApplicationResolver.resolveApplicationURL(from: app) {
                     rules[i].application = url.path
+                    hasUpdated = true
                 }
             }
         }
+
         if defaultApplication != "internal" && !defaultApplication.hasPrefix("/") && !defaultApplication.isEmpty {
             if let url = ApplicationResolver.resolveApplicationURL(from: defaultApplication) {
                 defaultApplication = url.path
+                hasUpdated = true
+            }
+        }
+
+        return hasUpdated
+    }
+
+    /**
+     * 設定を App Group UserDefaults に保存
+     */
+    func save() throws {
+        try Self.saveToSharedDefaults(self)
+        NSLog("ルーティング設定を保存しました（UserDefaults）")
+    }
+
+    /**
+     * 初回起動時にサンプル設定を投入（空設定時のみ）
+     */
+    static func seedDefaultSettingsIfNeeded() {
+        let settings = load()
+        if settings.rules.isEmpty && settings.defaultApplication.isEmpty {
+            do {
+                try sampleSettings.save()
+                NSLog("ルーティング設定のサンプル値を初期投入しました")
+            } catch {
+                NSLog("ルーティング設定の初期投入に失敗しました: %@", error.localizedDescription)
             }
         }
     }
 
-    /**
-     * 設定をsettings.jsonファイルに保存
-     */
-    func save() throws {
-        guard let appSupportURL = KeywordSettings.getApplicationSupportDirectory() else {
-            throw NSError(
-                domain: "KeywordSettings",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: CZLocalized.string(
-                    "error.keyword_settings.app_support_not_found",
-                    defaultValue: "Application Support directory not found"
-                )]
-            )
-        }
-
-        let settingsURL = appSupportURL.appendingPathComponent("settings.json")
+    private static func saveToSharedDefaults(_ settings: KeywordSettings) throws {
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-
-        let data = try encoder.encode(self)
-        try data.write(to: settingsURL)
-        NSLog("設定ファイルを保存しました: \(settingsURL.path)")
+        let data = try encoder.encode(settings)
+        CZSettings.shared.userDefaults.set(data, forKey: CZSettingsKeys.routingSettingsData)
     }
 
-    /**
-     * アプリケーションサポートディレクトリを取得
-     */
-    static func getApplicationSupportDirectory() -> URL? {
-        let fileManager = FileManager.default
-
-        guard let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+    private static func loadFromSharedDefaults() -> KeywordSettings? {
+        let defaults = CZSettings.shared.userDefaults
+        guard let data = defaults.data(forKey: CZSettingsKeys.routingSettingsData) else {
             return nil
         }
 
-        let appURL = appSupportURL.appendingPathComponent("CoverZip")
-
-        // ディレクトリが存在しない場合は作成
-        if !fileManager.fileExists(atPath: appURL.path) {
-            try? fileManager.createDirectory(at: appURL, withIntermediateDirectories: true, attributes: nil)
-        }
-
-        return appURL
-    }
-
-    /**
-     * デフォルト設定ファイルを作成
-     */
-    static func createDefaultSettingsFile() {
-        let defaultRules = [
-            KeywordRule(keyword: "コミック", type: .filename, application: "internal", matchMode: .contains),
-            KeywordRule(keyword: "manga", type: .filename, application: "internal", matchMode: .contains),
-            KeywordRule(keyword: "vol*", type: .filename, application: "internal", matchMode: .wildcard)
-        ]
-
-        let settings = KeywordSettings(
-            rules: defaultRules,
-            defaultApplication: "Archive Utility.app"
-        )
-
-        guard let appSupportURL = getApplicationSupportDirectory() else { return }
-        let settingsURL = appSupportURL.appendingPathComponent("settings.json")
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-
-        if let data = try? encoder.encode(settings) {
-            try? data.write(to: settingsURL)
-            NSLog("Default settings file created at: %@", settingsURL.path)
+        do {
+            return try JSONDecoder().decode(KeywordSettings.self, from: data)
+        } catch {
+            NSLog("UserDefaults のルーティング設定デコードに失敗: %@", error.localizedDescription)
+            return nil
         }
     }
 }

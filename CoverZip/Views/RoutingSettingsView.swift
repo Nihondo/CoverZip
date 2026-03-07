@@ -24,8 +24,7 @@ struct RoutingSettingsView: View {
     private let zipContentTypeIdentifiers = ["public.zip-archive", "com.pkware.zip-archive"]
     private let archiveUtilityBundleIdentifier = "com.apple.archiveutility"
 
-    @State private var settings: KeywordSettings = SettingsFileManager.loadSettings()
-    @State private var hasUnsavedChanges = false
+    @State private var settings: KeywordSettings = KeywordSettings.load()
     @State private var showingAlert = false
     @State private var alertMessage = ""
     @State private var isDefaultHandler = false
@@ -59,7 +58,7 @@ struct RoutingSettingsView: View {
                             rule: $rule,
                             usedApplications: usedApplications,
                             onDelete: { deleteRule(rule) },
-                            onChange: { hasUnsavedChanges = true }
+                            onChange: saveCurrentSettings
                         )
                     }
                     .onMove(perform: moveRules)
@@ -88,19 +87,6 @@ struct RoutingSettingsView: View {
                 ))
             }
 
-            Section {
-                HStack {
-                    Button(CZLocalized.string("routing.actions.save", defaultValue: "Save")) { saveSettings() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!hasUnsavedChanges)
-                    Button(CZLocalized.string("routing.actions.reset", defaultValue: "Reset")) { resetSettings() }
-                        .disabled(!hasUnsavedChanges)
-                    Spacer()
-                    Button(CZLocalized.string("routing.actions.edit_json", defaultValue: "Edit JSON File")) {
-                        let _ = SettingsFileManager.openSettingsFileInExternalEditor()
-                    }
-                }
-            }
         }
         .formStyle(.grouped)
         .frame(minWidth: 760, minHeight: 480)
@@ -156,7 +142,7 @@ struct RoutingSettingsView: View {
             AppPickerMenu(
                 application: $settings.defaultApplication,
                 usedApplications: usedApplications,
-                onChange: { hasUnsavedChanges = true }
+                onChange: saveCurrentSettings
             )
         }
     }
@@ -199,33 +185,23 @@ struct RoutingSettingsView: View {
 
     private func addNewRule() {
         settings.rules.append(KeywordRule(keyword: "", type: .filename, application: "internal", matchMode: .contains))
-        hasUnsavedChanges = true
+        saveCurrentSettings()
     }
 
     private func deleteRule(_ rule: KeywordRule) {
         settings.rules.removeAll { $0.id == rule.id }
-        hasUnsavedChanges = true
+        saveCurrentSettings()
     }
 
     private func moveRules(from source: IndexSet, to destination: Int) {
         settings.rules.move(fromOffsets: source, toOffset: destination)
-        hasUnsavedChanges = true
+        saveCurrentSettings()
     }
 
-    private func saveSettings() {
-        if SettingsFileManager.saveSettings(settings) {
-            hasUnsavedChanges = false
-            alertMessage = CZLocalized.string("routing.alert.save_success", defaultValue: "Settings saved.")
-            showingAlert = true
-        } else {
-            alertMessage = CZLocalized.string("routing.alert.save_failed", defaultValue: "Failed to save settings.")
-            showingAlert = true
+    private func saveCurrentSettings() {
+        if !SettingsFileManager.saveSettings(settings) {
+            NSLog("ルーティング設定の保存に失敗しました")
         }
-    }
-
-    private func resetSettings() {
-        settings = SettingsFileManager.loadSettings()
-        hasUnsavedChanges = false
     }
 
     // MARK: - File Association
