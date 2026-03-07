@@ -15,6 +15,8 @@ import UniformTypeIdentifiers
 private enum ColumnWidth {
     static let typePicker: CGFloat = 115
     static let matchMode: CGFloat = 155
+    static let keywordField: CGFloat = 120
+    static let applicationPicker: CGFloat = 200
     static let deleteButton: CGFloat = 28
 }
 
@@ -171,9 +173,9 @@ struct RoutingSettingsView: View {
             Text(CZLocalized.string("routing.rules.header.condition", defaultValue: "Condition"))
                 .frame(width: ColumnWidth.matchMode, alignment: .leading)
             Text(CZLocalized.string("routing.rules.header.keyword", defaultValue: "Keyword"))
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: ColumnWidth.keywordField, alignment: .leading)
             Text(CZLocalized.string("routing.rules.header.application", defaultValue: "Application"))
-                .frame(minWidth: 140, alignment: .leading)
+                .frame(width: ColumnWidth.applicationPicker, alignment: .leading)
             Spacer().frame(width: ColumnWidth.deleteButton)
         }
         .font(.caption)
@@ -344,10 +346,6 @@ struct RuleRowView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "line.3.horizontal")
-                .foregroundColor(.secondary)
-                .frame(width: 20)
-
             HStack(spacing: 0) {
                 Picker("", selection: $rule.type) {
                     ForEach(KeywordType.allCases, id: \.self) { Text($0.displayName).tag($0) }
@@ -369,14 +367,14 @@ struct RuleRowView: View {
             .frame(width: ColumnWidth.matchMode)
 
             LeadingTextField(text: $rule.keyword, onChange: onChange)
-                .frame(minWidth: 80, maxWidth: .infinity, minHeight: 22)
+                .frame(width: ColumnWidth.keywordField, height: 22)
 
             AppPickerMenu(
                 application: $rule.application,
                 usedApplications: usedApplications,
                 onChange: onChange
             )
-            .frame(minWidth: 140)
+            .frame(width: ColumnWidth.applicationPicker, alignment: .leading)
 
             Button(action: onDelete) {
                 Image(systemName: "trash").foregroundColor(.red)
