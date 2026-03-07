@@ -1,291 +1,133 @@
 # CoverZip
 
-CoverZipは、四つの独立した機能を持つmacOSアプリケーションです：
+CoverZip は、ZIPに圧縮されたコミックや画像集をmacOSで快適に扱うためのアプリです。インストールするだけで Finder の見た目が変わり、スペースキー一発でコミックを読めるようになります。
 
-1. **QuickLook Thumbnail Extension** - ZIPファイル内の先頭画像を使用したサムネイル生成
-2. **QuickLook Preview Extension** - ZIPファイル内画像のフルスクリーンプレビューとページング機能
-3. **ZIPファイルルーティングアプリケーション** - ファイル名キーワードマッチングによる外部アプリケーション自動起動
-4. **内蔵ビューア** - アプリ内でQLPreviewViewを使用したZIP画像表示機能
+---
 
-## 特徴
+## できること
 
-### QuickLook Thumbnail Extension
-- **ZIPファイルサムネイル生成**: ZIPファイル内の最初の画像ファイルを使用してサムネイルを生成
-- **純Swift実装**: 標準のFoundationとCompressionフレームワークのみを使用
-- **App Extension対応**: macOS QuickLook Thumbnail Extensionとして実装
-- **軽量**: 外部ライブラリに依存しない軽量な実装
-- **先頭画像の早期判定(オプション)**: 表紙らしい名前（`cover`/`front`/`表紙`/`00*`）を優先し、次いで0埋め1（`01`/`001`/`image001` など）を採用。したがって連番が混在する場合は `000` 系を `001` より優先して表紙と判断。`CZZip.firstImageData(from:options:)` を利用（例: `[.preferCoverLike, .preferZeroPaddedOne]`）。
+### ZIPファイルにサムネイルを表示する
 
-### QuickLook Preview Extension
-- **フルスクリーンプレビュー**: ZIPファイル内のすべての画像をフルスクリーンで表示
-- **ページング機能**: マウスクリック・キーボードでのページ移動
-- **遅延ロード方式**: メタデータを先行取得し、画像データは必要時にロード
-  - 2ページ目以降への高速遷移（全画像読み込み待ちなし）
-  - メモリ効率的なキャッシュ管理（元画像10枚、リサイズ画像20枚）
-  - 隣接ページの自動プリロード
-- **表示モード**: 単ページ/見開き/自動（画像サイズに応じた判定）
-- **ページスライダー**: ページ位置を視覚的に表示・操作
-- **RTL読書対応**: 日本のコミック向け右から左への読書方向
-- **履歴機能**: ZIP別に最終閲覧ページと表示設定を記憶
-- **レスポンシブUI**: ウィンドウ幅に応じてUI要素を動的調整
-- **設定共有**: App Groupによるメインアプリとの設定同期
-- **ページ送りアニメ設定**: 設定画面からON/OFF可能（既定値を共有）
-- **サムネイルリスト初期表示設定**: 設定画面からON/OFF可能（右クリックメニューでも切り替え可能）
-- **サムネイル並び方向**: 右綴じは右→左（少ページ時も右端基準）、左綴じは左→右で表示
-- **見開き時のサムネイル選択**: 表示中の2ページを同時に選択表示
+CoverZip をインストールすると、Finder で ZIP ファイルを見たときに、中に入っている最初の画像がサムネイルとして表示されます。ファイルを開かなくても、どのコミックか一目でわかるようになります。
 
-### 内蔵ビューア機能
-- **QLPreviewView統合**: QuickLook Preview Extensionと同じプレビュー体験
-- **キーボードナビゲーション**: 左右矢印キーでのページ送り（合成クリック方式）
-- **コンテキストメニュー**: 右クリックで読書方向/表示モード/見開き補正/サムネイルリスト表示/ページ送りアニメ/スライドショーを切り替え（QuickLookビューアと同一構成）
-- **複数ウィンドウ対応**: 複数のZIPファイルを同時に表示可能
-- **"internal"キーワード**: ルーティング設定で内蔵ビューアを指定可能
-- **Cmd+O対応**: メニューまたはキーボードショートカットで直接開く
+表紙らしいファイル名（`cover`、`front`、`表紙`、`00` で始まる名前など）が含まれている場合は、そちらが優先して表示されます。
 
-### ファイルルーティング機能
-- **キーワードマッチング**: ZIPファイル名に基づいた自動アプリケーション起動
-- **設定画面で即時保存**: ルール追加・編集・削除のたびに自動保存
-- **バックグラウンド動作**: 不要なウィンドウ生成なしでの処理
-- **自動終了**: 外部アプリケーション起動後の即座終了（内蔵ビューア使用時は継続）
+### スペースキーでコミックを読む（QuickLook ビューア）
 
-## 対応ファイル形式
+Finder で ZIP ファイルを選択してスペースキーを押すと、CoverZip のコミックビューアが開きます。ファイルをアプリで開く必要はなく、その場でページをめくって内容を確認できます。
 
-### ZIPファイル
-- 標準的なZIPファイル（.zip）
-- DEFLATE圧縮（方式8）と非圧縮（方式0）に対応
+ビューアでできることは次のとおりです。
 
-### 画像ファイル（サムネイル生成用）
-- JPEG (.jpg, .jpeg)
-- PNG (.png)
-- GIF (.gif)
-- BMP (.bmp)
-- TIFF (.tiff, .tif)
-- ICO (.ico)
-- ICNS (.icns)
+- **ページ移動**は、画面の左右をクリックするか、マウスホイールの上下スクロールで行います。矢印キーは QuickLook ビューアでは使えません（Finderにキーが奪われるため。後述の内蔵ビューアでは使えます）。
+- **表示モード**は、1ページずつ表示する「単ページ」と、見開きで2ページを並べて表示する「見開き」を選べます。「自動」にすると画像のサイズに応じて自動判断します。
+見開きモードでページの組み合わせがずれて見える場合は、メニューの「**見開きの左右を補正**」を選ぶと1ページ分ずれて正しい組み合わせになります。
+- **読む方向**は、右から左（日本のマンガ向け）と左から右（洋書向け）を切り替えられます。
+- **ページスライダー**をドラッグすると、好きなページへ素早くジャンプできます。
+- **サムネイルリスト**を表示すると、ページの一覧が下部に並び、クリックで直接そのページへ移動できます。
+- **スライドショー**機能を使うと、一定時間ごとに自動でページが進みます。
+- **前回の続きから**読むことができます。ZIP ファイルごとに最後に見ていたページと表示設定が記憶されます。
 
-## システム要件
+設定は画面内で右クリックするか、表示メニューから変更できます。
 
-- macOS 11.0 (Big Sur) 以降
-- Intel Mac (x86_64) および Apple Silicon Mac (arm64) 対応
-- Xcode 14.0 以降（開発時）
+### ダブルクリックで内蔵ビューアまたは別アプリで開く（ルーティング機能）
 
-## インストール
+CoverZip を ZIP ファイルに関連付けておくと、ZIP をダブルクリックしたときに、ファイル名に応じて自動的に開くアプリを振り分けることができます。
 
-### 開発者向け（ソースからビルド）
+たとえばこのような使い方ができます。
 
-1. リポジトリをクローンまたはダウンロード
-2. Xcodeでプロジェクトを開く
-3. プロジェクトをビルドして実行
+- ファイル名に「コミック」が含まれていれば CoverZip の内蔵ビューアで開く
+- ファイル名に「巻」が含まれていれば CoverZip の内蔵ビューアで開く
+- それ以外の ZIP はアーカイブ解凍アプリで開く
 
-```bash
-# プロジェクトを開く
-open CoverZip.xcodeproj
+振り分け先として「内蔵ビューア」を指定した場合は CoverZip がそのまま動き続けます。外部アプリを指定した場合は、そのアプリが起動した後に CoverZip は自動的に終了します。
 
-# コマンドラインでビルド（コードサイン無効）
-xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
-```
+また、Option+Cmd+O（メニューの「内蔵ビューアで開く...」）から ZIP ファイルを選ぶと、ルーティング設定に関係なく常に内蔵ビューアで開きます。
 
-### Extension の有効化
+内蔵ビューアでは、クリックやスクロールに加えて次のキー操作が使えます。矢印キーの前後は、読み方向の設定（右綴じ / 左綴じ）に応じて自動的に切り替わります。
 
-1. アプリケーションを一度実行
-2. システム設定 > プライバシーとセキュリティ > 機能拡張 > QuickLook
-3. CoverZip（両方のExtension）を有効化
-   - CoverZip Thumbnail Extension
-   - CoverZip Preview Extension
+| キー | 動作 |
+|------|------|
+| `←` / `→` | 1ページ移動（右綴じなら `←` が次のページ） |
+| `Space` / `Shift + Space` | 次 / 前のページへ |
+| `Shift + ←` / `Shift + →`、`Page Down` / `Page Up` | 10ページジャンプ |
+| `Cmd + ←` / `Cmd + →`、`Home` / `End` | 最初 / 最後のページへ |
 
-## 使用方法
+---
 
-### QuickLook サムネイル機能
-1. インストール後、Finderでサムネイル表示を有効にします
-2. ZIPファイルを含むフォルダで、表示 > サムネイル を選択
-3. 画像を含むZIPファイルのサムネイルが自動的に生成されます
+## インストール方法
 
-### QuickLook プレビュー機能
-1. Finderで画像を含むZIPファイルを選択
-2. スペースキーを押すかプレビューアイコンをクリック
-3. フルスクリーンでZIPファイル内の画像が表示されます
+1. ソースコードを Xcode でビルドし、CoverZip.app をアプリケーションフォルダに置きます。
+2. CoverZip を一度起動します。
+3. **システム設定 → プライバシーとセキュリティ → 機能拡張 → QuickLook** を開き、「CoverZip Thumbnail Extension」と「CoverZip Preview Extension」の両方を有効にします。
 
-#### プレビュー操作方法
-- **ページ移動**: 画面の左右をクリック、または矢印キーで移動
-- **マウスホイール**: 上下スクロールでページ送り/戻し（読書方向設定に対応）
-- **スライダー操作**: ページスライダーをクリック・ドラッグで任意のページへジャンプ
-- **キーボード操作**:
-  - 左右矢印キー: ページ移動（読書方向設定に応じて動作）
-  - Home/End: 最初/最後のページへ
-  - Page Up/Down: 5ページずつ移動
-  - Escape: プレビューを閉じる
+有効化後、Finder で ZIP ファイルを選択するとサムネイルが表示され、スペースキーでコミックビューアが使えるようになります。
 
-### アプリ内プレビュー（内蔵ビューア）
-- アプリ内でも Quick Look のプレビューを使用しています（`QLPreviewView` 埋め込み）。
-- キー入力は専用のフォワーダビューで受け取り、プレビュー領域左右へのクリックを合成してページ移動します。
-- 安定性のため、ウィンドウを閉じる際は OS の標準解放順序に任せ、独自のビュー破棄は行いません（2025-09 変更）。
+---
 
-### ZIPファイルルーティング機能
-1. CoverZipにZIPファイルをドロップまたは関連付けで開く
-2. ファイル名に基づいてキーワードマッチングが実行
-3. 設定に応じて適切な外部アプリケーションが自動起動
-4. CoverZipは自動的に終了
+## ルーティング設定の方法
 
-## ファイルルーティング設定
+Cmd+, またはメニューの **CoverZip → Settings...** を選ぶと設定画面が開きます。「File Routing」タブでルールを管理します。
 
-ファイルルーティング機能は、設定画面（`CoverZip > Settings... > File Routing`）で管理します。  
-他の設定項目と同様に、変更は App Group の UserDefaults に即時保存されます。
+ルールは上から順に評価され、最初に一致したものが使われます。
 
-#### マッチング方式の説明
-- **contains** (デフォルト): 部分一致検索
-  - 例: `"comic"` → `comic_vol1.zip` にマッチ
-- **wildcard**: ワイルドカード (`*`, `?`) 対応
-  - 例: `"vol*"` → `vol1.zip`, `vol_special.zip` にマッチ
-  - 例: `"*backup*"` → `auto_backup_2024.zip` にマッチ
-- **regex**: 正規表現対応
-  - 例: `"^backup_\\d+$"` → `backup_123` にマッチ（先頭末尾固定）
-  - 例: `"(manga|comic)"` → `manga.zip`, `comic.zip` にマッチ
+### マッチング方式
 
-#### キーワードタイプの説明
-- **filename**: ZIPファイル名でマッチング（拡張子除く）
-- **pathname**: ZIPファイルのフルパスでマッチング
+| 方式 | 内容 | 例 |
+|------|------|----|
+| 次を含む（contains） | ファイル名に指定した文字列が含まれているか | `コミック` → `コミック01.zip` にマッチ |
+| 次で始まる（startsWith） | ファイル名が指定した文字列で始まるか | `vol` → `vol3.zip` にマッチ |
+| 次で終わる（endsWith） | ファイル名が指定した文字列で終わるか | `backup` → `data_backup.zip` にマッチ |
+| ワイルドカード（wildcard） | `*`（任意の文字列）や `?`（任意の1文字）を使ったパターン | `vol*` → `vol1.zip`、`vol_special.zip` にマッチ |
+| 正規表現（regex） | 正規表現によるパターンマッチ | `^backup_\d+$` → `backup_123.zip` にマッチ |
 
-### 設定の編集
-1. Cmd+, または アプリメニューから CoverZip > Settings... を選択
-2. 「File Routing」タブでルールを追加・編集・削除
-3. 変更はその場で自動保存され、次回のファイル処理から反映
+### キーワードタイプ
 
-## 開発
+マッチングの対象として「ファイル名」「フォルダ名（親フォルダ）」「拡張子」を選べます。
 
-### プロジェクト構造
+### 開くアプリの指定方法
 
-```
-CoverZip/
-├── CoverZip/                    # メインアプリケーション
-│   ├── CoverZipApp.swift        # SwiftUI Appライフサイクルエントリーポイント
-│   ├── AppDelegate.swift        # ファイル処理、アプリケーションデリゲート
-│   ├── Services/                # ビジネスロジック層
-│   │   ├── ZipRoutingService.swift  # ZIPルーティング判定・実行
-│   │   ├── KeywordMatcher.swift     # ファイル名マッチング
-│   │   ├── ApplicationResolver.swift # アプリ識別子→URL解決
-│   │   ├── AppLauncher.swift        # 外部アプリ起動
-│   │   ├── SettingsFileManager.swift # ルーティング設定の読み書きラッパー
-│   │   ├── AppSettings.swift        # App Group共有設定
-│   │   ├── PreviewSessionStateStore.swift # ビューア状態の共通読込
-│   │   └── PreviewSessionCommandDispatcher.swift # セッション通知送信
-│   └── Models/
-│       └── KeywordSettings.swift   # ルーティング設定データモデル（UserDefaults）
-├── coverZipExtension/           # QuickLook Thumbnail Extension
-│   ├── ThumbnailProvider.swift  # サムネイル生成エントリーポイント
-│   └── Info.plist              # Extension設定
-├── coverZipViewer/             # QuickLook Preview Extension
-│   ├── PreviewProvider.swift   # プレビューエントリーポイント
-│   ├── PreviewViewController.swift # プレビューUI制御（NSViewController）
-│   ├── ImageManager.swift      # 画像管理・ページング制御（遅延ロード実装）
-│   ├── ReadingHistoryManager.swift # 閲覧履歴管理
-│   ├── Settings.swift          # App Group共有設定
-│   ├── Base.lproj/
-│   │   └── PreviewViewController.xib # UI定義
-│   └── Info.plist              # Extension設定
-├── Shared/                     # 共有ユーティリティ
-│   ├── ZipCore.swift           # 純Swift ZIP処理コア
-│   ├── NaturalSort.swift       # 自然順ソート
-│   ├── ImageFileFilter.swift   # 画像ファイル判定
-│   ├── SettingsKeys.swift      # 共有設定キー
-│   └── ImageIOOptions.swift    # 画像生成オプション
-└── docs/                        # 計画・運用ドキュメント
-```
+アプリの指定には次の形式が使えます。
 
-### ビルドとテスト
+- `内蔵ビューア` ：CoverZip の内蔵ビューアで開きます
+- アプリ名（例：`アーカイブユーティリティ`）：そのアプリで開きます
 
-```bash
-# Extension単体のビルド
-xcodebuild -project CoverZip.xcodeproj -target coverZipExtension build -configuration Debug CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
-xcodebuild -project CoverZip.xcodeproj -target coverZipViewer build -configuration Debug CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+---
 
-# QuickLook Extension のテスト
-qlmanage -r                    # Extensionをリロード
-qlmanage -t path/to/test.zip   # サムネイル生成テスト
-qlmanage -p path/to/test.zip   # プレビューテスト
-qlmanage -m | grep -i coverzip # Extension登録状況確認
-pluginkit -m | grep -i coverzip # 詳細なExtension情報
-```
+## 快適に読むための工夫
 
-### 技術的詳細
+CoverZip のビューアで取り組んでいる高速化は以下のようなものです。
 
-#### アプリケーション起動フロー
-```
-ZIPファイル入力 → ZipRoutingService.route(...)
-  → (internal) InternalViewer
-  → (external/default) AppLauncher → NSApplication.terminate
-```
+**すぐ表示、すぐめくれる**
+ZIP を開いたときに、まずページの一覧情報だけを素早く取得します。そのうえで1ページ目だけを他のページより先に優先してデコードし、残りは続きの先読みとして処理します。ファイルを開いてすぐ最初のページが表示され、続きのページも待たずにめくれます。
 
-#### ZIP解析（Extension側）
-- Central DirectoryとLocal File Headerの純Swift実装
-- Foundation/Compressionフレームワークを使用したDEFLATE展開
-- 8MBメモリバッファによる制御されたメモリ使用
-- エンコーディング問題への対応
+**先読みとキャッシュ**
+今見ているページの前後を裏側で先読みしておくことで、ページをめくったときにもたつきを感じにくくしています。単ページ表示では前方5ページ・後方1ページ、見開き表示では前方3セット・後方1セットを先読みします。一度表示した画像は最大32枚分をメモリに保持しておき、同じページに戻ったときの表示も速くなっています。
 
-#### サムネイル生成
-- NSImageとNSBezierPathを使用
-- 画像の縦横比を保持したリサイズ
-- App Extensionのメモリ制限に配慮した実装
+**GPU を使った滑らかなページ切り替え**
+次のページの描画をあらかじめ GPU で処理しておくことで、ページをめくる瞬間の描画を瞬時に完了させています。
 
-#### Preview Extension UI
-- NSViewControllerベースのフルUI制御
-- ページスライダー・ページ番号表示
-- マウス/キーボード/スクロールホイール操作対応
-- RTL読書方向（右から左）対応
-- レスポンシブUIデザイン
+**表示できるものから段階的に表示する**
+ページを表示するとき、GPU事前描画済みのデータ・高品質キャッシュ・低品質キャッシュの順に優先して使います。キャッシュが何もない場合のみ、まず低解像度の画像を非同期で取得して暫定表示し、後から高品質の描画に差し替えます。先読みが追いついていれば最初から高品質が表示されます。ページを連続で切り替え続けると、一瞬、低品質の画像が見えることがあると思います。
 
-#### 遅延ロード実装
-- **メタデータ先行取得**: `CZZip.imageEntryInfoList()`でファイル名とエントリ情報のみを高速取得
-- **オンデマンドロード**: `CZZip.extractImageData()`で表示時に画像データを抽出
-- **2段階キャッシュ**: 元画像キャッシュ（10枚）とリサイズキャッシュ（20枚）
-- **プリロード戦略**: 隣接ページをバックグラウンドで自動プリロード
-- **自然順ソート**: `NaturalSort.lessFilename()`による数値認識ソート（01.jpg < 02.jpg < 10.jpg）
+**メモリが不足したときは自動でキャッシュを解放**
+システムのメモリが逼迫したときは、自動的にキャッシュを削除して他のアプリへの影響を抑えます。
 
-#### Settings Scene アーキテクチャ
-- WindowGroupの代替としてSettings sceneを使用
-- 不要なウィンドウ生成を回避しバックグラウンド処理に最適化
-- Cmd+, でアクセス可能な統合設定UI
+---
 
-## アーキテクチャの特徴
+## 対応しているファイル形式
 
-### 責任分離
-- **Thumbnail Extension**: サムネイル生成のみに専念
-- **Preview Extension**: フルスクリーンプレビュー・ページング機能（遅延ロード実装）
-- **Main App**: ファイルルーティングと内蔵ビューア機能
-- **共通**: ZipCore（純Swift ZIP処理ロジック）、NaturalSort、設定管理（App Group）
+CoverZip が対応しているのは、標準的な ZIP ファイル（.zip）です。ZIP 内の画像として、JPEG、PNG、GIF、BMP、TIFF などの一般的な形式を認識します。
 
-### パフォーマンス最適化
-- **遅延ロード方式**: メタデータ先行取得により2ページ目以降への即座遷移を実現
-- **メモリ効率**: 必要な画像のみをロード、2段階キャッシュ管理
-- **プリロード戦略**: 隣接ページをバックグラウンドで先読み
-- **リサイズ最適化**: 表示サイズに最適化された画像をキャッシュ
-- 一時ファイル作成を廃止し、元ファイルを直接使用
-- ZIP解析時の8MBバッファ制限
-- 外部アプリ起動後の即座終了でリソース解放
+パスワードで保護された ZIP ファイルや、Zip64 形式、DEFLATE 以外の圧縮方式には対応していません。
 
-### 設定管理
-- ルーティング設定の即時保存（UserDefaults）
-- 初回起動時のサンプルルーティング設定投入
-- App Group (`group.com.dmng.CoverZip`) による Extension との設定共有
+---
 
-## ローカライズ運用（日英）
+## 動作環境
 
-- 対応言語: 日本語 (`ja`) / 英語 (`en`)
-- 開発基準言語: 英語（`developmentRegion = en`）
-- 文言管理: `Localizable.xcstrings`（`CoverZip/` と `coverZipViewer/` に配置）
-- キー方針: 意味ベースキー（例: `settings.display.section`, `routing.rules.section`）
-- 共有メニュー文言（右クリックメニュー/表示メニュー）は `Shared/SettingsKeys.swift` の `CZPreviewContextMenuLayout.title(for:)` で一元管理
+- macOS 14.0（Sonoma）以降
+- Intel Mac および Apple Silicon Mac に対応
 
-### 新規文言追加手順
-1. `Localizable.xcstrings` にキーを追加し、`en`/`ja` の両方を登録
-2. コード側は文字列リテラルを直接書かず、`CZLocalized.string(...)` または `CZLocalized.formatted(...)` を使用
-3. 右クリックメニュー関連は `CZPreviewContextMenuLayout.title(for:)` のキーを更新し、アプリ/拡張の表示を揃える
-
-## 制限事項
-
-- **暗号化ZIP**: パスワード付きZIPファイルは未対応
-- **圧縮方式**: DEFLATE（方式8）と非圧縮（方式0）のみ対応
-- **大容量ファイル**: 大きなZIPファイルでのメモリ制限あり（8MBバッファ）
-- **Preview Extension**: サンドボックス環境での制約、独立プロセスでの実行
+---
 
 ## ライセンス
 

@@ -15,9 +15,7 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
 ### 四つの独立したコンポーネント
 
 #### 1. QuickLook Thumbnail Extension (`coverZipExtension/`)
-- **ThumbnailProvider.swift** - QuickLookサムネイル拡張機能のエントリーポイント
-  - `CZZip` を直接使用してZIPファイルから画像を抽出
-  - `CZImageUtilities` で画像のアスペクト比計算と中央配置
+- **ThumbnailProvider.swift** - `CZZip` でZIPから画像を抽出し、`CZImageUtilities` でアスペクト比計算・中央配置
 
 #### 2. QuickLook Preview Extension (`coverZipViewer/`)
 - **PreviewViewController.swift** - メインのプレビューUI制御（NSViewController）
@@ -25,22 +23,30 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
   - メタデータ先行取得と必要時画像ロード
   - 元画像キャッシュ（最大10枚）とリサイズキャッシュ（最大20枚）
   - 隣接ページのバックグラウンドプリロード
-  - 表示サイズに最適化されたリサイズ処理
+- **ThumbnailStripView.swift** - サムネイルストリップUI（`ThumbnailResizeHandle`, `ThumbnailCollectionView`, `ThumbnailStripView`）
+- **ThumbnailCollectionViewItem.swift** - サムネイルコレクションビューアイテム
 - **ReadingHistoryManager.swift** - ZIP別の閲覧履歴管理（最終ページ、表示設定等）
 - **Settings.swift** - 設定管理の軽量ラッパー（`CZSettings`へのアクセスを提供）
-- **Base.lproj/PreviewViewController.xib** - UI定義
 
 #### 3. ZIPファイルルーティングアプリケーション (`CoverZip/`)
 - **CoverZipApp.swift** - SwiftUIアプリケーションエントリーポイント
-- **AppDelegate.swift** - ファイルオープン処理とルーティングロジック
+- **AppDelegate.swift** - ファイルオープン処理（`processZipFile` → `ZipRoutingService.route()` → `handle()`）
 - **Services/**
+  - `ZipRoutingService.swift` - ルーティング判定と実行の分離（`RouteInvocationContext`, `RouteDecision`）
   - `KeywordMatcher.swift` - ファイル名ベースのマッチング
   - `AppLauncher.swift` - 外部アプリケーション起動
-  - `SettingsFileManager.swift` - JSON設定管理
+  - `ApplicationResolver.swift` - アプリ識別子（絶対パス/Bundle ID/アプリ名）からURLを解決
+  - `ApplicationPicker.swift` - アプリケーション選択ダイアログ
+  - `InternalViewer.swift` - QLPreviewView埋め込みビューア（設定同期・サムネイル表示等を統括）
+  - `QLPreviewInputDriver.swift` - QLPreviewウィンドウとキーボード入力管理
+  - `PreviewSessionCommandDispatcher.swift` - App/Extension間の分散通知を一元化
+  - `PreviewSessionStateStore.swift` - セッション状態の読み出し（`PreviewSessionState`）
   - `AppSettings.swift` - SwiftUI用ObservableObjectラッパー（`CZSettings`を@Published経由で公開）
-  - `InternalViewer.swift` - QLPreviewView埋め込みビューア
+  - `SettingsFileManager.swift` - JSON設定ファイル管理
   - `FileOpenPanelService.swift` - ファイル選択ダイアログ
-- **Commands/FileMenuCommands.swift** - メニューコマンド（Cmd+O）
+- **Commands/**
+  - `FileMenuCommands.swift` - ファイルメニューコマンド（Cmd+O）
+  - `ViewMenuCommands.swift` - ビューメニューコマンド（`ViewMenuState`, `ViewMenuCommands`）
 - **Views/**
   - `RoutingSettingsView.swift` - ルーティング設定UI
   - `PreviewSettingsView.swift` - プレビュー設定UI
@@ -54,18 +60,18 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
 - **ImageFileFilter.swift** - 画像ファイル判定
 
 **設定管理:**
-- **UnifiedAppSettings.swift** - 統一設定管理（`CZSettings`クラス）
-  - App Group UserDefaults へのアクセスを一元化
-  - 全ターゲットで共有される設定のコア実装
-  - Single Source of Truth パターン
+- **UnifiedAppSettings.swift** - 統一設定管理（`CZSettings`クラス、Single Source of Truth）
+- **SettingsKeys.swift** - 共有設定キー・通知名・コマンド enum を集約
+  - `CZSettingsKeys` - UserDefaults キー定義
+  - `CZAppGroup` - App Group 識別子 (`group.com.dmng.CoverZip`)
+  - `CZPreviewSessionCommand` - プレビューセッションコマンド enum
+  - `CZDistributedNotifications` - App/Extension間分散通知名
+  - `CZPreviewContextMenuLayout` / `CZPreviewContextMenuFactory` - コンテキストメニュー定義と生成
 - **ViewModePreference.swift** - 表示モード enum の共有定義
-- **SettingsKeys.swift** - 共有設定キー定義
 - **UserDefaultsHelper.swift** - UserDefaults 統一アクセスポイント（`CZUserDefaults`）
 
 **画像処理:**
 - **ImageUtilities.swift** - 画像処理ユーティリティ（`CZImageUtilities`）
-  - アスペクト比を維持したサイズ計算
-  - 中央配置矩形の計算
 - **ImageIOOptions.swift** - 画像生成オプション
 
 ### App Extension制約への対応
@@ -112,54 +118,52 @@ pluginkit -m | grep -i coverzip
 
 **ファイルドロップ/ダブルクリック時:**
 ```
-ZIPファイル → AppDelegate:application:open:urls: → 
-processZipFile → KeywordMatcher → "internal"判定 → InternalViewer.show() (継続実行)
-                              → 外部アプリ判定 → AppLauncher → NSApplication.terminate
+ZIPファイル → AppDelegate.application(_:open:) →
+processZipFile → ZipRoutingService.route(zipURL:invocationContext:.appLaunch) →
+  RouteDecision.openInternalViewer → InternalViewer.shared.show() (継続実行)
+  RouteDecision.openExternalApp   → AppLauncher → NSApplication.terminate
+  RouteDecision.openDefaultApp    → AppLauncher → NSApplication.terminate
 ```
 
 **メニューから開く時 (Cmd+O):**
 ```
-FileMenuCommands → FileOpenPanelService.presentAndOpenZip() → 
-InternalViewer.show() (常に内蔵ビューアで表示)
+FileMenuCommands → FileOpenPanelService.presentAndOpenZip() →
+ZipRoutingService.route(invocationContext:.openPanelRouting) →
+  常に RouteDecision.openInternalViewer → InternalViewer.shared.show()
 ```
 
+#### App/Extension間通信アーキテクチャ
+
+- **設定変更通知**: `PreviewSessionCommandDispatcher.postSettingsChanged()` → `CZDistributedNotifications.settingsChanged`
+- **コマンド送信**: `PreviewSessionCommandDispatcher.post(command:boolValue:intValue:)` → `CZDistributedNotifications.previewSessionCommand`
+- **受信側**: `PreviewViewController.handlePreviewSessionCommandNotification(_:)` で処理
+- **コンテキストメニュー**: `CZPreviewContextMenuFactory.makeMenu(target:selectorForCommand:stateForCommand:)` で生成（App/Extension共通定義）
+
+#### 内蔵ビューアアーキテクチャ（`QLPreviewInputDriver`）
+
+- **キーボード入力**: `KeyForwardingView`（NSView サブクラス）をファーストレスポンダーとして配置し、左右キーを受信（ローカルイベントモニタは廃止）
+- **クリック合成**: CGEvent で プレビュー領域の左右半分をクリックしてページ送りを駆動（アクセシビリティ権限が必要）
+- **フォールバック**: QLPreviewView生成失敗時は `SimplePanelDataSource` 経由で共有パネル表示
+- **ウィンドウ管理**: `retainedWindows` で強参照保持、OS標準のウィンドウクローズに委ねる
+- **コンテキストメニュー**: `contextMenuProvider` クロージャ経由で `InternalViewer.makeContextMenu()` を呼び出し
+
 #### Extension設定とApp Group
-- **App Group**: `group.com.dmng.CoverZip`（`Shared/SettingsKeys.swift`に定義）
-- **共有設定**: 読み方向、表示モード、ページ送りアニメ、履歴データ等
 - **統一設定管理アーキテクチャ**:
   - **コア**: `CZSettings` (`Shared/UnifiedAppSettings.swift`) - 全設定の単一の真実の情報源
   - **Main App**: `AppSettingsWriter` (`CoverZip/Services/AppSettings.swift`) - SwiftUI用ObservableObjectラッパー
   - **Preview Extension**: `AppSettings` (`coverZipViewer/Settings.swift`) - 軽量ラッパー
   - **UserDefaults統一アクセス**: `CZUserDefaults.shared` (`Shared/UserDefaultsHelper.swift`)
+- **セッション状態**: `PreviewSessionStateStore.loadState(resetSlideshowState:)` で一括読み出し
 
 #### ZIP処理アーキテクチャ
 - **コアエンジン**: `Shared/ZipCore.swift` - 純Swift実装、Foundation/Compressionのみ使用
 - **対応圧縮方式**: DEFLATE（方式8）と非圧縮（方式0）
 - **メモリ効率**: 8MBバッファによる制御されたメモリ使用
-- **画像抽出**: 表紙らしい名前の優先判定（cover/front/表紙/00*系）
 - **遅延ロードAPI**:
   - `imageEntryInfoList(from:)` - メタデータのみを高速取得
   - `extractImageData(from:entryInfo:)` - 個別の画像データを必要時に抽出
   - `imageEntries(from:)` - 全画像を一括取得（サムネイル生成等で使用）
 - **自然順ソート**: `NaturalSort.lessFilename()` による数値認識ソート（全APIで一貫）
-
-### 内蔵ビューアの実装詳細
-
-#### QLPreviewView 埋め込みアーキテクチャ
-- **NSWindowベース**: 独立したウィンドウでQLPreviewViewを埋め込み
-- **フォールバック機構**: QLPreviewView生成失敗時は共有パネル経由で表示
-- **ウィンドウ管理**: 複数ウィンドウ対応とクリーンアップ処理
-
-#### キーボードナビゲーション実装
-- **イベントモニター**: NSEvent.addLocalMonitorForEventsでキー入力監視
-- **合成クリック**: CGEventによるグローバルクリックイベント生成と NSApp.postEvent フォールバック
-- **アクセシビリティ**: AXIsProcessTrusted()による権限チェック
-- **座標変換**: ウィンドウ→スクリーン座標変換でプレビュー領域の左右半分をクリック
-
-#### コンテキストメニュー機能
-- **設定統合**: App Group共有設定の読み書き
-- **動的メニュー**: 現在の設定値に基づく状態表示（右綴じ/左綴じ、表示モード等）
-- **即時反映**: UserDefaults変更による設定の即時更新
 
 ### QuickLook Preview Extension の機能
 
@@ -167,109 +171,68 @@ InternalViewer.show() (常に内蔵ビューアで表示)
 - **表示モード**: 単ページ/見開き/自動（画像サイズに応じた判定）
 - **読書方向**: 右綴じ/左綴じ対応
 - **ページ送りアニメーション**: 設定可能なトランジション効果
-- **スライドショー機能**: 自動ページ送り
+- **スライドショー機能**: 自動ページ送り（新規セッション開始時は自動リセット）
+- **サムネイルストリップ**: `ThumbnailStripView` によるページ一覧表示・リサイズ可能
 - **操作方法**: マウスクリック、キーボード、スクロールホイール対応
-- **レスポンシブUI**: ウィンドウサイズに応じた UI 要素の動的調整
-
-#### 遅延ロード方式による最適化
-- **メタデータ先行取得**: `CZZip.imageEntryInfoList()` により画像のメタデータを即座に取得
-- **必要時データロード**: 実際の画像データは表示時に `CZZip.extractImageData()` で取得
-- **高速ページ送り**: 2ページ目以降への遷移が即座に可能（全画像読み込み待ちなし）
-- **メモリ効率**: 必要な画像のみをメモリに保持、隣接ページのプリロード実装
-- **リサイズキャッシュ**: 表示サイズに最適化された画像をキャッシュしパフォーマンス向上
-- **自然順ソート一貫性**: メタデータ取得時も `NaturalSort.lessFilename()` で正しくソート
 
 #### 履歴機能
 - **ZIP別履歴**: `ReadingHistoryManager.swift`による個別管理
 - **保存データ**: 最終ページ、表示モード、見開き設定、読み方向
 - **App Group共有**: 内蔵ビューアとの履歴同期
 
-### コードベースの進化とリファクタリング歴史
+## ルーティング設定
 
-#### 2025年リファクタリング（Phase 1 & 2）
-コードの重複解消とアーキテクチャ改善を実施：
+### 保存先
+App Group UserDefaults の `CZSettingsKeys.routingSettingsData` キーに JSON エンコードで保存（`KeywordSettings.save()` / `load()`）。`settings.json` ファイルの読み込みパスは廃止済み。
 
-**Phase 1（高優先度）:**
-- ✅ **ZipProcessor.swift 削除** - レガシーラッパーを削除し、`CZZip`を直接使用
-- ✅ **ViewModePreference 統合** - 3箇所の重複enum定義を `Shared/ViewModePreference.swift` に統一
-- ✅ **設定管理統一** - `CZSettings` を Single Source of Truth として確立
-  - ~200行の重複設定ロジックを削減
-  - ターゲット固有のラッパー（ObservableObject / Lightweight）を維持
-
-**Phase 2（中優先度）:**
-- ✅ **UserDefaults アクセス統一** - `CZUserDefaults.shared` で統一（3箇所の重複削除）
-- ✅ **冗長関数削除** - `PreviewViewController` から6つの `loadXXX()` 関数を削除
-- ✅ **画像ユーティリティ統合** - `CZImageUtilities` で共通化（~60行削減）
-- ✅ **デッドコード削除** - 空のextension、廃止コメント削除
-
-**成果:**
-- 重複コード ~380行削減
-- 設定変更時の修正箇所: 15箇所 → 1箇所（93%削減）
-- メンテナンス性とコードの明確性が大幅向上
-
-**ベストプラクティス:**
-- 新規設定は `CZSettings` に追加
-- UserDefaults アクセスは `CZUserDefaults.shared` を使用
-- 共通ユーティリティは `Shared/` に配置
-- ターゲット固有のロジックは各ターゲット内に配置
-
-## 設定ファイル（settings.json）
-
-### 設定ファイルの階層
-1. `~/Library/Application Support/CoverZip/settings.json` (優先)
-2. アプリバンドル内の `settings.json`
-3. デフォルト設定（空の keywords）
-
-### JSON設定形式
+### データモデル（配列ベース）
 ```json
 {
-  "keywords": {
-    "コミック": {
+  "rules": [
+    {
+      "id": "<UUID>",
+      "keyword": "コミック",
       "type": "filename",
-      "application": "internal",
+      "application": "/Applications/Foo.app",
       "matchMode": "contains"
     },
-    "vol*": {
-      "type": "filename", 
-      "application": "SimpleComicViewer.app",
+    {
+      "id": "<UUID>",
+      "keyword": "vol*",
+      "type": "filename",
+      "application": "internal",
       "matchMode": "wildcard"
-    },
-    "^backup_\\d+$": {
-      "type": "pathname",
-      "application": "Archive Utility.app", 
-      "matchMode": "regex"
     }
-  },
-  "default": "Archive Utility.app"
+  ],
+  "defaultApplication": "/Applications/Archive Utility.app"
 }
 ```
 
-### マッチング方式
-- **contains**: 部分一致検索（大文字小文字無視）
-- **wildcard**: ワイルドカード (`*`, `?`) 対応
-- **regex**: NSRegularExpression による正規表現（無効時は contains フォールバック）
+### マッチング方式（`MatchMode`）
+- **contains** / **startsWith** / **endsWith**: 文字列検索（大文字小文字無視）
+- **wildcard**: `*` / `?` 対応
+- **regex**: NSRegularExpression（無効時は contains フォールバック）
 
-### アプリケーション指定
+### アプリケーション指定（`application` フィールド）
 - **"internal"**: 内蔵ビューアで表示（継続実行）
-- **アプリケーション名**: 外部アプリケーションで開く（自動終了）
+- **絶対パス** (`/Applications/Foo.app`): 直接使用（保存時に `ApplicationResolver` で解決済み）
+- アプリ名 / Bundle ID は `ApplicationResolver.resolveApplicationURL(from:)` で絶対パスに解決してから保存する
 
 ## 開発時の注意点
-
-### Extension の特徴
-- QuickLook Extension（Thumbnail/Preview）は独立したプロセスで動作
-- サンドボックス環境での制限
-- メモリ使用量の制限（8MBバッファ）
-- Preview ExtensionではNSViewController使用（フルUIコントロール）
 
 ### 共有設定の管理
 - App Group (`group.com.dmng.CoverZip`) を必ず使用
 - 設定キーは `Shared/SettingsKeys.swift` に集約
-- **統一設定アクセス**: 全ターゲットで `CZSettings.shared` を使用
 - **新規設定の追加手順**:
-  1. `Shared/SettingsKeys.swift` にキーを追加
+  1. `Shared/SettingsKeys.swift` の `CZSettingsKeys` にキーを追加
   2. `Shared/UnifiedAppSettings.swift` の `CZSettings` にプロパティを追加
   3. 必要に応じてラッパー（`AppSettingsWriter` / `AppSettings`）にも追加
-- **UserDefaults直接アクセス**: `CZUserDefaults.shared` を使用（従来の `sharedDefaults()` は廃止）
+- **UserDefaults直接アクセス**: `CZUserDefaults.shared` を使用
+
+### コンテキストメニューの拡張
+- `CZPreviewContextMenuLayout.entries` にエントリを追加
+- `CZPreviewSessionCommand` に対応コマンドを追加
+- App側（`InternalViewer`）とExtension側（`PreviewViewController`）双方に `selector(for:)` / `menuState(for:)` を実装
 
 ### ZIP処理の制約
 - **対応圧縮方式**: DEFLATE（方式8）と非圧縮（方式0）のみ

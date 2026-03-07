@@ -14,10 +14,10 @@
 - `coverZipViewer` (Quick Look プレビュー拡張)
   - ZIP 内画像の閲覧 UI（単ページ/見開き/自動、右綴じ/左綴じ、ページ送りアニメ、スライドショー、履歴など）。
   - 操作方法: マウスクリック、キーボード、スクロールホイール対応。
-  - 主要ファイル: `coverZipViewer/PreviewViewController.swift`、`coverZipViewer/ImageManager.swift`、`coverZipViewer/ReadingHistoryManager.swift`、`coverZipViewer/Base.lproj/PreviewViewController.xib`。
+  - 主要ファイル: `coverZipViewer/PreviewViewController.swift`、`coverZipViewer/ImageManager.swift`、`coverZipViewer/ReadingHistoryManager.swift`、`coverZipViewer/ThumbnailStripView.swift`、`coverZipViewer/ThumbnailCollectionViewItem.swift`、`coverZipViewer/Base.lproj/PreviewViewController.xib`。
 - `coverZipExtension` (サムネイル拡張)
   - ZIP の先頭画像からサムネイル生成。
-  - 主要ファイル: `coverZipExtension/ThumbnailProvider.swift`、`coverZipExtension/ZipProcessor.swift`。
+  - 主要ファイル: `coverZipExtension/ThumbnailProvider.swift`。
 - `Shared`
   - 共有ユーティリティ群（ZIP 解析、自然順ソート、設定キー定義等）。
   - 主要ファイル: `Shared/ZipCore.swift`、`Shared/NaturalSort.swift`、`Shared/ImageFileFilter.swift`、`Shared/SettingsKeys.swift`。
@@ -53,17 +53,9 @@
 - 破壊的コマンド（大規模削除・全体リフォーマット）を行わない。
 
 ## 既知の課題・改善候補（要合意）
-1) 外部アプリ解決ロジック（`CoverZip/Services/AppLauncher.swift`）
-   - 現状 `urlForApplication(withBundleIdentifier:)` にアプリ名を渡しており、名前→バンドルIDでは解決できないケースがある。
-   - 改善案: `NSWorkspace.shared.fullPath(forApplication:)` を優先、もしくは設定側でバンドル ID を許容する。
-2) ZIP 展開の制約（`Shared/ZipCore.swift`）
+1) ZIP 展開の制約（`Shared/ZipCore.swift`）
    - method 0/8 のみ、Zip64/暗号化非対応。8MB 固定バッファの伸長が必要なケースがある。
    - 改善にはメモリ安全性（上限/逐次解凍）と後方互換の検討が必要。
-3) 内蔵ビューアの実装整理（対応済み）
-- 以前は `InternalViewer` と `EmbeddedPreviewWindowController` が重複していたが、`InternalViewer` を正とし `EmbeddedPreviewWindowController` は削除済み。
-- 2025-09: QL クローズ時の EXC_BAD_ACCESS 対策として、First Responder をフォワーダビューに固定し、イベントモニタ/CGEvent 依存を削減。安定構成を既定化。
-4) テンプレコードの整理
-   - `coverZipViewer/PreviewProvider.swift` はテンプレ実装。ビルドに不要なら除外/削除検討。
 
 ## テスト・検証の要点
 - ルーティング: 複数の ZIP 名/パスで `contains`/`wildcard`/`regex` の動作を確認。`internal` 指定で内蔵ビューアに遷移すること。
