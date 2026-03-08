@@ -30,6 +30,10 @@
 ## ファイルルーティング仕様（重要）
 - 設定は App Group UserDefaults（`CZSettingsKeys.routingSettingsData`）に保存する（`CoverZip/Models/KeywordSettings.swift`）。
 - マッチングは先勝ち。`contains` は大文字小文字無視、`wildcard` は `*`/`?`、`regex` は NSRegularExpression（無効時は contains フォールバック）。
+- マッチング対象の type:
+  - `filename`: ZIPファイル名（拡張子除去済み）
+  - `pathname`: ZIPの**全祖先フォルダ名**（ルートまで）。親から祖父母へと順に検索し、いずれか1つにマッチすれば成功。
+  - `fileExtension`: ZIPファイルの拡張子
 
 ## 内蔵ビューアと拡張の連携
 - アプリ側の内蔵ビューア: `CoverZip/Services/InternalViewer.swift`（`QLPreviewView` をウィンドウに埋め込み）。
@@ -58,7 +62,7 @@
    - 改善にはメモリ安全性（上限/逐次解凍）と後方互換の検討が必要。
 
 ## テスト・検証の要点
-- ルーティング: 複数の ZIP 名/パスで `contains`/`wildcard`/`regex` の動作を確認。`internal` 指定で内蔵ビューアに遷移すること。
+- ルーティング: 複数の ZIP 名/パスで `contains`/`wildcard`/`regex` の動作を確認。`internal` 指定で内蔵ビューアに遷移すること。`pathname` タイプはZIPの親フォルダだけでなく、より上位の祖先フォルダ名でもマッチすることを確認。
 - 内蔵ビューア: 左右クリック/キー/スクロールホイールでページ送り、右綴じ/左綴じ、単/見開き/自動の切り替え、スライドショー動作。
 - 履歴: ZIP ごとの最終ページ・表示モード・綴じ方向・見開き補正が復元されること（App Group の UserDefaults に保存）。
 - サムネイル: Finder でのサムネイル生成（異常系もログ確認）。
@@ -101,3 +105,4 @@
 - 2026-03-08 Removed full-screen shortcut override logic from app startup and returned Enter/Exit Full Screen shortcut handling to macOS defaults
 - 2026-03-08 Restored internal-viewer keyboard focus after thumbnail-strip height drag by posting `sliderOperationCompleted` on resize end
 - 2026-03-08 Added SF Symbols to preview context menus and app menu-bar commands (View and File open actions)
+- 2026-03-08 Changed `pathname` routing match target from parent folder only to all ancestor folders up to root (KeywordMatcher.swift)

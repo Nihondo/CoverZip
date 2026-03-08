@@ -33,7 +33,7 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
 - **AppDelegate.swift** - ファイルオープン処理（`processZipFile` → `ZipRoutingService.route()` → `handle()`）
 - **Services/**
   - `ZipRoutingService.swift` - ルーティング判定と実行の分離（`RouteInvocationContext`, `RouteDecision`）
-  - `KeywordMatcher.swift` - ファイル名ベースのマッチング
+  - `KeywordMatcher.swift` - ファイル名・フォルダ名・拡張子ベースのマッチング（フォルダ名指定時はルートまでの全祖先フォルダを対象）
   - `AppLauncher.swift` - 外部アプリケーション起動
   - `ApplicationResolver.swift` - アプリ識別子（絶対パス/Bundle ID/アプリ名）からURLを解決
   - `ApplicationPicker.swift` - アプリケーション選択ダイアログ
@@ -207,6 +207,11 @@ App Group UserDefaults の `CZSettingsKeys.routingSettingsData` キーに JSON �
   "defaultApplication": "/Applications/Archive Utility.app"
 }
 ```
+
+### マッチング対象（`type` フィールド）
+- **filename**: ZIPファイル名（拡張子除去済み）
+- **pathname**: ZIPファイルの全祖先フォルダ名（ルートまで）- いずれか1つにマッチすれば成功。近い側（親）から先に検索する
+- **fileExtension**: ZIPファイルの拡張子
 
 ### マッチング方式（`MatchMode`）
 - **contains** / **startsWith** / **endsWith**: 文字列検索（大文字小文字無視）
