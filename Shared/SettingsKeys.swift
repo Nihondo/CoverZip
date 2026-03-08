@@ -128,10 +128,13 @@ public enum CZPreviewContextMenuLayout {
 
 #if canImport(AppKit)
 public enum CZPreviewContextMenuFactory {
+    public typealias ShortcutDefinition = (keyEquivalent: String, modifierMask: NSEvent.ModifierFlags)
+
     public static func makeMenu(
         target: AnyObject,
         selectorForCommand: (CZPreviewSessionCommand) -> Selector?,
-        stateForCommand: (CZPreviewSessionCommand) -> NSControl.StateValue
+        stateForCommand: (CZPreviewSessionCommand) -> NSControl.StateValue,
+        shortcutForCommand: (CZPreviewSessionCommand) -> ShortcutDefinition? = { _ in nil }
     ) -> NSMenu {
         let menu = NSMenu()
 
@@ -141,11 +144,13 @@ public enum CZPreviewContextMenuFactory {
                 menu.addItem(NSMenuItem.separator())
             case .action(let command):
                 guard let selector = selectorForCommand(command) else { continue }
+                let shortcut = shortcutForCommand(command)
                 let item = NSMenuItem(
                     title: CZPreviewContextMenuLayout.title(for: command),
                     action: selector,
-                    keyEquivalent: ""
+                    keyEquivalent: shortcut?.keyEquivalent ?? ""
                 )
+                item.keyEquivalentModifierMask = shortcut?.modifierMask ?? []
                 item.target = target
                 item.state = stateForCommand(command)
                 menu.addItem(item)

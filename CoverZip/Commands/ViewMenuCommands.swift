@@ -152,7 +152,7 @@ struct ViewMenuCommands: Commands {
                     get: { state.spreadPairOffset == 1 },
                     set: { _ in state.toggleSpreadPairOffset() }
                 ))
-                .keyboardShortcut("f")
+                .keyboardShortcut("t", modifiers: [.command])
 
                 Toggle(CZPreviewContextMenuLayout.title(for: .setThumbnailStripVisible), isOn: Binding(
                     get: { state.isThumbnailStripVisible },

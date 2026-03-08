@@ -95,3 +95,7 @@
 - 2026-03-07 File routing settings are persisted in App Group UserDefaults; removed JSON-edit/save-button workflow
 - 2026-03-07 Removed legacy `settings.json` migration/fallback path from routing settings load logic
 - 2026-03-08 Replaced internal viewer key navigation click synthesis with distributed session commands (`goForwardPage` / `goBackwardPage`)
+- 2026-03-08 Added internal-viewer context-menu shortcut glyphs and reassigned spread pairing shortcut to `Cmd+T` so Enter Full Screen uses `Cmd+F`
+- 2026-03-08 Hardened full-screen shortcut override by reapplying `Cmd+F` across menu/window lifecycle notifications and title-based fallback matching
+- 2026-03-08 Added NSUserKeyEquivalents fallback (`@f`) for localized/full-screen menu titles to keep Enter/Exit Full Screen on `Cmd+F`
+- 2026-03-08 Removed full-screen shortcut override logic from app startup and returned Enter/Exit Full Screen shortcut handling to macOS defaults
