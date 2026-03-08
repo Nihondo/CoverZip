@@ -718,14 +718,14 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         imageView?.imageFrameStyle = .none
         rightImageView?.imageFrameStyle = .none
 
-        // カーソルオーバーレイをimageView上に配置
+        // カーソルオーバーレイを画像表示エリア全体（左右ページ）に配置
         if let imageView {
             let overlay = PreviewCursorAreaView()
             overlay.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(overlay, positioned: .above, relativeTo: imageView)
             NSLayoutConstraint.activate([
-                overlay.leadingAnchor.constraint(equalTo: imageView.leadingAnchor),
-                overlay.trailingAnchor.constraint(equalTo: imageView.trailingAnchor),
+                overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
                 overlay.topAnchor.constraint(equalTo: imageView.topAnchor),
                 overlay.bottomAnchor.constraint(equalTo: imageView.bottomAnchor),
             ])
@@ -2145,6 +2145,16 @@ private final class PreviewCursorAreaView: NSView {
             userInfo: nil
         )
         addTrackingArea(ta)
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        window?.invalidateCursorRects(for: self)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.invalidateCursorRects(for: self)
     }
 
     override func mouseEntered(with event: NSEvent) {
