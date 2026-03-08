@@ -1,139 +1,140 @@
 # CoverZip
 
-**開発中**
+**Under Development**
 
-CoverZip は、ZIPに圧縮されたコミックや画像集をmacOSで快適に扱うためのアプリです。インストールするだけで Finder 上でコミックの表紙がアイコンとして表示され、スペースキー一発でコミックを開けるようになります。
-
----
-
-## できること
-
-### ZIPファイルにサムネイルを表示する（QuickLook サムネイル）
-
-CoverZip をインストールすると、Finder で ZIP ファイルを見たときに、中に入っている最初の画像がサムネイルとして表示されます。ファイルを開かなくても、どのコミックか一目でわかるようになります。
-
-表紙らしいファイル名（`cover`、`front`、`表紙`、`00` で始まる名前など）が含まれている場合は、そちらが優先して表示されます。
-
-### スペースキーでコミックを読む（QuickLook ビューア）
-
-Finder で ZIP ファイルを選択してスペースキーを押すと、QuickLook で CoverZip のコミックビューアが開きます。ファイルをアプリで開く必要はなく、その場でページをめくって内容を確認できます。
-
-ビューアでできることは次のとおりです。右クリックメニューで表示モードや読む方向などの設定も変更できます。
-
-- **ページ移動**は、画面の左右をクリックするか、マウスホイールの上下スクロールで行います。残念ながら、現状**矢印キーは QuickLook ビューアでは使えません**（Finder にキーが奪われるため。後述のアプリ内蔵ビューアでは使えます）。
-- **表示モード**は、1ページずつ表示する「単ページ」と、見開きで2ページを並べて表示する「見開き」を選べます。「自動」にすると画像のサイズに応じて自動判断します。
-見開きモードでページの組み合わせがずれて見える場合は、メニューの「**見開きの左右を補正**」を選ぶと1ページ分ずれて正しい組み合わせになります。
-- **読む方向**は、右から左（日本のマンガ向け）と左から右（洋書向け）を切り替えられます。
-- **ページスライダー**をドラッグすると、好きなページへ素早くジャンプできます。
-- **サムネイルリスト**を表示すると、ページの一覧が下部に並び、クリックで直接そのページへ移動できます。
-- **スライドショー**機能を使うと、一定時間ごとに自動でページが進みます。
-- **前回の続きから**読むことができます。ZIP ファイルごとに最後に見ていたページと表示設定が記憶されます（最新の100件を保存）。
-
-設定は画面内で右クリックするか、表示メニューから変更できます。
-
-### ダブルクリックでアプリ内蔵ビューアまたは別アプリで開く（ルーティング機能）
-
-CoverZip を ZIP ファイルに関連付けておくと、ZIP をダブルクリックしたときに、ファイル名に応じて自動的に開くアプリを振り分けることができます。
-
-たとえばこのような使い方ができます。
-
-- 上位フォルダ名に「コミック」が含まれていれば CoverZip のアプリ内蔵ビューアで開く
-- ファイル名に「巻」が含まれていれば CoverZip のアプリ内蔵ビューアで開く
-- それ以外の ZIP はアーカイブ解凍アプリで開く
-
-振り分け先として「アプリ内蔵ビューア」を指定した場合は CoverZip がそのまま動き続けます。外部アプリを指定した場合は、そのアプリが起動した後に CoverZip は自動的に終了します。
-
-また、Option+Cmd+O（メニューの `内蔵ビューアで開く...`）から ZIP ファイルを選ぶと、ルーティング設定に関係なく常に内蔵ビューアで開きます。
-
-### 内蔵ビューアでのキー操作
-内蔵ビューアでは、クリックやスクロールに加えて次のキー操作が使えます。矢印キーの前後は、読み方向の設定（右綴じ / 左綴じ）に応じて自動的に切り替わります。
-
-| キー | 動作 |
-|------|------|
-| `←` / `→` | 1ページ移動（右綴じなら `←` が次のページ） |
-| `Space` / `Shift + Space` | 次 / 前のページへ |
-| `Shift + ←` / `Shift + →`、`Page Down` / `Page Up` | 10ページジャンプ |
-| `Cmd + ←` / `Cmd + →`、`Home` / `End` | 最初 / 最後のページへ |
-
-また、`表示`メニューや、右クリックメニューから、表示モードの切り替えや、読む方向の変更もできます。
+CoverZip is a macOS app designed for comfortably browsing comics and image collections stored in ZIP files. Once installed, comic covers appear as icons in Finder, and you can open them instantly with the spacebar.
 
 ---
 
-## インストール方法
+## Features
 
-1. ソースコードを Xcode でビルドし、CoverZip.app をアプリケーションフォルダに置きます。
-2. CoverZip を一度起動します。
-3. **システム設定 → プライバシーとセキュリティ → 機能拡張 → QuickLook** を開き、「CoverZip Thumbnail Extension」と「CoverZip Preview Extension」の両方を有効にします。
+### ZIP File Thumbnails (QuickLook Thumbnail)
 
-有効化後、Finder で ZIP ファイルを選択するとサムネイルが表示され、スペースキーでコミックビューアが使えるようになります。
+Once CoverZip is installed, the first image inside a ZIP file is displayed as its thumbnail in Finder. You can tell which comic it is at a glance without opening the file.
 
----
+If the ZIP contains a file with a cover-like name (such as `cover`, `front`, or a name starting with `00`), that image is shown preferentially.
 
-## ルーティング設定の方法
+### Read Comics with the Spacebar (QuickLook Viewer)
 
-Cmd+, またはメニューの **CoverZip → Settings...** を選ぶと設定画面が開きます。「File Routing」タブでルールを管理します。
+Select a ZIP file in Finder and press the spacebar to open CoverZip's comic viewer in QuickLook. There's no need to open the file in an app — you can flip through pages and check the contents right there.
 
-ルールは上から順に評価され、最初に一致したものが使われます。
+Here's what you can do in the viewer. You can also change settings like view mode and reading direction from the right-click context menu.
 
-### マッチング方式
+- **Page navigation** is done by clicking the left or right side of the screen, or by scrolling the mouse wheel up and down. Unfortunately, **arrow keys do not work in the QuickLook viewer** (because Finder captures key events; arrow keys do work in the built-in app viewer described below).
+- **View mode** can be set to "Single Page" (one page at a time) or "Spread" (two pages side by side). The "Auto" option automatically determines the layout based on image dimensions.
+If the page pairing looks off in spread mode, select "**Adjust Spread Alignment**" from the menu to shift the pairing by one page.
+- **Reading direction** can be switched between right-to-left (for Japanese manga) and left-to-right (for Western books).
+- **Page slider** — drag it to quickly jump to any page.
+- **Thumbnail strip** — displays a list of page thumbnails at the bottom; click one to jump directly to that page.
+- **Slideshow** — automatically advances pages at a set interval.
+- **Resume reading** — your last viewed page and display settings are remembered for each ZIP file (up to 100 recent entries).
 
-| 方式 | 内容 | 例 |
-|------|------|----|
-| 次を含む（contains） | ファイル名に指定した文字列が含まれているか | `コミック` → `コミック01.zip` にマッチ |
-| 次で始まる（startsWith） | ファイル名が指定した文字列で始まるか | `vol` → `vol3.zip` にマッチ |
-| 次で終わる（endsWith） | ファイル名が指定した文字列で終わるか | `backup` → `data_backup.zip` にマッチ |
-| ワイルドカード（wildcard） | `*`（任意の文字列）や `?`（任意の1文字）を使ったパターン | `vol*` → `vol1.zip`、`vol_special.zip` にマッチ |
-| 正規表現（regex） | 正規表現によるパターンマッチ | `^backup_\d+$` → `backup_123.zip` にマッチ |
+Settings can be changed by right-clicking within the viewer or from the View menu.
 
-### キーワードタイプ
+### Double-Click to Open in Built-in Viewer or Another App (Routing)
 
-マッチングの対象として「ファイル名」「フォルダ名（親フォルダ）」「拡張子」を選べます。
+If you associate CoverZip with ZIP files, double-clicking a ZIP will automatically route it to the appropriate app based on the filename.
 
-### 開くアプリの指定方法
+For example, you can set it up like this:
 
-アプリの指定には次の形式が使えます。
+- If a parent folder name contains "Comics", open in CoverZip's built-in viewer
+- If the filename contains "vol", open in CoverZip's built-in viewer
+- Otherwise, open the ZIP with an archive extraction app
 
-- `内蔵ビューア` ：CoverZip の内蔵ビューアで開きます
-- アプリ名（例：`アーカイブユーティリティ`）：そのアプリで開きます
+When the routing target is the "Built-in Viewer", CoverZip continues running. When an external app is specified, CoverZip automatically quits after launching that app.
 
----
+You can also use Option+Cmd+O (menu: `Open in Built-in Viewer...`) to open a ZIP file directly in the built-in viewer, regardless of routing settings.
 
-## 快適に読むための工夫
+### Keyboard Controls in the Built-in Viewer
 
-CoverZip のビューアで取り組んでいる高速化は以下のようなものです。
+In the built-in viewer, the following keyboard controls are available in addition to clicking and scrolling. Forward/backward directions for arrow keys automatically adapt to the reading direction setting (right-to-left / left-to-right).
 
-**すぐ表示、すぐめくれる**
-ZIP を開いたときに、まずページの一覧情報だけを素早く取得します。そのうえで1ページ目だけを他のページより先に優先してデコードし、残りは続きの先読みとして処理します。ファイルを開いてすぐ最初のページが表示され、続きのページも待たずにめくれます。
+| Key | Action |
+|-----|--------|
+| `←` / `→` | Move one page (in right-to-left mode, `←` goes to the next page) |
+| `Space` / `Shift + Space` | Next / previous page |
+| `Shift + ←` / `Shift + →`, `Page Down` / `Page Up` | Jump 10 pages |
+| `Cmd + ←` / `Cmd + →`, `Home` / `End` | Go to first / last page |
 
-**先読みとキャッシュ**
-今見ているページの前後を裏側で先読みしておくことで、ページをめくったときにもたつきを感じにくくしています。単ページ表示では前方5ページ・後方1ページ、見開き表示では前方3セット・後方1セットを先読みします。一度表示した画像は最大32枚分をメモリに保持しておき、同じページに戻ったときの表示も速くなっています。
-
-**GPU を使った滑らかなページ切り替え**
-次のページの描画をあらかじめ GPU で処理しておくことで、ページをめくる瞬間の描画を瞬時に完了させています。
-
-**表示できるものから段階的に表示する**
-ページを表示するとき、GPU事前描画済みのデータ・高品質キャッシュ・低品質キャッシュの順に優先して使います。キャッシュが何もない場合のみ、まず低解像度の画像を非同期で取得して暫定表示し、後から高品質の描画に差し替えます。先読みが追いついていれば最初から高品質が表示されます。ページを連続で切り替え続けると、一瞬、低品質の画像が見えることがあると思います。
-
-**メモリが不足したときは自動でキャッシュを解放**
-システムのメモリが逼迫したときは、自動的にキャッシュを削除して他のアプリへの影響を抑えます。
+You can also switch view modes and change reading direction from the `View` menu or the right-click context menu.
 
 ---
 
-## 対応しているファイル形式
+## Installation
 
-CoverZip が対応しているのは、標準的な ZIP ファイル（.zip）です。ZIP 内の画像として、JPEG、PNG、GIF、BMP、TIFF などの一般的な形式を認識します。
+1. Build the source code in Xcode and place CoverZip.app in your Applications folder.
+2. Launch CoverZip once.
+3. Open **System Settings → Privacy & Security → Extensions → QuickLook** and enable both "CoverZip Thumbnail Extension" and "CoverZip Preview Extension".
 
-パスワードで保護された ZIP ファイルや、Zip64 形式、DEFLATE 以外の圧縮方式には対応していません。
-
----
-
-## 動作環境
-
-- macOS 14.0（Sonoma）以降
-- Intel Mac および Apple Silicon Mac に対応
+After enabling, selecting a ZIP file in Finder will show its thumbnail, and pressing the spacebar will launch the comic viewer.
 
 ---
 
-## 既知の問題
-- QuickLook ビューアでは、カーソルキーが使えません。Finder にキー入力が奪われ、選択ファイルが変更されるためです。アプリ内蔵ビューアではカーソルキーも使えます。
-- QuickLook ビューアを閉じないまま Finder 上で別の ZIP ファイルを選択すると、高確率でマウスクリックでのページ移動ができなくなります。スペースキーで一度ウィンドウを開き直すと、またクリックでの移動もできるようになります。なお、マウスホイールでのスクロールは問題なく動作し続けます。
+## Configuring Routing Rules
+
+Open Settings with Cmd+, or from the menu **CoverZip → Settings...**. Manage rules under the "File Routing" tab.
+
+Rules are evaluated from top to bottom, and the first match is used.
+
+### Match Modes
+
+| Mode | Description | Example |
+|------|-------------|---------|
+| Contains | Whether the filename contains the specified string | `comic` → matches `comic01.zip` |
+| Starts With | Whether the filename starts with the specified string | `vol` → matches `vol3.zip` |
+| Ends With | Whether the filename ends with the specified string | `backup` → matches `data_backup.zip` |
+| Wildcard | Pattern using `*` (any string) and `?` (any single character) | `vol*` → matches `vol1.zip`, `vol_special.zip` |
+| Regex | Pattern matching with regular expressions | `^backup_\d+$` → matches `backup_123.zip` |
+
+### Keyword Types
+
+You can choose the matching target: "Filename", "Folder Name (parent folder)", or "File Extension".
+
+### Specifying the Target App
+
+The following formats can be used to specify an app:
+
+- `Built-in Viewer`: Opens in CoverZip's built-in viewer
+- App name (e.g., `Archive Utility`): Opens with the specified app
+
+---
+
+## Performance Optimizations
+
+Here are the techniques CoverZip's viewer uses to deliver a fast reading experience.
+
+**Instant Display, Instant Page Turns**
+When opening a ZIP, the viewer first quickly retrieves the page list metadata. It then prioritizes decoding the first page ahead of all others, while the remaining pages are processed as read-ahead. The first page appears immediately after opening the file, and subsequent pages can be turned without waiting.
+
+**Read-Ahead and Caching**
+Pages adjacent to the current one are read ahead in the background, minimizing delays when turning pages. In single-page mode, 5 pages ahead and 1 page behind are prefetched; in spread mode, 3 spreads ahead and 1 behind. Up to 32 previously displayed images are kept in memory, making it fast to revisit pages.
+
+**Smooth Page Transitions with GPU**
+The next page's rendering is pre-processed on the GPU, allowing page transitions to complete instantaneously.
+
+**Progressive Display**
+When displaying a page, the viewer uses GPU pre-rendered data, high-quality cache, or low-quality cache, in that order of priority. Only when no cache is available does it asynchronously fetch a low-resolution image for interim display, then replace it with high-quality rendering later. If read-ahead has caught up, high quality is shown from the start. When flipping through pages rapidly, you may briefly see lower-quality images.
+
+**Automatic Cache Release Under Memory Pressure**
+When system memory runs low, caches are automatically released to minimize impact on other apps.
+
+---
+
+## Supported File Formats
+
+CoverZip supports standard ZIP files (.zip). It recognizes common image formats inside ZIP files, including JPEG, PNG, GIF, BMP, and TIFF.
+
+Password-protected ZIP files, Zip64 format, and compression methods other than DEFLATE are not supported.
+
+---
+
+## System Requirements
+
+- macOS 14.0 (Sonoma) or later
+- Supports both Intel Mac and Apple Silicon Mac
+
+---
+
+## Known Issues
+- Arrow keys do not work in the QuickLook viewer. Finder captures key input, causing the selected file to change. Arrow keys work correctly in the built-in app viewer.
+- If you select a different ZIP file in Finder while the QuickLook viewer is still open, mouse click page navigation will likely stop working. Pressing the spacebar to reopen the window will restore click navigation. Mouse wheel scrolling continues to work normally.
