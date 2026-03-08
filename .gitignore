@@ -7,3 +7,4 @@ DerivedData/
 docs/
 handoff.md
 DevelopmentTeam.local.xcconfig
+dev-reset-coverzip.sh
