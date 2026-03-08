@@ -99,3 +99,4 @@
 - 2026-03-08 Hardened full-screen shortcut override by reapplying `Cmd+F` across menu/window lifecycle notifications and title-based fallback matching
 - 2026-03-08 Added NSUserKeyEquivalents fallback (`@f`) for localized/full-screen menu titles to keep Enter/Exit Full Screen on `Cmd+F`
 - 2026-03-08 Removed full-screen shortcut override logic from app startup and returned Enter/Exit Full Screen shortcut handling to macOS defaults
+- 2026-03-08 Restored internal-viewer keyboard focus after thumbnail-strip height drag by posting `sliderOperationCompleted` on resize end

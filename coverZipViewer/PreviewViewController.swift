@@ -811,6 +811,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 self.saveThumbnailStripHeight(constraint.constant)
                 self.lastVisibleThumbnailStripHeight = constraint.constant
                 self.thumbnailStripView?.reloadThumbnails()
+                // 内蔵ビューア側の KeyForwardingView へフォーカスを戻す
+                DistributedNotificationCenter.default().post(
+                    name: CZDistributedNotifications.sliderOperationCompleted,
+                    object: nil
+                )
             }
 
             // スライダー経由の制約を作成（サムネイルストリップの下から）
