@@ -41,6 +41,8 @@ For example, you can set it up like this:
 - If the filename contains "vol", open in CoverZip's built-in viewer
 - Otherwise, open the ZIP with an archive extraction app
 
+![](./images/coverzip_sample.png)
+
 When the routing target is the "Built-in Viewer", CoverZip continues running. When an external app is specified, CoverZip automatically quits after launching that app.
 
 You can also use Option+Cmd+O (menu: `Open in Built-in Viewer...`) to open a ZIP file directly in the built-in viewer, regardless of routing settings.
