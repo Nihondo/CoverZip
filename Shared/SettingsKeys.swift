@@ -124,6 +124,48 @@ public enum CZPreviewContextMenuLayout {
             return CZLocalized.string("context.menu.page.jump", defaultValue: "Jump Pages")
         }
     }
+
+    public static func symbolName(for command: CZPreviewSessionCommand) -> String {
+        CZMenuSymbols.previewCommandSymbolName(for: command)
+    }
+}
+
+public enum CZMenuSymbols {
+    public static let fileOpen = "folder"
+    public static let fileOpenInternal = "eye"
+
+    public static func previewCommandSymbolName(for command: CZPreviewSessionCommand) -> String {
+        switch command {
+        case .setRightToLeftReading:
+            return "text.alignright"
+        case .setLeftToRightReading:
+            return "text.alignleft"
+        case .setViewModeAuto:
+            return "sparkles"
+        case .setViewModeSingle:
+            return "rectangle"
+        case .setViewModeSpread:
+            return "rectangle.split.2x1"
+        case .setSpreadPairOffset:
+            return "arrow.left.arrow.right"
+        case .setThumbnailStripVisible:
+            return "rectangle.grid.1x2"
+        case .setPageTransitionEnabled:
+            return "rectangle.on.rectangle"
+        case .setSlideshowEnabled:
+            return "play.circle"
+        case .goToFirstPage:
+            return "backward.end"
+        case .goToLastPage:
+            return "forward.end"
+        case .goForwardPage:
+            return "chevron.right"
+        case .goBackwardPage:
+            return "chevron.left"
+        case .jumpRelativePages:
+            return "arrow.left.arrow.right.square"
+        }
+    }
 }
 
 #if canImport(AppKit)
@@ -153,6 +195,14 @@ public enum CZPreviewContextMenuFactory {
                 item.keyEquivalentModifierMask = shortcut?.modifierMask ?? []
                 item.target = target
                 item.state = stateForCommand(command)
+                if let image = NSImage(
+                    systemSymbolName: CZPreviewContextMenuLayout.symbolName(for: command),
+                    accessibilityDescription: item.title
+                ) {
+                    image.isTemplate = true
+                    image.size = NSSize(width: 14, height: 14)
+                    item.image = image
+                }
                 menu.addItem(item)
             }
         }

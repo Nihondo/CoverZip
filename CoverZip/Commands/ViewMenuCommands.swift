@@ -114,67 +114,93 @@ struct ViewMenuCommands: Commands {
         CommandGroup(after: .toolbar) {
             Group {
                 // 読み方向
-                Toggle(CZPreviewContextMenuLayout.title(for: .setRightToLeftReading), isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { state.isRightToLeftReading },
                     set: { if $0 { state.setRightToLeft() } }
-                ))
+                )) {
+                    menuLabel(for: .setRightToLeftReading)
+                }
 
-                Toggle(CZPreviewContextMenuLayout.title(for: .setLeftToRightReading), isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { !state.isRightToLeftReading },
                     set: { if $0 { state.setLeftToRight() } }
-                ))
+                )) {
+                    menuLabel(for: .setLeftToRightReading)
+                }
 
                 Divider()
 
                 // 表示モード
-                Toggle(CZPreviewContextMenuLayout.title(for: .setViewModeAuto), isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { state.currentViewMode == .auto },
                     set: { if $0 { state.setViewModeAuto() } }
-                ))
+                )) {
+                    menuLabel(for: .setViewModeAuto)
+                }
                 .keyboardShortcut("0")
 
-                Toggle(CZPreviewContextMenuLayout.title(for: .setViewModeSingle), isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { state.currentViewMode == .single },
                     set: { if $0 { state.setViewModeSingle() } }
-                ))
+                )) {
+                    menuLabel(for: .setViewModeSingle)
+                }
                 .keyboardShortcut("1")
 
-                Toggle(CZPreviewContextMenuLayout.title(for: .setViewModeSpread), isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { state.currentViewMode == .spread },
                     set: { if $0 { state.setViewModeSpread() } }
-                ))
+                )) {
+                    menuLabel(for: .setViewModeSpread)
+                }
                 .keyboardShortcut("2")
 
                 Divider()
 
                 // 補助設定
-                Toggle(CZPreviewContextMenuLayout.title(for: .setSpreadPairOffset), isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { state.spreadPairOffset == 1 },
                     set: { _ in state.toggleSpreadPairOffset() }
-                ))
+                )) {
+                    menuLabel(for: .setSpreadPairOffset)
+                }
                 .keyboardShortcut("t", modifiers: [.command])
 
-                Toggle(CZPreviewContextMenuLayout.title(for: .setThumbnailStripVisible), isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { state.isThumbnailStripVisible },
                     set: { _ in state.toggleThumbnailStrip() }
-                ))
+                )) {
+                    menuLabel(for: .setThumbnailStripVisible)
+                }
                 .keyboardShortcut("l")
 
                 Divider()
 
                 // ページ送り / スライドショー
-                Toggle(CZPreviewContextMenuLayout.title(for: .setPageTransitionEnabled), isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { state.isTransitionEnabled },
                     set: { _ in state.toggleTransition() }
-                ))
+                )) {
+                    menuLabel(for: .setPageTransitionEnabled)
+                }
 
-                Toggle(CZPreviewContextMenuLayout.title(for: .setSlideshowEnabled), isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { state.isSlideshowEnabled },
                     set: { _ in state.toggleSlideshow() }
-                ))
+                )) {
+                    menuLabel(for: .setSlideshowEnabled)
+                }
                 .keyboardShortcut("s")
             }
             .disabled(!state.isViewerOpen)
         }
+    }
+
+    @ViewBuilder
+    private func menuLabel(for command: CZPreviewSessionCommand) -> some View {
+        Label(
+            CZPreviewContextMenuLayout.title(for: command),
+            systemImage: CZPreviewContextMenuLayout.symbolName(for: command)
+        )
     }
 }
