@@ -936,7 +936,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return #selector(toggleTransition(_:))
         case .setSlideshowEnabled:
             return #selector(toggleSlideshow(_:))
-        case .goToFirstPage, .goToLastPage, .jumpRelativePages:
+        case .goToFirstPage, .goToLastPage, .goForwardPage, .goBackwardPage, .jumpRelativePages:
             return nil
         }
     }
@@ -961,7 +961,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return isTransitionEnabled ? .on : .off
         case .setSlideshowEnabled:
             return isSlideshowEnabled ? .on : .off
-        case .goToFirstPage, .goToLastPage, .jumpRelativePages:
+        case .goToFirstPage, .goToLastPage, .goForwardPage, .goBackwardPage, .jumpRelativePages:
             return .off
         }
     }
@@ -1168,6 +1168,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             moveToPageFromThumbnail(1)
         case .goToLastPage:
             moveToPageFromThumbnail(imageManager.getImageCount())
+        case .goForwardPage:
+            _ = performPageNavigation(forward: true)
+        case .goBackwardPage:
+            _ = performPageNavigation(forward: false)
         case .jumpRelativePages:
             let delta = userInfo[CZPreviewSessionCommandUserInfoKeys.intValue] as? Int ?? 0
             let target = imageManager.getCurrentPageNumber() + delta

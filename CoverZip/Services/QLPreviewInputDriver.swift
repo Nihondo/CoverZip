@@ -4,17 +4,14 @@
 //
 //  Quick Look 埋め込みの入力ドライバ（正式実装）。
 //  - First Responder 専用フォワーダビューで左右キーを受け取り、
-//    プレビュー領域左右半分へのクリック（ダウン/アップ）を合成してページ送りを駆動
+//    分散コマンド経由でページ遷移を駆動
 //  - 入力はフォワーダビュー経由に統一（ローカルイベントモニタは廃止）。
-//  - クリック注入は CGEvent を使用（アクセシビリティ権限が必要）。
 //  - ウィンドウクローズは OS の標準挙動に委ね、独自破棄は行わない。
 //
 
 import AppKit
-import ApplicationServices
 import QuickLook
 import QuickLookUI
-import UniformTypeIdentifiers
 
 /// 弱参照ラッパー
 private class WeakRef<T: AnyObject> {
@@ -35,8 +32,6 @@ enum QLPreviewInputDriver {
     private static var retainedWindows: [NSWindow] = []
     /// KeyForwardingView の弱参照を保持（フォーカス復帰用）
     private static var keyForwarders: [WeakRef<KeyForwardingView>] = []
-    // ローカルイベントモニタは廃止（フォワーダ方式に一本化）
-    private static var didPromptAX: Bool = false
     /// コンテキストメニュー供給（アプリ側で設定）
     static var contextMenuProvider: (() -> NSMenu)?
     /// 共有パネル用データソースを強参照で保持（QLPreviewPanel.dataSourceはunowned）
@@ -124,21 +119,6 @@ enum QLPreviewInputDriver {
         )
     }
     
-    /// アクセシビリティ権限を確認し、必要なら一度だけプロンプトを表示
-    /// - Returns: 権限が有効なら true
-    @discardableResult
-    private static func ensureAccessibilityPermission() -> Bool {
-        if AXIsProcessTrusted() { return true }
-        if !didPromptAX {
-            let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-            let options = [key: true] as CFDictionary
-            _ = AXIsProcessTrustedWithOptions(options)
-            didPromptAX = true
-            NSLog("[QLInputDriver] Requested Accessibility permission for CGEvent posting")
-        }
-        return AXIsProcessTrusted()
-    }
-
     /// 指定 URL を QLPreviewView 単体で表示するウィンドウを開く
     /// - Parameter url: 表示する ZIP の URL
     static func openQuickLookWindow(url: URL) {
@@ -200,7 +180,7 @@ enum QLPreviewInputDriver {
             ])
             previewView.previewItem = url as NSURL
 
-            let forwarderRef = addKeyForwarder(window: window, previewView: previewView)
+            let forwarderRef = addKeyForwarder(window: window)
 
             // ウィンドウフレーム変更の監視（リサイズ・移動時に保存）
             let frameObserver = NotificationCenter.default.addObserver(
@@ -250,9 +230,9 @@ enum QLPreviewInputDriver {
     }
 
     /// 既存ウィンドウに入力フォワーダを取り付ける（埋め込み用）
-    /// - Note: 内蔵ビューアの埋め込み `QLPreviewView` に対して矢印キー→クリック合成を提供する。
-    static func attachInputForwarder(to window: NSWindow, previewView: QLPreviewView) {
-        guard let forwarder = addKeyForwarder(window: window, previewView: previewView) else { return }
+    /// - Note: 矢印キー入力を分散コマンドへ変換する。
+    static func attachInputForwarder(to window: NSWindow) {
+        guard let forwarder = addKeyForwarder(window: window) else { return }
         // キー化後に改めて First Responder を設定（QL に奪われるのを防ぐ）
         DispatchQueue.main.async { window.makeFirstResponder(forwarder) }
         let obs = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { _ in
@@ -266,16 +246,14 @@ enum QLPreviewInputDriver {
     // ローカルイベントモニタ方式は削除（安定構成へ統一）
 
     // 方式2: First Responder フォワーダ方式（推奨）
-    private static func addKeyForwarder(window: NSWindow, previewView: QLPreviewView) -> KeyForwardingView? {
-        let forwarder = KeyForwardingView { isLeft in
-            synthesizeClick(in: previewView, window: window, onLeftHalf: isLeft)
-        }
+    private static func addKeyForwarder(window: NSWindow) -> KeyForwardingView? {
+        let forwarder = KeyForwardingView()
         forwarder.translatesAutoresizingMaskIntoConstraints = false
         forwarder.isHidden = false
         forwarder.wantsLayer = false
 
         guard let content = window.contentView else { return nil }
-        content.addSubview(forwarder, positioned: .above, relativeTo: previewView)
+        content.addSubview(forwarder)
         NSLayoutConstraint.activate([
             forwarder.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             forwarder.trailingAnchor.constraint(equalTo: content.trailingAnchor),
@@ -292,9 +270,8 @@ enum QLPreviewInputDriver {
     }
 
     private final class KeyForwardingView: NSView {
-        private let handler: (Bool) -> Void
-        init(handler: @escaping (Bool) -> Void) { self.handler = handler; super.init(frame: .zero) }
         required init?(coder: NSCoder) { nil }
+        init() { super.init(frame: .zero) }
         override var acceptsFirstResponder: Bool { true }
         override var isOpaque: Bool { false }
         // 左クリックはプレビューへ通し、右クリック/Control-クリックは自分で受ける
@@ -315,22 +292,20 @@ enum QLPreviewInputDriver {
                 let isLeft  = (Int(event.keyCode) == 123)
                 let isCmd   = event.modifierFlags.contains(.command)
                 let isShift = event.modifierFlags.contains(.shift)
+                let isRTL = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
+                let isForward = (isLeft == isRTL)  // RTL: ←=前進, LTR: →=前進
                 if isCmd || isShift {
-                    let isRTL = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
-                    let isForward = (isLeft == isRTL)  // RTL: ←=前進, LTR: →=前進
                     if isCmd {
                         PreviewSessionCommandDispatcher.post(command: isForward ? .goToLastPage : .goToFirstPage)
                     } else {
                         PreviewSessionCommandDispatcher.post(command: .jumpRelativePages, intValue: isForward ? +10 : -10)
                     }
                 } else {
-                    handler(isLeft)
+                    PreviewSessionCommandDispatcher.post(command: isForward ? .goForwardPage : .goBackwardPage)
                 }
             case 49:  // Space: 読み方向に応じてページ送り/戻し
-                let isRTL = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
                 let goForward = !event.modifierFlags.contains(.shift)
-                // RTL: 前進=左クリック / LTR: 前進=右クリック
-                handler(goForward == isRTL)
+                PreviewSessionCommandDispatcher.post(command: goForward ? .goForwardPage : .goBackwardPage)
             case 115: PreviewSessionCommandDispatcher.post(command: .goToFirstPage)               // Home
             case 119: PreviewSessionCommandDispatcher.post(command: .goToLastPage)                // End
             case 116: PreviewSessionCommandDispatcher.post(command: .jumpRelativePages, intValue: -10) // Page Up
@@ -341,29 +316,6 @@ enum QLPreviewInputDriver {
         override func menu(for event: NSEvent) -> NSMenu? {
             return QLPreviewInputDriver.contextMenuProvider?()
         }
-    }
-
-    private static func synthesizeClick(in previewView: QLPreviewView, window: NSWindow, onLeftHalf: Bool) {
-        let bounds = previewView.bounds
-        guard bounds.width > 1, bounds.height > 1 else { return }
-        let x = onLeftHalf ? bounds.width * 0.25 : bounds.width * 0.75
-        let y = bounds.height * 0.5
-        let pointInView = NSPoint(x: x, y: y)
-        let pointInWindow = previewView.convert(pointInView, to: nil)
-
-        // CGEvent（リモートレイヤ越しに確実にイベントを届ける）
-        guard ensureAccessibilityPermission() else {
-            NSLog("[QLInputDriver] Cannot synthesize click: Accessibility permission not granted")
-            return
-        }
-            let screenPoint = window.convertPoint(toScreen: pointInWindow)
-            let totalMaxY = NSScreen.screens.map { $0.frame.maxY }.max() ?? screenPoint.y
-            let cgPoint = CGPoint(x: screenPoint.x, y: totalMaxY - screenPoint.y)
-            if let down = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: cgPoint, mouseButton: .left),
-               let up = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: cgPoint, mouseButton: .left) {
-                down.post(tap: .cghidEventTap)
-                up.post(tap: .cghidEventTap)
-            }
     }
 }
 

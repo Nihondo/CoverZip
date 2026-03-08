@@ -142,7 +142,7 @@ ZipRoutingService.route(invocationContext:.openPanelRouting) →
 #### 内蔵ビューアアーキテクチャ（`QLPreviewInputDriver`）
 
 - **キーボード入力**: `KeyForwardingView`（NSView サブクラス）をファーストレスポンダーとして配置し、左右キーを受信（ローカルイベントモニタは廃止）
-- **クリック合成**: CGEvent で プレビュー領域の左右半分をクリックしてページ送りを駆動（アクセシビリティ権限が必要）
+- **ページ移動経路**: 矢印キー/Space は `PreviewSessionCommandDispatcher` から `CZPreviewSessionCommand.goForwardPage/goBackwardPage` を送信し、`PreviewViewController.performPageNavigation(forward:)` で処理
 - **フォールバック**: QLPreviewView生成失敗時は `SimplePanelDataSource` 経由で共有パネル表示
 - **ウィンドウ管理**: `retainedWindows` で強参照保持、OS標準のウィンドウクローズに委ねる
 - **コンテキストメニュー**: `contextMenuProvider` クロージャ経由で `InternalViewer.makeContextMenu()` を呼び出し
@@ -244,7 +244,7 @@ App Group UserDefaults の `CZSettingsKeys.routingSettingsData` キーに JSON �
 - **macOS**: 11.0 (Big Sur) 以降
 - **アーキテクチャ**: Universal Binary (Intel x86_64 + Apple Silicon arm64)
 - **開発環境**: Xcode 14.0 以降
-- **権限**: アクセシビリティ権限（内蔵ビューアのキー合成機能で使用）
+- **権限**: 特別なアクセシビリティ権限は不要（内蔵ビューアのキー操作は分散コマンド経由）
 
 ## 参考資料
 

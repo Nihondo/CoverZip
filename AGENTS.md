@@ -33,11 +33,11 @@
 
 ## 内蔵ビューアと拡張の連携
 - アプリ側の内蔵ビューア: `CoverZip/Services/InternalViewer.swift`（`QLPreviewView` をウィンドウに埋め込み）。
-- キー入力処理は `KeyForwardingView`（First Responder 専用の薄いビュー）で受け取り、プレビュー領域の左右半分への左クリック（ダウン/アップ）を合成してページ送りを駆動（正式: `QLPreviewInputDriver`）。
+- キー入力処理は `KeyForwardingView`（First Responder 専用の薄いビュー）で受け取り、`CZPreviewSessionCommand`（`goForwardPage` / `goBackwardPage`）を分散通知で送信してページ送りを駆動（正式: `QLPreviewInputDriver`）。
 - `QLPreviewView` 自体を First Responder にしない（クローズ時の解放競合を回避）。
 - クローズ時は OS の標準解放順序（`shouldCloseWithWindow = true`）に委ね、独自のビュー破棄は行わない。
 - Context menu items (reading direction / view mode / spread offset / thumbnail strip visibility / animation / slideshow) are unified between the app-side internal viewer and Quick Look viewer via shared menu definitions.
-- Runtime menu operations from the internal viewer are propagated to the Quick Look viewer via distributed session-command notifications (not direct shared-UserDefaults writes for each click).
+- Runtime menu operations from the internal viewer are propagated to the Quick Look viewer via distributed session-command notifications (not direct shared-UserDefaults writes per operation).
 
 ## 実装ポリシー（変更方針）
 - 変更は最小限・局所的・既存スタイルに合わせる。無関係な最適化や一括リネームは禁止。
@@ -94,3 +94,4 @@
 - 2026-03-07 Added `PreviewSessionStateStore` and `PreviewSessionCommandDispatcher` to reduce duplicated viewer/menu synchronization logic
 - 2026-03-07 File routing settings are persisted in App Group UserDefaults; removed JSON-edit/save-button workflow
 - 2026-03-07 Removed legacy `settings.json` migration/fallback path from routing settings load logic
+- 2026-03-08 Replaced internal viewer key navigation click synthesis with distributed session commands (`goForwardPage` / `goBackwardPage`)

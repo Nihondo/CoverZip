@@ -169,7 +169,7 @@ final class InternalViewer: NSObject {
             return #selector(toggleTransition(_:))
         case .setSlideshowEnabled:
             return #selector(toggleSlideshow(_:))
-        case .goToFirstPage, .goToLastPage, .jumpRelativePages:
+        case .goToFirstPage, .goToLastPage, .goForwardPage, .goBackwardPage, .jumpRelativePages:
             return nil
         }
     }
@@ -194,7 +194,7 @@ final class InternalViewer: NSObject {
             return isTransitionEnabled ? .on : .off
         case .setSlideshowEnabled:
             return isSlideshowEnabled ? .on : .off
-        case .goToFirstPage, .goToLastPage, .jumpRelativePages:
+        case .goToFirstPage, .goToLastPage, .goForwardPage, .goBackwardPage, .jumpRelativePages:
             return .off
         }
     }

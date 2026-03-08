@@ -60,6 +60,8 @@ public enum CZPreviewSessionCommand: String {
     case setSlideshowEnabled
     case goToFirstPage
     case goToLastPage
+    case goForwardPage
+    case goBackwardPage
     case jumpRelativePages  // intValue に相対量（正=前進、負=後退）
 }
 
@@ -114,6 +116,10 @@ public enum CZPreviewContextMenuLayout {
             return CZLocalized.string("context.menu.page.first", defaultValue: "First Page")
         case .goToLastPage:
             return CZLocalized.string("context.menu.page.last", defaultValue: "Last Page")
+        case .goForwardPage:
+            return CZLocalized.string("context.menu.page.forward", defaultValue: "Next Page")
+        case .goBackwardPage:
+            return CZLocalized.string("context.menu.page.backward", defaultValue: "Previous Page")
         case .jumpRelativePages:
             return CZLocalized.string("context.menu.page.jump", defaultValue: "Jump Pages")
         }
