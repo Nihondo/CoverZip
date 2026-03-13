@@ -8,19 +8,33 @@
 import SwiftUI
 import AppKit
 import CoreServices
-import UniformTypeIdentifiers
-
-// MARK: - 列幅定数
 
 private enum ColumnWidth {
-    static let typePicker: CGFloat = 115
-    static let matchMode: CGFloat = 155
-    static let keywordField: CGFloat = 120
-    static let applicationPicker: CGFloat = 200
-    static let deleteButton: CGFloat = 28
+    static let target: CGFloat = 160
+    static let condition: CGFloat = 180
+    static let keyword: CGFloat = 140
+    static let application: CGFloat = 260
+    static let deleteButton: CGFloat = 36
 }
 
-// MARK: - RoutingSettingsView 本体
+private struct RoutingTableRow: Identifiable, Hashable {
+    let id: String
+    let ruleID: UUID?
+
+    var isDefault: Bool { ruleID == nil }
+
+    static let fallback = RoutingTableRow(id: "default", ruleID: nil)
+
+    init(ruleID: UUID) {
+        self.id = ruleID.uuidString
+        self.ruleID = ruleID
+    }
+
+    private init(id: String, ruleID: UUID?) {
+        self.id = id
+        self.ruleID = ruleID
+    }
+}
 
 struct RoutingSettingsView: View {
     private let zipContentTypeIdentifiers = ["public.zip-archive", "com.pkware.zip-archive"]
@@ -32,7 +46,6 @@ struct RoutingSettingsView: View {
     @State private var isDefaultHandler = false
     @State private var currentDefaultAppName = ""
 
-    /// 全ルール＋デフォルトで使用中のアプリ一覧（重複排除・順序保持）
     private var usedApplications: [String] {
         var seen = Set<String>()
         var result: [String] = []
@@ -43,49 +56,22 @@ struct RoutingSettingsView: View {
         return result
     }
 
+    private var tableRows: [RoutingTableRow] {
+        settings.rules.map { RoutingTableRow(ruleID: $0.id) } + [.fallback]
+    }
+
+    private var minimumTableHeight: CGFloat {
+        let visibleRows = max(settings.rules.count + 1, 4)
+        return CGFloat(visibleRows) * 44.0 + 28.0
+    }
+
     var body: some View {
         Form {
             fileAssociationSection
-
-            Section {
-                columnHeaderView
-                    .moveDisabled(true)
-
-                if settings.rules.isEmpty {
-                    emptyRulesView
-                } else {
-                    ForEach($settings.rules) { $rule in
-                        RuleRowView(
-                            rule: $rule,
-                            usedApplications: usedApplications,
-                            onDelete: { deleteRule(rule) },
-                            onChange: saveCurrentSettings
-                        )
-                    }
-                    .onMove(perform: moveRules)
-                }
-
-                DefaultRuleRowView(
-                    application: $settings.defaultApplication,
-                    usedApplications: usedApplications,
-                    onChange: saveCurrentSettings
-                )
-                .moveDisabled(true)
-
-                Button(action: addNewRule) {
-                    Label(CZLocalized.string("routing.rules.add", defaultValue: "New Rule"), systemImage: "plus")
-                }
-            } header: {
-                Label(CZLocalized.string("routing.rules.section", defaultValue: "Rules"), systemImage: "list.bullet")
-            } footer: {
-                Text(CZLocalized.string(
-                    "routing.rules.footer",
-                    defaultValue: "Rules are evaluated from top to bottom, and the first match is applied."
-                ))
-            }
-
+            rulesSection
         }
         .formStyle(.grouped)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .frame(minWidth: 760, minHeight: 480)
         .alert(CZLocalized.string("routing.alert.title", defaultValue: "Notice"), isPresented: $showingAlert) {
             Button(CZLocalized.string("common.ok", defaultValue: "OK"), role: .cancel) { }
@@ -95,31 +81,35 @@ struct RoutingSettingsView: View {
         .onAppear { refreshDefaultHandlerStatus() }
     }
 
-    // MARK: - ファイル関連付けセクション
-
     private var fileAssociationSection: some View {
         Section {
-            HStack {
+            LabeledContent {
+                Button(
+                    isDefaultHandler
+                    ? CZLocalized.string("routing.association.action.unset_default", defaultValue: "Unset Default")
+                    : CZLocalized.string("routing.association.action.set_default", defaultValue: "Set as Default")
+                ) {
+                    toggleDefaultHandler()
+                }
+            } label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(isDefaultHandler
+                    Text(
+                        isDefaultHandler
                         ? CZLocalized.string("routing.association.status.is_default", defaultValue: "CoverZip is the default app for ZIP files")
                         : CZLocalized.string("routing.association.status.is_not_default", defaultValue: "CoverZip is not the default app for ZIP files")
                     )
+
                     if !currentDefaultAppName.isEmpty && !isDefaultHandler {
-                        Text(CZLocalized.formatted(
-                            "routing.association.current_default_format",
-                            defaultValue: "Current default: %@",
-                            currentDefaultAppName
-                        ))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        Text(
+                            CZLocalized.formatted(
+                                "routing.association.current_default_format",
+                                defaultValue: "Current default: %@",
+                                currentDefaultAppName
+                            )
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
-                }
-                Spacer()
-                Button(isDefaultHandler
-                       ? CZLocalized.string("routing.association.action.unset_default", defaultValue: "Unset Default")
-                       : CZLocalized.string("routing.association.action.set_default", defaultValue: "Set as Default")) {
-                    toggleDefaultHandler()
                 }
             }
         } header: {
@@ -127,54 +117,182 @@ struct RoutingSettingsView: View {
         }
     }
 
-    // MARK: - ルール表示
+    private var rulesSection: some View {
+        Section {
+            if settings.rules.isEmpty {
+                ContentUnavailableView(
+                    CZLocalized.string("routing.rules.empty.title", defaultValue: "No Rules"),
+                    systemImage: "list.bullet.rectangle",
+                    description: Text(CZLocalized.string("routing.rules.empty.subtitle", defaultValue: "Click \"New Rule\" to add one."))
+                )
+            }
 
-    private var emptyRulesView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 36))
-                .foregroundColor(.secondary)
-            Text(CZLocalized.string("routing.rules.empty.title", defaultValue: "No Rules"))
-                .foregroundColor(.secondary)
-            Text(CZLocalized.string("routing.rules.empty.subtitle", defaultValue: "Click \"New Rule\" to add one."))
-                .font(.caption)
-                .foregroundColor(.secondary)
+            routingTable
+                .frame(minHeight: minimumTableHeight)
+
+            Button(action: addNewRule) {
+                Label(CZLocalized.string("routing.rules.add", defaultValue: "New Rule"), systemImage: "plus")
+            }
+        } header: {
+            Label(CZLocalized.string("routing.rules.section", defaultValue: "Rules"), systemImage: "list.bullet")
+        } footer: {
+            Text(CZLocalized.string(
+                "routing.rules.footer",
+                defaultValue: "Rules are evaluated from top to bottom, and the first match is applied."
+            ))
         }
-        .frame(maxWidth: .infinity, minHeight: 100)
     }
 
-    private var columnHeaderView: some View {
-        HStack(spacing: 8) {
-            Spacer().frame(width: 20)
-            Text(CZLocalized.string("routing.rules.header.target", defaultValue: "Target"))
-                .frame(width: ColumnWidth.typePicker, alignment: .leading)
-            Text(CZLocalized.string("routing.rules.header.condition", defaultValue: "Condition"))
-                .frame(width: ColumnWidth.matchMode, alignment: .leading)
-            Text(CZLocalized.string("routing.rules.header.keyword", defaultValue: "Keyword"))
-                .frame(width: ColumnWidth.keywordField, alignment: .leading)
-            Text(CZLocalized.string("routing.rules.header.application", defaultValue: "Application"))
-                .frame(width: ColumnWidth.applicationPicker, alignment: .leading)
-            Spacer().frame(width: ColumnWidth.deleteButton)
+    private var routingTable: some View {
+        Table(of: RoutingTableRow.self) {
+            TableColumn(CZLocalized.string("routing.rules.header.target", defaultValue: "Target")) { row in
+                targetCell(for: row)
+            }
+            .width(ColumnWidth.target)
+
+            TableColumn(CZLocalized.string("routing.rules.header.condition", defaultValue: "Condition")) { row in
+                conditionCell(for: row)
+            }
+            .width(ColumnWidth.condition)
+
+            TableColumn(CZLocalized.string("routing.rules.header.keyword", defaultValue: "Keyword")) { row in
+                keywordCell(for: row)
+            }
+            .width(min: ColumnWidth.keyword, ideal: 160, max: 240)
+
+            TableColumn(CZLocalized.string("routing.rules.header.application", defaultValue: "Application")) { row in
+                applicationCell(for: row)
+            }
+            .width(min: ColumnWidth.application, ideal: 280, max: 420)
+
+            TableColumn("") { row in
+                deleteCell(for: row)
+            }
+            .width(ColumnWidth.deleteButton)
+        } rows: {
+            ForEach(tableRows) { row in
+                TableRow(row)
+                    .itemProvider {
+                        guard !row.isDefault else { return nil }
+                        return NSItemProvider(object: row.id as NSString)
+                    }
+            }
+            .dropDestination(for: String.self) { destination, draggedRowIDs in
+                moveDraggedRules(with: draggedRowIDs, to: destination)
+            }
         }
-        .font(.caption)
-        .foregroundColor(.secondary)
-        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - 補助メソッド
+    @ViewBuilder
+    private func targetCell(for row: RoutingTableRow) -> some View {
+        if let rule = binding(for: row) {
+            Picker("", selection: rule.type) {
+                ForEach(KeywordType.allCases, id: \.self) { type in
+                    Text(type.displayName).tag(type)
+                }
+            }
+            .labelsHidden()
+            .onChange(of: rule.wrappedValue.type) { saveCurrentSettings() }
+        } else {
+            Text(CZLocalized.string("routing.default.label", defaultValue: "Default"))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func conditionCell(for row: RoutingTableRow) -> some View {
+        if let rule = binding(for: row) {
+            Picker("", selection: rule.matchMode) {
+                ForEach(MatchMode.allCases, id: \.self) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .labelsHidden()
+            .onChange(of: rule.wrappedValue.matchMode) { saveCurrentSettings() }
+        } else {
+            Text("—")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func keywordCell(for row: RoutingTableRow) -> some View {
+        if let rule = binding(for: row) {
+            LeadingTextField(text: rule.keyword, onChange: saveCurrentSettings)
+                .frame(height: 24)
+        } else {
+            Text("—")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func applicationCell(for row: RoutingTableRow) -> some View {
+        if let rule = binding(for: row) {
+            AppPickerMenu(
+                application: rule.application,
+                usedApplications: usedApplications,
+                onChange: saveCurrentSettings
+            )
+        } else {
+            AppPickerMenu(
+                application: Binding(
+                    get: { settings.defaultApplication },
+                    set: { settings.defaultApplication = $0 }
+                ),
+                usedApplications: usedApplications,
+                onChange: saveCurrentSettings
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func deleteCell(for row: RoutingTableRow) -> some View {
+        if let ruleID = row.ruleID {
+            Button(role: .destructive) {
+                deleteRule(id: ruleID)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help(CZLocalized.string("routing.help.delete", defaultValue: "Delete"))
+        } else {
+            EmptyView()
+        }
+    }
+
+    private func binding(for row: RoutingTableRow) -> Binding<KeywordRule>? {
+        guard let ruleID = row.ruleID,
+              let index = settings.rules.firstIndex(where: { $0.id == ruleID }) else {
+            return nil
+        }
+        return $settings.rules[index]
+    }
 
     private func addNewRule() {
-        settings.rules.append(KeywordRule(keyword: "", type: .filename, application: "internal", matchMode: .contains))
+        settings.rules.append(
+            KeywordRule(keyword: "", type: .filename, application: "internal", matchMode: .contains)
+        )
         saveCurrentSettings()
     }
 
-    private func deleteRule(_ rule: KeywordRule) {
-        settings.rules.removeAll { $0.id == rule.id }
+    private func deleteRule(id: UUID) {
+        settings.rules.removeAll { $0.id == id }
         saveCurrentSettings()
     }
 
-    private func moveRules(from source: IndexSet, to destination: Int) {
-        settings.rules.move(fromOffsets: source, toOffset: destination)
+    private func moveDraggedRules(with draggedRowIDs: [String], to destination: Int) {
+        let sourceIndexes = IndexSet(
+            draggedRowIDs.compactMap { rowID in
+                settings.rules.firstIndex { $0.id.uuidString == rowID }
+            }
+        )
+
+        guard !sourceIndexes.isEmpty else { return }
+
+        let clampedDestination = min(destination, settings.rules.count)
+        settings.rules.move(fromOffsets: sourceIndexes, toOffset: clampedDestination)
         saveCurrentSettings()
     }
 
@@ -183,8 +301,6 @@ struct RoutingSettingsView: View {
             NSLog("ルーティング設定の保存に失敗しました")
         }
     }
-
-    // MARK: - ファイル関連付け
 
     private func refreshDefaultHandlerStatus() {
         guard let bundleID = Bundle.main.bundleIdentifier else { return }
@@ -239,7 +355,10 @@ struct RoutingSettingsView: View {
                     if let error {
                         let fallbackResult = self.applyLaunchServicesDefaultHandler(bundleID: bundleID)
                         if !fallbackResult.isSuccess {
-                            self.alertMessage = self.makeDefaultHandlerErrorMessage(error: error as NSError, statusDetails: fallbackResult.statusDetails)
+                            self.alertMessage = self.makeDefaultHandlerErrorMessage(
+                                error: error as NSError,
+                                statusDetails: fallbackResult.statusDetails
+                            )
                             self.showingAlert = true
                         }
                     }
@@ -314,91 +433,6 @@ struct RoutingSettingsView: View {
     }
 }
 
-// MARK: - ルール行ビュー
-
-struct RuleRowView: View {
-    @Binding var rule: KeywordRule
-    let usedApplications: [String]
-    let onDelete: () -> Void
-    let onChange: () -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 0) {
-                Picker("", selection: $rule.type) {
-                    ForEach(KeywordType.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-                .labelsHidden()
-                .onChange(of: rule.type) { onChange() }
-                Spacer()
-            }
-            .frame(width: ColumnWidth.typePicker)
-
-            HStack(spacing: 0) {
-                Picker("", selection: $rule.matchMode) {
-                    ForEach(MatchMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-                .labelsHidden()
-                .onChange(of: rule.matchMode) { onChange() }
-                Spacer()
-            }
-            .frame(width: ColumnWidth.matchMode)
-
-            LeadingTextField(text: $rule.keyword, onChange: onChange)
-                .frame(width: ColumnWidth.keywordField, height: 22)
-
-            AppPickerMenu(
-                application: $rule.application,
-                usedApplications: usedApplications,
-                onChange: onChange
-            )
-            .frame(width: ColumnWidth.applicationPicker, alignment: .leading)
-
-            Button(action: onDelete) {
-                Image(systemName: "trash").foregroundColor(.red)
-            }
-            .buttonStyle(.borderless)
-            .help(CZLocalized.string("routing.help.delete", defaultValue: "Delete"))
-            .frame(width: ColumnWidth.deleteButton)
-        }
-        .padding(.horizontal, 4)
-    }
-}
-
-struct DefaultRuleRowView: View {
-    @Binding var application: String
-    let usedApplications: [String]
-    let onChange: () -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(CZLocalized.string("routing.default.label", defaultValue: "Default"))
-                .foregroundColor(.secondary)
-                .frame(width: ColumnWidth.typePicker, alignment: .leading)
-
-            Text("—")
-                .foregroundColor(.secondary)
-                .frame(width: ColumnWidth.matchMode, alignment: .leading)
-
-            Text("—")
-                .foregroundColor(.secondary)
-                .frame(width: ColumnWidth.keywordField, alignment: .leading)
-
-            AppPickerMenu(
-                application: $application,
-                usedApplications: usedApplications,
-                onChange: onChange
-            )
-            .frame(width: ColumnWidth.applicationPicker, alignment: .leading)
-
-            Spacer().frame(width: ColumnWidth.deleteButton)
-        }
-        .padding(.horizontal, 4)
-    }
-}
-
-// MARK: - アプリ選択メニュー
-
 struct AppPickerMenu: View {
     @Binding var application: String
     let usedApplications: [String]
@@ -432,7 +466,7 @@ struct AppPickerMenu: View {
 
             Button(CZLocalized.string("routing.app_picker.choose_app", defaultValue: "Choose App...")) {
                 ApplicationPicker.pickApplication { url in
-                    if let url = url {
+                    if let url {
                         application = url.path
                         onChange()
                     }
@@ -441,8 +475,10 @@ struct AppPickerMenu: View {
         } label: {
             HStack(spacing: 4) {
                 appIconView(for: application, size: 16)
-                Text(displayName).lineLimit(1)
+                Text(displayName)
+                    .lineLimit(1)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .menuStyle(.borderlessButton)
     }
@@ -477,9 +513,6 @@ struct AppPickerMenu: View {
     }
 }
 
-// MARK: - 左寄せ TextField（NSViewRepresentable）
-
-/// macOS Form の右揃え強制を回避し、テキストを左揃えで表示する TextField
 private struct LeadingTextField: NSViewRepresentable {
     @Binding var text: String
     let onChange: () -> Void
@@ -505,7 +538,10 @@ private struct LeadingTextField: NSViewRepresentable {
 
     class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: LeadingTextField
-        init(parent: LeadingTextField) { self.parent = parent }
+
+        init(parent: LeadingTextField) {
+            self.parent = parent
+        }
 
         func controlTextDidChange(_ obj: Notification) {
             guard let field = obj.object as? NSTextField else { return }
@@ -514,8 +550,6 @@ private struct LeadingTextField: NSViewRepresentable {
         }
     }
 }
-
-// MARK: - プレビュー
 
 #Preview {
     RoutingSettingsView()
