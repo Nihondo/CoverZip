@@ -7,6 +7,73 @@
 
 import SwiftUI
 
+enum AppWindowIdentifier {
+    static let settings = "settings-window"
+}
+
+private enum SettingsTab: Hashable, CaseIterable {
+    case viewer
+    case slideshow
+    case window
+    case routing
+
+    var title: String {
+        switch self {
+        case .viewer:
+            CZLocalized.string("app.tab.viewer", defaultValue: "Viewer Settings")
+        case .slideshow:
+            CZLocalized.string("app.tab.slideshow", defaultValue: "Slideshow")
+        case .window:
+            CZLocalized.string("app.tab.window", defaultValue: "Window")
+        case .routing:
+            CZLocalized.string("app.tab.routing", defaultValue: "File Routing")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .viewer:
+            "eye"
+        case .slideshow:
+            "play.rectangle"
+        case .window:
+            "macwindow"
+        case .routing:
+            "arrow.triangle.branch"
+        }
+    }
+}
+
+private struct SettingsRootView: View {
+    @State private var selectedSettingsTab: SettingsTab? = .viewer
+
+    var body: some View {
+        NavigationSplitView {
+            List(SettingsTab.allCases, id: \.self, selection: $selectedSettingsTab) { tab in
+                Label(tab.title, systemImage: tab.systemImage)
+            }
+            .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 260)
+        } detail: {
+            detailView
+        }
+        .frame(minWidth: 1000, minHeight: 560)
+    }
+
+    @ViewBuilder
+    private var detailView: some View {
+        switch selectedSettingsTab {
+        case .viewer, .none:
+            PreviewSettingsView()
+        case .slideshow:
+            SlideshowSettingsView()
+        case .window:
+            WindowSettingsView()
+        case .routing:
+            RoutingSettingsView()
+        }
+    }
+}
+
 @main
 struct CoverZipApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -17,26 +84,18 @@ struct CoverZipApp: App {
     }
     
     var body: some Scene {
-    Settings {
-            TabView {
-                if #available(macOS 13.0, *) {
-                    PreviewSettingsView()
-                        .tabItem {
-                            Label(CZLocalized.string("app.tab.viewer", defaultValue: "Viewer Settings"), systemImage: "eye")
-                        }
-                } else {
-                    // 旧バージョン向けフォールバック
-                }
-
-                RoutingSettingsView()
-                    .tabItem {
-                        Label(CZLocalized.string("app.tab.routing", defaultValue: "File Routing"), systemImage: "arrow.triangle.branch")
-                    }
-            }
-            .frame(minWidth: 650, minHeight: 500)
+        Window(
+            CZLocalized.string("window.settings.title", defaultValue: "CoverZip Settings"),
+            id: AppWindowIdentifier.settings
+        ) {
+            SettingsRootView()
         }
+        .defaultSize(width: 1000, height: 560)
+        .defaultLaunchBehavior(.suppressed)
+        .windowResizability(.contentSize)
         .commands {
             FileMenuCommands()
+            SettingsMenuCommands()
             ViewMenuCommands()
         }
     }

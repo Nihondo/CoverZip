@@ -329,7 +329,7 @@ struct RuleRowView: View {
                     ForEach(KeywordType.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .labelsHidden()
-                .onChange(of: rule.type) { _ in onChange() }
+                .onChange(of: rule.type) { onChange() }
                 Spacer()
             }
             .frame(width: ColumnWidth.typePicker)
@@ -339,7 +339,7 @@ struct RuleRowView: View {
                     ForEach(MatchMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .labelsHidden()
-                .onChange(of: rule.matchMode) { _ in onChange() }
+                .onChange(of: rule.matchMode) { onChange() }
                 Spacer()
             }
             .frame(width: ColumnWidth.matchMode)

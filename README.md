@@ -74,7 +74,13 @@ After enabling, selecting a ZIP file in Finder will show its thumbnail, and pres
 
 ## Configuring Routing Rules
 
-Open Settings with Cmd+, or from the menu **CoverZip → Settings...**. Manage rules under the "File Routing" tab.
+Open Settings with Cmd+, or from the menu **CoverZip → Settings...**.
+
+The Settings window uses a macOS sidebar layout with these tabs:
+- `Viewer`: Reading direction, view mode, thumbnail visibility, page transition, and decode cache policy
+- `Slideshow`: Page auto-advance interval
+- `Window`: Restore preview window size/position and reset saved frame
+- `File Routing`: Rule-based routing and ZIP default-app association
 
 Rules are evaluated from top to bottom, and the first match is used.
 

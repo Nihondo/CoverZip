@@ -59,6 +59,23 @@
         }
       }
     },
+    "app.tab.slideshow" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slideshow"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スライドショー"
+          }
+        }
+      }
+    },
     "app.tab.viewer" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -72,6 +89,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ビューア設定"
+          }
+        }
+      }
+    },
+    "app.tab.window" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Window"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ウィンドウ"
           }
         }
       }
@@ -395,6 +429,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "内蔵ビューアで開く…"
+          }
+        }
+      }
+    },
+    "menu.app.settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定..."
           }
         }
       }
@@ -1466,6 +1517,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ウィンドウ"
+          }
+        }
+      }
+    },
+    "window.settings.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CoverZip Settings"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CoverZip設定"
           }
         }
       }
