@@ -10,11 +10,12 @@ import AppKit
 import CoreServices
 
 private enum ColumnWidth {
-    static let target: CGFloat = 160
-    static let condition: CGFloat = 180
-    static let keyword: CGFloat = 140
-    static let application: CGFloat = 260
-    static let deleteButton: CGFloat = 36
+    static let dragHandle: CGFloat = 20
+    static let target: CGFloat = 120
+    static let condition: CGFloat = 120
+    static let keyword: CGFloat = 100
+    static let application: CGFloat = 100
+    static let deleteButton: CGFloat = 20
 }
 
 private struct RoutingTableRow: Identifiable, Hashable {
@@ -145,6 +146,11 @@ struct RoutingSettingsView: View {
 
     private var routingTable: some View {
         Table(of: RoutingTableRow.self) {
+            TableColumn("") { row in
+                dragHandleCell(for: row)
+            }
+            .width(ColumnWidth.dragHandle)
+
             TableColumn(CZLocalized.string("routing.rules.header.target", defaultValue: "Target")) { row in
                 targetCell(for: row)
             }
@@ -158,12 +164,12 @@ struct RoutingSettingsView: View {
             TableColumn(CZLocalized.string("routing.rules.header.keyword", defaultValue: "Keyword")) { row in
                 keywordCell(for: row)
             }
-            .width(min: ColumnWidth.keyword, ideal: 160, max: 240)
+            .width(min: ColumnWidth.keyword)
 
             TableColumn(CZLocalized.string("routing.rules.header.application", defaultValue: "Application")) { row in
                 applicationCell(for: row)
             }
-            .width(min: ColumnWidth.application, ideal: 280, max: 420)
+            .width(min: ColumnWidth.application)
 
             TableColumn("") { row in
                 deleteCell(for: row)
@@ -172,16 +178,27 @@ struct RoutingSettingsView: View {
         } rows: {
             ForEach(tableRows) { row in
                 TableRow(row)
-                    .itemProvider {
-                        guard !row.isDefault else { return nil }
-                        return NSItemProvider(object: row.id as NSString)
-                    }
             }
             .dropDestination(for: String.self) { destination, draggedRowIDs in
                 moveDraggedRules(with: draggedRowIDs, to: destination)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func dragHandleCell(for row: RoutingTableRow) -> some View {
+        if row.isDefault {
+            EmptyView()
+        } else {
+            Image(systemName: "line.3.horizontal")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .help(CZLocalized.string("routing.help.reorder", defaultValue: "Drag to reorder"))
+                .onDrag {
+                    NSItemProvider(object: row.id as NSString)
+                }
+        }
     }
 
     @ViewBuilder
