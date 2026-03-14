@@ -13,9 +13,15 @@ struct SettingsMenuCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
-            Button(CZLocalized.string("menu.app.settings", defaultValue: "Settings…")) {
+            Button {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: AppWindowIdentifier.settings)
+            }
+            label: {
+                Label(
+                    CZLocalized.string("menu.app.settings", defaultValue: "Settings…"),
+                    systemImage: "gearshape"
+                )
             }
             .keyboardShortcut(",", modifiers: [.command])
         }
