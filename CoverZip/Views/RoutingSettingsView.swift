@@ -218,8 +218,9 @@ struct RoutingSettingsView: View {
 
     @ViewBuilder
     private func keywordCell(for row: RoutingTableRow) -> some View {
-        if let rule = binding(for: row) {
-            LeadingTextField(text: rule.keyword, onChange: saveCurrentSettings)
+        if let keyword = keywordBinding(for: row) {
+            TextField("", text: keyword)
+                .textFieldStyle(.roundedBorder)
                 .frame(height: 24)
         } else {
             Text("—")
@@ -268,6 +269,18 @@ struct RoutingSettingsView: View {
             return nil
         }
         return $settings.rules[index]
+    }
+
+    private func keywordBinding(for row: RoutingTableRow) -> Binding<String>? {
+        guard let rule = binding(for: row) else { return nil }
+        return Binding(
+            get: { rule.wrappedValue.keyword },
+            set: { updatedKeyword in
+                guard rule.wrappedValue.keyword != updatedKeyword else { return }
+                rule.wrappedValue.keyword = updatedKeyword
+                saveCurrentSettings()
+            }
+        )
     }
 
     private func addNewRule() {
@@ -509,44 +522,6 @@ struct AppPickerMenu: View {
         } else {
             Image(systemName: "app")
                 .frame(width: size, height: size)
-        }
-    }
-}
-
-private struct LeadingTextField: NSViewRepresentable {
-    @Binding var text: String
-    let onChange: () -> Void
-
-    func makeNSView(context: Context) -> NSTextField {
-        let field = NSTextField()
-        field.bezelStyle = .roundedBezel
-        field.isBordered = true
-        field.drawsBackground = true
-        field.alignment = .left
-        field.delegate = context.coordinator
-        return field
-    }
-
-    func updateNSView(_ nsView: NSTextField, context: Context) {
-        if nsView.stringValue != text {
-            nsView.stringValue = text
-        }
-        nsView.alignment = .left
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
-
-    class Coordinator: NSObject, NSTextFieldDelegate {
-        var parent: LeadingTextField
-
-        init(parent: LeadingTextField) {
-            self.parent = parent
-        }
-
-        func controlTextDidChange(_ obj: Notification) {
-            guard let field = obj.object as? NSTextField else { return }
-            parent.text = field.stringValue
-            parent.onChange()
         }
     }
 }
