@@ -1,8 +1,8 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "extended-gray:1.00000,1.00000",
-      "display-p3:0.63917,0.67859,0.82500,1.00000"
+      "extended-srgb:0.38039,0.33333,0.96078,1.00000",
+      "extended-srgb:0.00000,0.76471,0.81569,1.00000"
     ],
     "orientation" : {
       "start" : {
@@ -20,13 +20,13 @@
       "layers" : [
         {
           "glass" : false,
-          "image-name" : "coverzipicon.png",
-          "name" : "coverzipicon",
+          "image-name" : "qlimage.png",
+          "name" : "qlimage",
           "position" : {
-            "scale" : 0.85,
+            "scale" : 1.5,
             "translation-in-points" : [
-              11,
-              -8
+              0,
+              -8.25
             ]
           }
         }
