@@ -4,6 +4,8 @@
 
 CoverZip is a macOS app designed for comfortably browsing comics and image collections stored in ZIP files. Once installed, comic covers appear as icons in Finder, and you can open them instantly with the spacebar.
 
+![](./images/coverzip_lead.png)
+
 ---
 
 ## Features
