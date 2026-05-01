@@ -185,7 +185,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private func postPreviewVisibilityNotification(_ name: Notification.Name) {
         let userInfo: [String: Any] = [
             CZPreviewVisibilityUserInfoKeys.sessionID: previewVisibilitySessionID,
-            CZPreviewVisibilityUserInfoKeys.timestamp: Date().timeIntervalSince1970
+            CZPreviewVisibilityUserInfoKeys.timestamp: Date().timeIntervalSince1970,
+            CZPreviewVisibilityUserInfoKeys.isRightToLeftReading: isRightToLeftReading
         ]
         CZUserDefaults.shared.set(Date().timeIntervalSince1970, forKey: CZSettingsKeys.previewLastVisibilityPostAt)
         CZUserDefaults.shared.set(name.rawValue, forKey: CZSettingsKeys.previewLastVisibilityPostName)

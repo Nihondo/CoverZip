@@ -96,6 +96,7 @@ public enum CZPreviewSessionCommandUserInfoKeys {
 public enum CZPreviewVisibilityUserInfoKeys {
     public static let sessionID = "sessionID"
     public static let timestamp = "timestamp"
+    public static let isRightToLeftReading = "isRightToLeftReading"
 }
 
 public enum CZPreviewContextMenuEntry: Equatable {

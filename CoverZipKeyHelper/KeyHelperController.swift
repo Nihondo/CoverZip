@@ -32,10 +32,15 @@ final class KeyHelperController: NSObject {
     private var trustedCheckTimer: Timer?
     private var isAccessibilityTrusted = false
     private var didUseFinderFallbackForLastCapture = false
+    // Preview Extension から可視通知で受け取った最新の読み方向を保持する。
+    // クロスプロセスの UserDefaults はキャッシュにより値が古くなることがあるため、
+    // 通知経由で受け取った値を優先して利用する。
+    private var cachedIsRightToLeftReading: Bool = true
 
     override init() {
         super.init()
         NSLog("[CoverZipKeyHelper] started")
+        cachedIsRightToLeftReading = readIsRightToLeftReadingFromDefaults()
         setupDistributedNotificationObservers()
         refreshAccessibilityTrust(installIfNeeded: true, promptIfNeeded: isKeyHelperEnabledForRuntime())
         startTrustedCheckTimer()
@@ -168,6 +173,9 @@ final class KeyHelperController: NSObject {
 
         activeSessionID = sessionID
         visibleUntil = Date().addingTimeInterval(visibilityTimeout)
+        if let isRightToLeft = notification.userInfo?[CZPreviewVisibilityUserInfoKeys.isRightToLeftReading] as? Bool {
+            cachedIsRightToLeftReading = isRightToLeft
+        }
         let now = Date().timeIntervalSince1970
         CZUserDefaults.shared.set(sessionID, forKey: CZSettingsKeys.keyHelperActiveSessionID)
         CZUserDefaults.shared.set(now, forKey: CZSettingsKeys.keyHelperLastVisibleAt)
@@ -275,7 +283,7 @@ final class KeyHelperController: NSObject {
 
     private func shouldCaptureKeyEvent(_ event: CGEvent) -> Bool {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        guard Self.commandForKeyCode(keyCode) != nil else {
+        guard commandForKeyCode(keyCode) != nil else {
             return false
         }
 
@@ -363,7 +371,7 @@ final class KeyHelperController: NSObject {
             return Unmanaged.passUnretained(event)
         }
 
-        guard let command = Self.commandForKeyCode(keyCode) else {
+        guard let command = commandForKeyCode(keyCode) else {
             return Unmanaged.passUnretained(event)
         }
 
@@ -377,8 +385,8 @@ final class KeyHelperController: NSObject {
         return nil
     }
 
-    private static func commandForKeyCode(_ keyCode: Int64) -> CZPreviewSessionCommand? {
-        let isRightToLeft = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
+    private func commandForKeyCode(_ keyCode: Int64) -> CZPreviewSessionCommand? {
+        let isRightToLeft = cachedIsRightToLeftReading
 
         switch keyCode {
         case 123:
@@ -392,6 +400,10 @@ final class KeyHelperController: NSObject {
         default:
             return nil
         }
+    }
+
+    private func readIsRightToLeftReadingFromDefaults() -> Bool {
+        CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
     }
 
     private func postCommand(_ command: CZPreviewSessionCommand, commandID: String) {
