@@ -13,6 +13,7 @@ import Foundation
 final class KeyHelperController: NSObject {
     private let visibilityTimeout: TimeInterval = 2.5
     private let finderFallbackTimeout: TimeInterval = 300
+    private let finderFallbackActivationDelay: TimeInterval = 0.5
     private let trustedCheckInterval: TimeInterval = 5.0
     private static let spaceKeyCode: Int64 = 49
     private static let escapeKeyCode: Int64 = 53
@@ -29,6 +30,7 @@ final class KeyHelperController: NSObject {
     private var activeSessionID: String?
     private var visibleUntil: Date?
     private var finderFallbackUntil: Date?
+    private var finderFallbackActivationTimer: Timer?
     private var trustedCheckTimer: Timer?
     private var isAccessibilityTrusted = false
     private var didUseFinderFallbackForLastCapture = false
@@ -45,6 +47,7 @@ final class KeyHelperController: NSObject {
         NSLog("[CoverZipKeyHelper] deinit")
         teardownEventTap()
         DistributedNotificationCenter.default().removeObserver(self)
+        finderFallbackActivationTimer?.invalidate()
         trustedCheckTimer?.invalidate()
     }
 
@@ -83,6 +86,7 @@ final class KeyHelperController: NSObject {
     private func startTrustedCheckTimer() {
         trustedCheckTimer = Timer(timeInterval: trustedCheckInterval, repeats: true) { [weak self] _ in
             self?.refreshAccessibilityTrust(installIfNeeded: true, promptIfNeeded: false)
+            self?.refreshDiagnosticWindowSummary()
         }
         if let trustedCheckTimer {
             RunLoop.main.add(trustedCheckTimer, forMode: .common)
@@ -182,12 +186,14 @@ final class KeyHelperController: NSObject {
             NSLog("[CoverZipKeyHelper] hidden without sessionID")
             CZUserDefaults.shared.set(Date().timeIntervalSince1970, forKey: CZSettingsKeys.keyHelperLastHiddenAt)
             clearActiveSession()
+            refreshDiagnosticWindowSummary()
             return
         }
         if sessionID == activeSessionID {
             NSLog("[CoverZipKeyHelper] hidden session=%@", sessionID)
             CZUserDefaults.shared.set(Date().timeIntervalSince1970, forKey: CZSettingsKeys.keyHelperLastHiddenAt)
             clearActiveSession()
+            refreshDiagnosticWindowSummary()
         }
     }
 
@@ -220,10 +226,27 @@ final class KeyHelperController: NSObject {
         NSLog("[CoverZipKeyHelper] finder fallback began: %@", reason)
     }
 
+    private func scheduleFinderFallbackActivationAfterSpace() {
+        guard isFinderFallbackEnabledForRuntime(), !isFinderFallbackActive() else { return }
+        finderFallbackActivationTimer?.invalidate()
+        finderFallbackActivationTimer = Timer.scheduledTimer(withTimeInterval: finderFallbackActivationDelay, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.finderFallbackActivationTimer = nil
+            if self.isFrontmostQuickLookWindowVisible() {
+                CZUserDefaults.shared.set("QuickLook AX window visible", forKey: CZSettingsKeys.keyHelperLastDecision)
+            } else if self.isFrontmostFinderNonQuickLookWindowVisible() {
+                CZUserDefaults.shared.set("no active visible QuickLook session", forKey: CZSettingsKeys.keyHelperLastDecision)
+            } else {
+                self.beginFinderFallbackSession(reason: "finder fallback began after space")
+            }
+        }
+    }
+
     private func clearFinderFallbackSession(reason: String) {
         guard finderFallbackUntil != nil else { return }
         finderFallbackUntil = nil
         CZUserDefaults.shared.set(reason, forKey: CZSettingsKeys.keyHelperLastDecision)
+        refreshDiagnosticWindowSummary()
         NSLog("[CoverZipKeyHelper] finder fallback cleared: %@", reason)
     }
 
@@ -266,10 +289,8 @@ final class KeyHelperController: NSObject {
         }
         guard frontmostBundleID == "com.apple.finder" else { return }
         guard keyCode == Self.spaceKeyCode else { return }
-        if isFinderFallbackActive() {
-            clearFinderFallbackSession(reason: "finder fallback toggled closed by space")
-        } else {
-            beginFinderFallbackSession(reason: "finder fallback began by space")
+        if !isFrontmostQuickLookWindowVisible(), !isFinderFallbackActive() {
+            scheduleFinderFallbackActivationAfterSpace()
         }
     }
 
@@ -294,19 +315,25 @@ final class KeyHelperController: NSObject {
         }
         if visibleUntil == nil || visibleUntil ?? .distantPast <= Date() {
             clearActiveSession()
-            if frontmostBundleID == "com.apple.finder",
+            if isFrontmostQuickLookWindowVisible() {
+                CZUserDefaults.shared.set("QuickLook AX window visible", forKey: CZSettingsKeys.keyHelperLastDecision)
+            } else if frontmostBundleID == "com.apple.finder",
+                      isFrontmostFinderNonQuickLookWindowVisible() {
+                clearFinderFallbackSession(reason: "finder fallback cleared: AX Finder window is not QuickLook")
+                return rejectKeyEvent(reason: "no active visible QuickLook session", keyCode: keyCode)
+            } else if frontmostBundleID == "com.apple.finder",
                isFinderFallbackEnabledForRuntime(),
                isFinderFallbackActive() {
                 didUseFinderFallbackForLastCapture = true
                 CZUserDefaults.shared.set("diagnostic Finder fallback active", forKey: CZSettingsKeys.keyHelperLastDecision)
                 return true
+            } else {
+                let hasQuickLookWindow = isQuickLookWindowVisibleInWindowList()
+                guard hasQuickLookWindow else {
+                    return rejectKeyEvent(reason: "no active visible QuickLook session", keyCode: keyCode)
+                }
+                CZUserDefaults.shared.set("QuickLook window-list visible", forKey: CZSettingsKeys.keyHelperLastDecision)
             }
-
-            let hasQuickLookWindow = isQuickLookWindowVisibleFallback()
-            guard hasQuickLookWindow else {
-                return rejectKeyEvent(reason: "no active visible QuickLook session", keyCode: keyCode)
-            }
-            CZUserDefaults.shared.set("fallback QuickLook window visible", forKey: CZSettingsKeys.keyHelperLastDecision)
         }
         guard allowedFrontmostBundleIDs.contains(frontmostBundleID) else {
             return rejectKeyEvent(reason: "frontmost not allowed: \(frontmostBundleID)", keyCode: keyCode)
@@ -317,7 +344,48 @@ final class KeyHelperController: NSObject {
         return true
     }
 
-    private func isQuickLookWindowVisibleFallback() -> Bool {
+    private func isFrontmostQuickLookWindowVisible() -> Bool {
+        guard let frontmostSummary = resolveFrontmostWindowSummary() else {
+            refreshDiagnosticWindowSummary()
+            return false
+        }
+        recordFrontmostWindowSummary(frontmostSummary)
+        if isQuickLookWindowCandidate(ownerName: frontmostSummary.applicationName, windowName: frontmostSummary.windowTitle) {
+            NSLog("[CoverZipKeyHelper] QuickLook AX window=%@", frontmostSummary.diagnosticText)
+            return true
+        }
+        return false
+    }
+
+    private func isFrontmostFinderNonQuickLookWindowVisible() -> Bool {
+        guard let frontmostSummary = resolveFrontmostWindowSummary() else { return false }
+        recordFrontmostWindowSummary(frontmostSummary)
+        guard frontmostSummary.bundleIdentifier == "com.apple.finder" else { return false }
+        return !isQuickLookWindowCandidate(
+            ownerName: frontmostSummary.applicationName,
+            windowName: frontmostSummary.windowTitle
+        )
+    }
+
+    private func refreshDiagnosticWindowSummary() {
+        guard let frontmostSummary = resolveFrontmostWindowSummary() else {
+            let frontmostApplication = NSWorkspace.shared.frontmostApplication
+            let bundleIdentifier = frontmostApplication?.bundleIdentifier ?? "unknown"
+            let applicationName = frontmostApplication?.localizedName ?? "unknown"
+            CZUserDefaults.shared.set(
+                "AX:\(bundleIdentifier):\(applicationName):(no focused window)",
+                forKey: CZSettingsKeys.keyHelperLastWindowSummary
+            )
+            return
+        }
+        recordFrontmostWindowSummary(frontmostSummary)
+    }
+
+    private func recordFrontmostWindowSummary(_ summary: FrontmostWindowSummary) {
+        CZUserDefaults.shared.set(summary.diagnosticText, forKey: CZSettingsKeys.keyHelperLastWindowSummary)
+    }
+
+    private func isQuickLookWindowVisibleInWindowList() -> Bool {
         guard let windowInfoList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
             CZUserDefaults.shared.set("window list unavailable", forKey: CZSettingsKeys.keyHelperLastWindowSummary)
             return false
@@ -337,12 +405,9 @@ final class KeyHelperController: NSObject {
 
             guard layer == 0, alpha > 0 else { continue }
             let summary = "\(ownerName):\(windowName)[\(x),\(y),\(width)x\(height),L\(layer)]"
-            if ownerName.localizedCaseInsensitiveContains("QuickLook")
-                || ownerName.localizedCaseInsensitiveContains("Quick Look")
-                || windowName.localizedCaseInsensitiveContains("QuickLook")
-                || windowName.localizedCaseInsensitiveContains("Quick Look") {
+            if isQuickLookWindowCandidate(ownerName: ownerName, windowName: windowName) {
                 CZUserDefaults.shared.set(summary, forKey: CZSettingsKeys.keyHelperLastWindowSummary)
-                NSLog("[CoverZipKeyHelper] QuickLook fallback window=%@", summary)
+                NSLog("[CoverZipKeyHelper] QuickLook window-list window=%@", summary)
                 return true
             }
             if summaries.count < 5, !ownerName.isEmpty || !windowName.isEmpty {
@@ -352,6 +417,99 @@ final class KeyHelperController: NSObject {
 
         CZUserDefaults.shared.set(summaries.joined(separator: " | "), forKey: CZSettingsKeys.keyHelperLastWindowSummary)
         return false
+    }
+
+    private struct FrontmostWindowSummary {
+        let applicationName: String
+        let bundleIdentifier: String
+        let windowTitle: String
+
+        var diagnosticText: String {
+            "AX:\(bundleIdentifier):\(applicationName):\(windowTitle)"
+        }
+    }
+
+    private func resolveFrontmostWindowSummary() -> FrontmostWindowSummary? {
+        guard let frontmostApplication = NSWorkspace.shared.frontmostApplication else { return nil }
+        let applicationElement = AXUIElementCreateApplication(frontmostApplication.processIdentifier)
+        guard let windowElement = resolveFocusedWindowElement(from: applicationElement),
+              let windowTitle = resolveWindowTitle(from: windowElement) else {
+            return nil
+        }
+        let applicationName = frontmostApplication.localizedName ?? ""
+        let bundleIdentifier = frontmostApplication.bundleIdentifier ?? "unknown"
+        return FrontmostWindowSummary(
+            applicationName: applicationName,
+            bundleIdentifier: bundleIdentifier,
+            windowTitle: windowTitle
+        )
+    }
+
+    private func resolveFocusedWindowElement(from applicationElement: AXUIElement) -> AXUIElement? {
+        if let focusedWindowValue = copyAttributeValue(
+            of: applicationElement,
+            attribute: kAXFocusedWindowAttribute as CFString
+        ), CFGetTypeID(focusedWindowValue) == AXUIElementGetTypeID() {
+            return unsafeBitCast(focusedWindowValue, to: AXUIElement.self)
+        }
+
+        guard let focusedElementValue = copyAttributeValue(
+            of: applicationElement,
+            attribute: kAXFocusedUIElementAttribute as CFString
+        ), CFGetTypeID(focusedElementValue) == AXUIElementGetTypeID() else {
+            return nil
+        }
+        let focusedElement = unsafeBitCast(focusedElementValue, to: AXUIElement.self)
+        guard let windowElementValue = copyAttributeValue(
+            of: focusedElement,
+            attribute: kAXWindowAttribute as CFString
+        ), CFGetTypeID(windowElementValue) == AXUIElementGetTypeID() else {
+            return nil
+        }
+        return unsafeBitCast(windowElementValue, to: AXUIElement.self)
+    }
+
+    private func resolveWindowTitle(from windowElement: AXUIElement) -> String? {
+        guard let windowTitleValue = copyAttributeValue(
+            of: windowElement,
+            attribute: kAXTitleAttribute as CFString
+        ), let windowTitle = normalizeTextValue(windowTitleValue) else {
+            return nil
+        }
+        let normalizedWindowTitle = windowTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalizedWindowTitle.isEmpty ? nil : normalizedWindowTitle
+    }
+
+    private func copyAttributeValue(of element: AXUIElement, attribute: CFString) -> CFTypeRef? {
+        var attributeValue: CFTypeRef?
+        let copyStatus = AXUIElementCopyAttributeValue(element, attribute, &attributeValue)
+        guard copyStatus == .success else { return nil }
+        return attributeValue
+    }
+
+    private func normalizeTextValue(_ value: CFTypeRef) -> String? {
+        if let plainText = value as? String {
+            return plainText
+        }
+        if let attributedText = value as? NSAttributedString {
+            return attributedText.string
+        }
+        return nil
+    }
+
+    private func isQuickLookWindowCandidate(ownerName: String, windowName: String) -> Bool {
+        if ownerName.localizedCaseInsensitiveContains("QuickLook")
+            || ownerName.localizedCaseInsensitiveContains("Quick Look")
+            || ownerName.localizedCaseInsensitiveContains("クイックルック")
+            || windowName.localizedCaseInsensitiveContains("QuickLook")
+            || windowName.localizedCaseInsensitiveContains("Quick Look")
+            || windowName.localizedCaseInsensitiveContains("クイックルック") {
+            return true
+        }
+
+        let normalizedTitle = windowName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedTitle.isEmpty else { return false }
+        return normalizedTitle.hasSuffix(".zip") || normalizedTitle.contains(".zip ")
     }
 
     private func handleKeyEvent(_ event: CGEvent) -> Unmanaged<CGEvent>? {
