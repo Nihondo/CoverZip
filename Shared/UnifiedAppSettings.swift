@@ -38,6 +38,8 @@ public final class CZSettings {
             CZSettingsKeys.pageTransitionEnabled: true,
             CZSettingsKeys.restoreWindowFrameEnabled: true,
             CZSettingsKeys.readingHistoryEnabled: true,
+            CZSettingsKeys.isKeyHelperEnabled: false,
+            CZSettingsKeys.keyHelperFinderFallbackEnabled: true,
             CZSettingsKeys.spreadPairOffset: 0,
             CZSettingsKeys.imageDecodeCachePolicy: CZImageDecodeCachePolicy.deferred.rawValue
         ])
@@ -112,6 +114,12 @@ public final class CZSettings {
     public var readingHistoryEnabled: Bool {
         get { defaults.object(forKey: CZSettingsKeys.readingHistoryEnabled) as? Bool ?? true }
         set { defaults.set(newValue, forKey: CZSettingsKeys.readingHistoryEnabled) }
+    }
+
+    // MARK: - Finder QuickLook キー入力ヘルパー
+    public var isKeyHelperEnabled: Bool {
+        get { defaults.object(forKey: CZSettingsKeys.isKeyHelperEnabled) as? Bool ?? false }
+        set { defaults.set(newValue, forKey: CZSettingsKeys.isKeyHelperEnabled) }
     }
 
     // MARK: - 画像デコードキャッシュ方針

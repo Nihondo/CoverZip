@@ -26,5 +26,9 @@
 			<string>CoverZipDocument</string>
 		</dict>
 	</array>
+	<key>SMLoginItemBundleIdentifiers</key>
+	<array>
+		<string>com.dmng.CoverZip.KeyHelper</string>
+	</array>
 </dict>
 </plist>

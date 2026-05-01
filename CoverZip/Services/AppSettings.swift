@@ -58,6 +58,10 @@ final class AppSettingsWriter: ObservableObject {
         }
     }
 
+    @Published var isKeyHelperEnabled: Bool = false {
+        didSet { core.isKeyHelperEnabled = isKeyHelperEnabled }
+    }
+
     private init() {
         // コア設定から現在値を読み込む
         loadSettings()
@@ -76,6 +80,7 @@ final class AppSettingsWriter: ObservableObject {
         imageDecodeCachePolicy = core.imageDecodeCachePolicy
         pageTransitionEnabled = core.pageTransitionEnabled
         defaultViewMode = core.defaultViewMode
+        isKeyHelperEnabled = core.isKeyHelperEnabled
     }
 
     private func notifySettingsChangedIfNeeded() {

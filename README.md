@@ -22,7 +22,7 @@ Select a ZIP file in Finder and press the spacebar to open CoverZip's comic view
 
 Here's what you can do in the viewer. You can also change settings like view mode and reading direction from the right-click context menu.
 
-- **Page navigation** is done by clicking the left or right side of the screen, or by scrolling the mouse wheel up and down. Unfortunately, **arrow keys do not work in the QuickLook viewer** (because Finder captures key events; arrow keys do work in the built-in app viewer described below).
+- **Page navigation** is done by clicking the left or right side of the screen, by scrolling the mouse wheel up and down, or by using arrow keys when the optional Finder QuickLook key helper is enabled. Without the helper, Finder captures arrow keys and changes the selected file.
 - **View mode** can be set to "Single Page" (one page at a time) or "Spread" (two pages side by side). The "Auto" option automatically determines the layout based on image dimensions.
 If the page pairing looks off in spread mode, select "**Adjust Spread Alignment**" from the menu to shift the pairing by one page.
 - **Reading direction** can be switched between right-to-left (for Japanese manga) and left-to-right (for Western books).
@@ -72,6 +72,8 @@ You can also switch view modes and change reading direction from the `View` menu
 
 After enabling, selecting a ZIP file in Finder will show its thumbnail, and pressing the spacebar will launch the comic viewer.
 
+To use arrow keys in the Finder QuickLook viewer, open CoverZip Settings → Viewer and enable **Use arrow keys for pages in Finder Quick Look**. macOS will require the bundled helper app to be registered as a login item and allowed in **System Settings → Privacy & Security → Accessibility**.
+
 ---
 
 ## Configuring Routing Rules
@@ -79,7 +81,7 @@ After enabling, selecting a ZIP file in Finder will show its thumbnail, and pres
 Open Settings with Cmd+, or from the menu **CoverZip → Settings...**.
 
 The Settings window uses a macOS sidebar layout with these tabs:
-- `Viewer`: Reading direction, view mode, thumbnail visibility, page transition, and decode cache policy
+- `Viewer`: Reading direction, view mode, thumbnail visibility, page transition, Finder QuickLook arrow-key helper, and decode cache policy
 - `Slideshow`: Page auto-advance interval
 - `Window`: Restore preview window size/position and reset saved frame
 - `File Routing`: Rule-based routing and ZIP default-app association
@@ -146,5 +148,5 @@ Password-protected ZIP files, Zip64 format, and compression methods other than D
 ---
 
 ## Known Issues
-- Arrow keys do not work in the QuickLook viewer. Finder captures key input, causing the selected file to change. Arrow keys work correctly in the built-in app viewer.
+- Arrow keys in the Finder QuickLook viewer require the optional key helper and Accessibility permission. If the helper is disabled or permission is not granted, Finder captures key input and the selected file changes.
 - If you select a different ZIP file in Finder while the QuickLook viewer is still open, mouse click page navigation will likely stop working. Pressing the spacebar to reopen the window will restore click navigation. Mouse wheel scrolling continues to work normally.

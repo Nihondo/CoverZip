@@ -41,6 +41,26 @@ public enum CZSettingsKeys {
     public static let thumbnailStripHeight = "thumbnailStripHeight"
     // ファイルルーティング設定ペイロード（JSON エンコードされた KeywordSettings）
     public static let routingSettingsData = "routingSettingsData"
+    // Finder QuickLook 用キー入力ヘルパー
+    public static let isKeyHelperEnabled = "isKeyHelperEnabled"
+    public static let keyHelperLastAccessibilityTrusted = "keyHelperLastAccessibilityTrusted"
+    public static let keyHelperLastError = "keyHelperLastError"
+    public static let keyHelperFinderFallbackEnabled = "keyHelperFinderFallbackEnabled"
+    public static let keyHelperIsEventTapInstalled = "keyHelperIsEventTapInstalled"
+    public static let keyHelperActiveSessionID = "keyHelperActiveSessionID"
+    public static let keyHelperVisibleUntil = "keyHelperVisibleUntil"
+    public static let keyHelperLastVisibleAt = "keyHelperLastVisibleAt"
+    public static let keyHelperLastHiddenAt = "keyHelperLastHiddenAt"
+    public static let keyHelperLastKeyAt = "keyHelperLastKeyAt"
+    public static let keyHelperLastKeyCode = "keyHelperLastKeyCode"
+    public static let keyHelperLastFrontmostBundleID = "keyHelperLastFrontmostBundleID"
+    public static let keyHelperLastDecision = "keyHelperLastDecision"
+    public static let keyHelperLastWindowSummary = "keyHelperLastWindowSummary"
+    public static let keyHelperLastCommandAt = "keyHelperLastCommandAt"
+    public static let keyHelperLastCommand = "keyHelperLastCommand"
+    public static let previewLastVisibilityPostAt = "previewLastVisibilityPostAt"
+    public static let previewLastVisibilityPostName = "previewLastVisibilityPostName"
+    public static let previewLastVisibilitySessionID = "previewLastVisibilitySessionID"
 }
 
 public enum CZAppGroup {
@@ -67,8 +87,15 @@ public enum CZPreviewSessionCommand: String {
 
 public enum CZPreviewSessionCommandUserInfoKeys {
     public static let command = "command"
+    public static let commandID = "commandID"
     public static let boolValue = "boolValue"
     public static let intValue = "intValue"
+}
+
+/// Preview Extension の可視状態通知に載せる UserInfo キー。
+public enum CZPreviewVisibilityUserInfoKeys {
+    public static let sessionID = "sessionID"
+    public static let timestamp = "timestamp"
 }
 
 public enum CZPreviewContextMenuEntry: Equatable {
@@ -220,4 +247,12 @@ public enum CZDistributedNotifications {
     public static let sliderOperationCompleted = Notification.Name("com.dmng.CoverZip.sliderOperationCompleted")
     // App 側内蔵ビューアのメニュー操作を Preview Extension セッション状態へ反映するときに送信
     public static let previewSessionCommand = Notification.Name("com.dmng.CoverZip.previewSessionCommand")
+    // Preview Extension がセッションコマンドを処理したことをヘルパーへ伝える
+    public static let previewSessionCommandHandled = Notification.Name("com.dmng.CoverZip.previewSessionCommandHandled")
+    // Finder QuickLook 内で CoverZip Preview Extension が表示中であることをヘルパーへ伝える
+    public static let previewExtensionVisible = Notification.Name("com.dmng.CoverZip.previewExtensionVisible")
+    // Finder QuickLook 内の CoverZip Preview Extension が非表示になったことをヘルパーへ伝える
+    public static let previewExtensionHidden = Notification.Name("com.dmng.CoverZip.previewExtensionHidden")
+    // 起動中のキー入力ヘルパーへ終了を依頼する
+    public static let keyHelperQuitRequested = Notification.Name("com.dmng.CoverZip.keyHelperQuitRequested")
 }

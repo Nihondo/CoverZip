@@ -39,6 +39,9 @@
 		42BCD0C92E5E18A5007F2065 /* ZipCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BC2E5E18A5007F2065 /* ZipCore.swift */; };
 		42CD41A62E5AEA6400BA89CA /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 426EFEF22E2670FC00AD23E5 /* Quartz.framework */; };
 		42CD41B32E5AEA6400BA89CA /* coverZipViewer.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 42CD41A52E5AEA6400BA89CA /* coverZipViewer.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		42D710012FAD000100000001 /* CoverZipKeyHelper.app in Embed Login Items */ = {isa = PBXBuildFile; fileRef = 42D710082FAD000100000001 /* CoverZipKeyHelper.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		42D710022FAD000100000001 /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BB2E5E18A5007F2065 /* SettingsKeys.swift */; };
+		42D710032FAD000100000001 /* UserDefaultsHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9ED2EBC1D2D003D0E96 /* UserDefaultsHelper.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,6 +59,13 @@
 			remoteGlobalIDString = 42CD41A42E5AEA6400BA89CA;
 			remoteInfo = coverZipViewer;
 		};
+		42D710042FAD000100000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 426EFEA22E26708A00AD23E5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 42D710092FAD000100000001;
+			remoteInfo = CoverZipKeyHelper;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -69,6 +79,17 @@
 				426EFEFB2E2670FC00AD23E5 /* coverZipExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		42D710052FAD000100000001 /* Embed Login Items */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Library/LoginItems;
+			dstSubfolderSpec = 1;
+			files = (
+				42D710012FAD000100000001 /* CoverZipKeyHelper.app in Embed Login Items */,
+			);
+			name = "Embed Login Items";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -89,6 +110,7 @@
 		42BCD0BB2E5E18A5007F2065 /* SettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKeys.swift; sourceTree = "<group>"; };
 		42BCD0BC2E5E18A5007F2065 /* ZipCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipCore.swift; sourceTree = "<group>"; };
 		42CD41A52E5AEA6400BA89CA /* coverZipViewer.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = coverZipViewer.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		42D710082FAD000100000001 /* CoverZipKeyHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CoverZipKeyHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -112,6 +134,13 @@
 				Info.plist,
 			);
 			target = 42CD41A42E5AEA6400BA89CA /* coverZipViewer */;
+		};
+		42D710062FAD000100000001 /* Exceptions for "CoverZipKeyHelper" folder in "CoverZipKeyHelper" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 42D710092FAD000100000001 /* CoverZipKeyHelper */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -138,6 +167,14 @@
 				42CD41B72E5AEA6400BA89CA /* Exceptions for "coverZipViewer" folder in "coverZipViewer" target */,
 			);
 			path = coverZipViewer;
+			sourceTree = "<group>";
+		};
+		42D710072FAD000100000001 /* CoverZipKeyHelper */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				42D710062FAD000100000001 /* Exceptions for "CoverZipKeyHelper" folder in "CoverZipKeyHelper" target */,
+			);
+			path = CoverZipKeyHelper;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -167,6 +204,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		42D7100A2FAD000100000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -178,6 +222,7 @@
 				426EFEAC2E26708A00AD23E5 /* CoverZip */,
 				426EFEF42E2670FC00AD23E5 /* coverZipExtension */,
 				42CD41A72E5AEA6400BA89CA /* coverZipViewer */,
+				42D710072FAD000100000001 /* CoverZipKeyHelper */,
 				426EFEEF2E2670FC00AD23E5 /* Frameworks */,
 				426EFEAB2E26708A00AD23E5 /* Products */,
 			);
@@ -189,6 +234,7 @@
 				426EFEAA2E26708A00AD23E5 /* CoverZip.app */,
 				426EFEEE2E2670FC00AD23E5 /* coverZipExtension.appex */,
 				42CD41A52E5AEA6400BA89CA /* coverZipViewer.appex */,
+				42D710082FAD000100000001 /* CoverZipKeyHelper.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -237,12 +283,14 @@
 				426EFEA72E26708A00AD23E5 /* Frameworks */,
 				426EFEA82E26708A00AD23E5 /* Resources */,
 				426EFEFC2E2670FC00AD23E5 /* Embed Foundation Extensions */,
+				42D710052FAD000100000001 /* Embed Login Items */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				426EFEFA2E2670FC00AD23E5 /* PBXTargetDependency */,
 				42CD41B22E5AEA6400BA89CA /* PBXTargetDependency */,
+				42D7100F2FAD000100000001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				426EFEAC2E26708A00AD23E5 /* CoverZip */,
@@ -298,6 +346,28 @@
 			productReference = 42CD41A52E5AEA6400BA89CA /* coverZipViewer.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		42D710092FAD000100000001 /* CoverZipKeyHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 42D710102FAD000100000001 /* Build configuration list for PBXNativeTarget "CoverZipKeyHelper" */;
+			buildPhases = (
+				42D7100B2FAD000100000001 /* Sources */,
+				42D7100A2FAD000100000001 /* Frameworks */,
+				42D7100C2FAD000100000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				42D710072FAD000100000001 /* CoverZipKeyHelper */,
+			);
+			name = CoverZipKeyHelper;
+			packageProductDependencies = (
+			);
+			productName = CoverZipKeyHelper;
+			productReference = 42D710082FAD000100000001 /* CoverZipKeyHelper.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -306,7 +376,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1640;
-				LastUpgradeCheck = 2630;
+				LastUpgradeCheck = 2640;
 				TargetAttributes = {
 					426EFEA92E26708A00AD23E5 = {
 						CreatedOnToolsVersion = 16.4;
@@ -315,6 +385,9 @@
 						CreatedOnToolsVersion = 16.4;
 					};
 					42CD41A42E5AEA6400BA89CA = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					42D710092FAD000100000001 = {
 						CreatedOnToolsVersion = 16.4;
 					};
 				};
@@ -337,6 +410,7 @@
 				426EFEA92E26708A00AD23E5 /* CoverZip */,
 				426EFEED2E2670FC00AD23E5 /* coverZipExtension */,
 				42CD41A42E5AEA6400BA89CA /* coverZipViewer */,
+				42D710092FAD000100000001 /* CoverZipKeyHelper */,
 			);
 		};
 /* End PBXProject section */
@@ -357,6 +431,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		42CD41A32E5AEA6400BA89CA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		42D7100C2FAD000100000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -414,6 +495,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		42D7100B2FAD000100000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				42D710022FAD000100000001 /* SettingsKeys.swift in Sources */,
+				42D710032FAD000100000001 /* UserDefaultsHelper.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -426,6 +516,11 @@
 			isa = PBXTargetDependency;
 			target = 42CD41A42E5AEA6400BA89CA /* coverZipViewer */;
 			targetProxy = 42CD41B12E5AEA6400BA89CA /* PBXContainerItemProxy */;
+		};
+		42D7100F2FAD000100000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 42D710092FAD000100000001 /* CoverZipKeyHelper */;
+			targetProxy = 42D710042FAD000100000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -440,7 +535,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -481,7 +576,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -518,6 +613,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -587,6 +683,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -664,7 +761,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = "$(MARKETING_VERSION)";
+				MARKETING_VERSION = 1.0.11;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -700,7 +797,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = "$(MARKETING_VERSION)";
+				MARKETING_VERSION = 1.0.11;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -736,7 +833,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = "$(MARKETING_VERSION)";
+				MARKETING_VERSION = 1.0.11;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -770,7 +867,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = "$(MARKETING_VERSION)";
+				MARKETING_VERSION = 1.0.11;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -778,6 +875,74 @@
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
+				VERSIONING_SYSTEM = "";
+			};
+			name = Release;
+		};
+		42D7100D2FAD000100000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 427734762F5C5F7E008CAEBA /* DevelopmentTeam.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CoverZipKeyHelper/CoverZipKeyHelper.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CoverZipKeyHelper/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = CoverZipKeyHelper;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0.11;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.KeyHelper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				VALID_ARCHS = "arm64 x86_64";
+				VERSIONING_SYSTEM = "";
+			};
+			name = Debug;
+		};
+		42D7100E2FAD000100000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 427734762F5C5F7E008CAEBA /* DevelopmentTeam.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CoverZipKeyHelper/CoverZipKeyHelper.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CoverZipKeyHelper/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = CoverZipKeyHelper;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0.11;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.KeyHelper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				VALID_ARCHS = "arm64 x86_64";
 				VERSIONING_SYSTEM = "";
 			};
 			name = Release;
@@ -817,6 +982,15 @@
 			buildConfigurations = (
 				42CD41B52E5AEA6400BA89CA /* Debug */,
 				42CD41B62E5AEA6400BA89CA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		42D710102FAD000100000001 /* Build configuration list for PBXNativeTarget "CoverZipKeyHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				42D7100D2FAD000100000001 /* Debug */,
+				42D7100E2FAD000100000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

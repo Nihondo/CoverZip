@@ -9,6 +9,10 @@ import SwiftUI
 
 struct PreviewSettingsView: View {
     @ObservedObject private var settings = AppSettingsWriter.shared
+    @State private var keyHelperStatusText = ""
+    @State private var isKeyHelperAccessibilityTrusted = false
+    @State private var keyHelperErrorText: String?
+    @State private var keyHelperDiagnosticLines: [String] = []
 
     var body: some View {
         Form {
@@ -61,6 +65,78 @@ struct PreviewSettingsView: View {
             }
 
             Section {
+                Toggle(CZLocalized.string(
+                    "settings.key_helper.enabled",
+                    defaultValue: "Use arrow keys for pages in Finder Quick Look"
+                ), isOn: Binding(
+                    get: { settings.isKeyHelperEnabled },
+                    set: { setKeyHelperEnabled($0) }
+                ))
+
+                LabeledContent(CZLocalized.string("settings.key_helper.status", defaultValue: "Status")) {
+                    Text(keyHelperStatusText)
+                        .foregroundStyle(.secondary)
+                }
+
+                if settings.isKeyHelperEnabled && !isKeyHelperAccessibilityTrusted {
+                    Text(CZLocalized.string(
+                        "settings.key_helper.accessibility_required",
+                        defaultValue: "Allow CoverZipKeyHelper in Accessibility before arrow keys can be captured."
+                    ))
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+                }
+
+                if let keyHelperErrorText {
+                    Text(keyHelperErrorText)
+                        .foregroundStyle(.red)
+                        .font(.callout)
+                }
+
+                HStack {
+                    Button(CZLocalized.string(
+                        "settings.key_helper.refresh_status",
+                        defaultValue: "Refresh Status"
+                    )) {
+                        refreshKeyHelperStatus()
+                    }
+                    Button(CZLocalized.string(
+                        "settings.key_helper.open_accessibility",
+                        defaultValue: "Open Accessibility Settings"
+                    )) {
+                        KeyHelperManager.shared.openAccessibilitySettings()
+                    }
+                    Button(CZLocalized.string(
+                        "settings.key_helper.open_login_items",
+                        defaultValue: "Open Login Items Settings"
+                    )) {
+                        KeyHelperManager.shared.openLoginItemsSettings()
+                    }
+                }
+
+                DisclosureGroup(CZLocalized.string(
+                    "settings.key_helper.diagnostics",
+                    defaultValue: "Diagnostics"
+                )) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(keyHelperDiagnosticLines, id: \.self) { line in
+                            Text(line)
+                                .font(.system(.caption, design: .monospaced))
+                                .textSelection(.enabled)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } header: {
+                Label(CZLocalized.string("settings.key_helper.section", defaultValue: "Finder Quick Look Keys"), systemImage: "keyboard")
+            } footer: {
+                Text(CZLocalized.string(
+                    "settings.key_helper.footer",
+                    defaultValue: "The helper must be registered as a login item and allowed in Accessibility. It only captures arrow keys while CoverZip Preview is visible in Finder Quick Look."
+                ))
+            }
+
+            Section {
                 LabeledContent(CZLocalized.string("settings.decode_cache.policy_label", defaultValue: "Policy:")) {
                     Picker("", selection: Binding(
                         get: { settings.imageDecodeCachePolicy },
@@ -84,6 +160,32 @@ struct PreviewSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onAppear {
+            refreshKeyHelperStatus()
+        }
+    }
+
+    private func setKeyHelperEnabled(_ isEnabled: Bool) {
+        keyHelperErrorText = nil
+        do {
+            if isEnabled {
+                try KeyHelperManager.shared.enable()
+                settings.isKeyHelperEnabled = true
+            } else {
+                try KeyHelperManager.shared.disable()
+                settings.isKeyHelperEnabled = false
+            }
+        } catch {
+            settings.isKeyHelperEnabled = false
+            keyHelperErrorText = error.localizedDescription
+        }
+        refreshKeyHelperStatus()
+    }
+
+    private func refreshKeyHelperStatus() {
+        keyHelperStatusText = KeyHelperManager.shared.statusText
+        isKeyHelperAccessibilityTrusted = KeyHelperManager.shared.isHelperAccessibilityTrusted
+        keyHelperDiagnosticLines = KeyHelperManager.shared.diagnosticLines
     }
 }
 

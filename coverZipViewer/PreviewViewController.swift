@@ -64,6 +64,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var isThumbnailStripVisible: Bool = true
     private var lastVisibleThumbnailStripHeight: CGFloat = 88
     private var cursorAreaOverlay: PreviewCursorAreaView?
+    private let previewVisibilitySessionID = UUID().uuidString
+    private var previewVisibilityHeartbeatTimer: Timer?
 
     // マウスホイールスクロール管理
     private var scrollAccumulator: CGFloat = 0.0
@@ -132,6 +134,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         super.viewWillAppear()
         NSLog("[DEBUG] viewWillAppear called, view.window: %@", view.window?.description ?? "nil")
         setupDistributedNotificationObserversIfNeeded()
+        postPreviewVisibilityNotification(CZDistributedNotifications.previewExtensionVisible)
+        startPreviewVisibilityHeartbeat()
         
         // マウスイベントモニターを遅延設定
         setupMouseMonitorsWithDelay()
@@ -139,6 +143,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     override func viewWillDisappear() {
         super.viewWillDisappear()
+        stopPreviewVisibilityHeartbeat()
+        postPreviewVisibilityNotification(CZDistributedNotifications.previewExtensionHidden)
         
         // 読書履歴を保存
         saveReadingPositionToHistory()
@@ -155,6 +161,41 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         stopSlideshow()
         // ローディングインジケータ停止
         hideLoadingIndicator()
+    }
+
+    deinit {
+        stopPreviewVisibilityHeartbeat()
+        postPreviewVisibilityNotification(CZDistributedNotifications.previewExtensionHidden)
+    }
+
+    private func startPreviewVisibilityHeartbeat() {
+        stopPreviewVisibilityHeartbeat()
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.postPreviewVisibilityNotification(CZDistributedNotifications.previewExtensionVisible)
+        }
+        previewVisibilityHeartbeatTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopPreviewVisibilityHeartbeat() {
+        previewVisibilityHeartbeatTimer?.invalidate()
+        previewVisibilityHeartbeatTimer = nil
+    }
+
+    private func postPreviewVisibilityNotification(_ name: Notification.Name) {
+        let userInfo: [String: Any] = [
+            CZPreviewVisibilityUserInfoKeys.sessionID: previewVisibilitySessionID,
+            CZPreviewVisibilityUserInfoKeys.timestamp: Date().timeIntervalSince1970
+        ]
+        CZUserDefaults.shared.set(Date().timeIntervalSince1970, forKey: CZSettingsKeys.previewLastVisibilityPostAt)
+        CZUserDefaults.shared.set(name.rawValue, forKey: CZSettingsKeys.previewLastVisibilityPostName)
+        CZUserDefaults.shared.set(previewVisibilitySessionID, forKey: CZSettingsKeys.previewLastVisibilitySessionID)
+        DistributedNotificationCenter.default().postNotificationName(
+            name,
+            object: nil,
+            userInfo: userInfo,
+            deliverImmediately: true
+        )
     }
 
     // MARK: - マウスモニター管理
@@ -479,6 +520,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     override func viewDidAppear() {
         super.viewDidAppear()
+        postPreviewVisibilityNotification(CZDistributedNotifications.previewExtensionVisible)
+        startPreviewVisibilityHeartbeat()
         // Quick LookではFirst Responderを取得しない
         // レイアウト完了後のサイズで初回画像を再フィット
         // 設定の変更を反映
@@ -1144,6 +1187,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
               let command = CZPreviewSessionCommand(rawValue: commandRaw) else {
             return
         }
+        postPreviewSessionCommandHandled(commandID: userInfo[CZPreviewSessionCommandUserInfoKeys.commandID] as? String)
 
         switch command {
         case .setRightToLeftReading:
@@ -1183,6 +1227,16 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             let clamped = max(1, min(target, imageManager.getImageCount()))
             moveToPageFromThumbnail(clamped)
         }
+    }
+
+    private func postPreviewSessionCommandHandled(commandID: String?) {
+        guard let commandID else { return }
+        DistributedNotificationCenter.default().postNotificationName(
+            CZDistributedNotifications.previewSessionCommandHandled,
+            object: commandID,
+            userInfo: [CZPreviewSessionCommandUserInfoKeys.commandID: commandID],
+            deliverImmediately: true
+        )
     }
     
     private func startSlideshow() {

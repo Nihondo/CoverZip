@@ -20,6 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // ファイル処理の準備
         NSApplication.shared.servicesProvider = self
+        KeyHelperManager.shared.repairRegistrationIfNeeded()
     }
     
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
