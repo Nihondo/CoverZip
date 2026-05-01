@@ -12,11 +12,7 @@ import Foundation
 /// Finder QuickLook 上の CoverZip Preview Extension に対してキー操作を中継するコントローラ。
 final class KeyHelperController: NSObject {
     private let visibilityTimeout: TimeInterval = 2.5
-    private let finderFallbackTimeout: TimeInterval = 300
     private let trustedCheckInterval: TimeInterval = 5.0
-    private static let spaceKeyCode: Int64 = 49
-    private static let escapeKeyCode: Int64 = 53
-    private static let wKeyCode: Int64 = 13
     private let allowedFrontmostBundleIDs: Set<String> = [
         "com.apple.finder",
         "com.apple.QuickLookUIService",
@@ -28,10 +24,8 @@ final class KeyHelperController: NSObject {
     private var runLoopSource: CFRunLoopSource?
     private var activeSessionID: String?
     private var visibleUntil: Date?
-    private var finderFallbackUntil: Date?
     private var trustedCheckTimer: Timer?
     private var isAccessibilityTrusted = false
-    private var didUseFinderFallbackForLastCapture = false
     // Preview Extension から可視通知で受け取った最新の読み方向を保持する。
     // クロスプロセスの UserDefaults はキャッシュにより値が古くなることがあるため、
     // 通知経由で受け取った値を優先して利用する。
@@ -208,9 +202,6 @@ final class KeyHelperController: NSObject {
         let commandID = (notification.userInfo?[CZPreviewSessionCommandUserInfoKeys.commandID] as? String)
             ?? (notification.object as? String)
         guard let commandID else { return }
-        if finderFallbackUntil != nil {
-            finderFallbackUntil = Date().addingTimeInterval(finderFallbackTimeout)
-        }
         CZUserDefaults.shared.set("command handled \(commandID)", forKey: CZSettingsKeys.keyHelperLastDecision)
     }
 
@@ -219,20 +210,6 @@ final class KeyHelperController: NSObject {
         visibleUntil = nil
         CZUserDefaults.shared.removeObject(forKey: CZSettingsKeys.keyHelperActiveSessionID)
         CZUserDefaults.shared.removeObject(forKey: CZSettingsKeys.keyHelperVisibleUntil)
-    }
-
-    private func beginFinderFallbackSession(reason: String) {
-        guard isFinderFallbackEnabledForRuntime() else { return }
-        finderFallbackUntil = Date().addingTimeInterval(finderFallbackTimeout)
-        CZUserDefaults.shared.set(reason, forKey: CZSettingsKeys.keyHelperLastDecision)
-        NSLog("[CoverZipKeyHelper] finder fallback began: %@", reason)
-    }
-
-    private func clearFinderFallbackSession(reason: String) {
-        guard finderFallbackUntil != nil else { return }
-        finderFallbackUntil = nil
-        CZUserDefaults.shared.set(reason, forKey: CZSettingsKeys.keyHelperLastDecision)
-        NSLog("[CoverZipKeyHelper] finder fallback cleared: %@", reason)
     }
 
     private func rejectKeyEvent(reason: String, keyCode: Int64? = nil) -> Bool {
@@ -249,45 +226,12 @@ final class KeyHelperController: NSObject {
         CZUserDefaults.shared.object(forKey: CZSettingsKeys.isKeyHelperEnabled) as? Bool ?? true
     }
 
-    private func isFinderFallbackEnabledForRuntime() -> Bool {
-        CZUserDefaults.shared.object(forKey: CZSettingsKeys.keyHelperFinderFallbackEnabled) as? Bool ?? true
-    }
-
-    private func isFinderFallbackActive(now: Date = Date()) -> Bool {
-        guard let finderFallbackUntil else { return false }
-        if finderFallbackUntil > now {
-            return true
-        }
-        clearFinderFallbackSession(reason: "finder fallback expired")
-        return false
-    }
-
-    private func updateFinderFallbackSessionForControlKey(_ keyCode: Int64, event: CGEvent, frontmostBundleID: String) {
-        if keyCode == Self.escapeKeyCode {
-            clearFinderFallbackSession(reason: "finder fallback closed by escape")
-            return
-        }
-        let flags = CGEventFlags(rawValue: UInt64(event.flags.rawValue))
-        if keyCode == Self.wKeyCode, flags.contains(.maskCommand) {
-            clearFinderFallbackSession(reason: "finder fallback closed by command-w")
-            return
-        }
-        guard frontmostBundleID == "com.apple.finder" else { return }
-        guard keyCode == Self.spaceKeyCode else { return }
-        if isFinderFallbackActive() {
-            clearFinderFallbackSession(reason: "finder fallback toggled closed by space")
-        } else {
-            beginFinderFallbackSession(reason: "finder fallback began by space")
-        }
-    }
-
     private func shouldCaptureKeyEvent(_ event: CGEvent) -> Bool {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         guard commandForKeyCode(keyCode) != nil else {
             return false
         }
 
-        didUseFinderFallbackForLastCapture = false
         let now = Date().timeIntervalSince1970
         let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"
         CZUserDefaults.shared.set(now, forKey: CZSettingsKeys.keyHelperLastKeyAt)
@@ -302,19 +246,7 @@ final class KeyHelperController: NSObject {
         }
         if visibleUntil == nil || visibleUntil ?? .distantPast <= Date() {
             clearActiveSession()
-            if frontmostBundleID == "com.apple.finder",
-               isFinderFallbackEnabledForRuntime(),
-               isFinderFallbackActive() {
-                didUseFinderFallbackForLastCapture = true
-                CZUserDefaults.shared.set("diagnostic Finder fallback active", forKey: CZSettingsKeys.keyHelperLastDecision)
-                return true
-            }
-
-            let hasQuickLookWindow = isQuickLookWindowVisibleFallback()
-            guard hasQuickLookWindow else {
-                return rejectKeyEvent(reason: "no active visible QuickLook session", keyCode: keyCode)
-            }
-            CZUserDefaults.shared.set("fallback QuickLook window visible", forKey: CZSettingsKeys.keyHelperLastDecision)
+            return rejectKeyEvent(reason: "no active visible QuickLook session", keyCode: keyCode)
         }
         guard allowedFrontmostBundleIDs.contains(frontmostBundleID) else {
             return rejectKeyEvent(reason: "frontmost not allowed: \(frontmostBundleID)", keyCode: keyCode)
@@ -325,47 +257,8 @@ final class KeyHelperController: NSObject {
         return true
     }
 
-    private func isQuickLookWindowVisibleFallback() -> Bool {
-        guard let windowInfoList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
-            CZUserDefaults.shared.set("window list unavailable", forKey: CZSettingsKeys.keyHelperLastWindowSummary)
-            return false
-        }
-
-        var summaries: [String] = []
-        for windowInfo in windowInfoList {
-            let ownerName = windowInfo[kCGWindowOwnerName as String] as? String ?? ""
-            let windowName = windowInfo[kCGWindowName as String] as? String ?? ""
-            let layer = windowInfo[kCGWindowLayer as String] as? Int ?? 0
-            let alpha = windowInfo[kCGWindowAlpha as String] as? Double ?? 1.0
-            let bounds = windowInfo[kCGWindowBounds as String] as? [String: Any] ?? [:]
-            let x = bounds["X"] as? Int ?? 0
-            let y = bounds["Y"] as? Int ?? 0
-            let width = bounds["Width"] as? Int ?? 0
-            let height = bounds["Height"] as? Int ?? 0
-
-            guard layer == 0, alpha > 0 else { continue }
-            let summary = "\(ownerName):\(windowName)[\(x),\(y),\(width)x\(height),L\(layer)]"
-            if ownerName.localizedCaseInsensitiveContains("QuickLook")
-                || ownerName.localizedCaseInsensitiveContains("Quick Look")
-                || windowName.localizedCaseInsensitiveContains("QuickLook")
-                || windowName.localizedCaseInsensitiveContains("Quick Look") {
-                CZUserDefaults.shared.set(summary, forKey: CZSettingsKeys.keyHelperLastWindowSummary)
-                NSLog("[CoverZipKeyHelper] QuickLook fallback window=%@", summary)
-                return true
-            }
-            if summaries.count < 5, !ownerName.isEmpty || !windowName.isEmpty {
-                summaries.append(summary)
-            }
-        }
-
-        CZUserDefaults.shared.set(summaries.joined(separator: " | "), forKey: CZSettingsKeys.keyHelperLastWindowSummary)
-        return false
-    }
-
     private func handleKeyEvent(_ event: CGEvent) -> Unmanaged<CGEvent>? {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"
-        updateFinderFallbackSessionForControlKey(keyCode, event: event, frontmostBundleID: frontmostBundleID)
 
         guard shouldCaptureKeyEvent(event) else {
             return Unmanaged.passUnretained(event)
@@ -376,9 +269,6 @@ final class KeyHelperController: NSObject {
         }
 
         let commandID = UUID().uuidString
-        if didUseFinderFallbackForLastCapture {
-            finderFallbackUntil = Date().addingTimeInterval(finderFallbackTimeout)
-        }
         DispatchQueue.main.async { [weak self] in
             self?.postCommand(command, commandID: commandID)
         }

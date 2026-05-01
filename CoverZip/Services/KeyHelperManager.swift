@@ -56,7 +56,6 @@ final class KeyHelperManager {
             "Last key: \(lastKeyText(defaults: defaults))",
             "Last frontmost: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastFrontmostBundleID) ?? "-")",
             "Last decision: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastDecision) ?? "-")",
-            "Window summary: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastWindowSummary) ?? "-")",
             "Last command: \(lastCommandText(defaults: defaults))",
             "Preview posted: \(lastPreviewPostText(defaults: defaults))",
             "Last error: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastError) ?? "-")"
