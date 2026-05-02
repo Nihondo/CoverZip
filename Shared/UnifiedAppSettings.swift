@@ -39,7 +39,6 @@ public final class CZSettings {
             CZSettingsKeys.restoreWindowFrameEnabled: true,
             CZSettingsKeys.readingHistoryEnabled: true,
             CZSettingsKeys.isKeyHelperEnabled: false,
-            CZSettingsKeys.keyHelperFinderFallbackEnabled: true,
             CZSettingsKeys.spreadPairOffset: 0,
             CZSettingsKeys.imageDecodeCachePolicy: CZImageDecodeCachePolicy.deferred.rawValue
         ])
