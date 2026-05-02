@@ -183,6 +183,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
 
     private func postPreviewVisibilityNotification(_ name: Notification.Name) {
+        storePreviewReadingDirectionForKeyHelper(isRightToLeft: isRightToLeftReading)
         let userInfo: [String: Any] = [
             CZPreviewVisibilityUserInfoKeys.sessionID: previewVisibilitySessionID,
             CZPreviewVisibilityUserInfoKeys.timestamp: Date().timeIntervalSince1970
@@ -196,6 +197,13 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             userInfo: userInfo,
             deliverImmediately: true
         )
+    }
+
+    private func storePreviewReadingDirectionForKeyHelper(isRightToLeft: Bool) {
+        CZUserDefaults.shared.set(isRightToLeft, forKey: CZSettingsKeys.previewCurrentReadingDirection)
+        CZUserDefaults.shared.set(previewVisibilitySessionID, forKey: CZSettingsKeys.previewCurrentReadingDirectionSessionID)
+        CZUserDefaults.shared.set(Date().timeIntervalSince1970, forKey: CZSettingsKeys.previewCurrentReadingDirectionUpdatedAt)
+        CZUserDefaults.shared.synchronize()
     }
 
     // MARK: - マウスモニター管理
@@ -274,7 +282,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             // より寛容な window チェック
             if self.view.window != nil || self.view.superview != nil {
                 if let p = self.convertEventPointToViewRobust(event), self.view.bounds.contains(p) {
-                    let menu = self.makeContextMenu()
+                    let menu = self.makeContextMenu(includeDebugInfo: event.modifierFlags.contains(.shift))
                     menu.popUp(positioning: nil, at: p, in: self.view)
                     NSLog("[DEBUG] Context menu displayed")
                     return nil
@@ -947,8 +955,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         view.menu = makeContextMenu()
     }
 
-    private func makeContextMenu() -> NSMenu {
-        CZPreviewContextMenuFactory.makeMenu(
+    private func makeContextMenu(includeDebugInfo: Bool = false) -> NSMenu {
+        let menu = CZPreviewContextMenuFactory.makeMenu(
             target: self,
             selectorForCommand: { [weak self] command in
                 self?.selector(for: command)
@@ -957,7 +965,107 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 self?.menuState(for: command) ?? .off
             }
         )
+        if includeDebugInfo {
+            appendDebugMenuItems(to: menu)
+        }
+        return menu
     }
+
+    private func appendDebugMenuItems(to menu: NSMenu) {
+        menu.addItem(.separator())
+        addDisabledMenuItem("Debug Information", to: menu)
+        for line in makeDebugInformationLines() {
+            addDisabledMenuItem(line, to: menu)
+        }
+    }
+
+    private func addDisabledMenuItem(_ title: String, to menu: NSMenu) {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        menu.addItem(item)
+    }
+
+    private func makeDebugInformationLines() -> [String] {
+        let defaults = CZUserDefaults.shared
+        let bundle = Bundle(for: PreviewViewController.self)
+        let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-"
+        let build = bundle.object(forInfoDictionaryKey: kCFBundleVersionKey as String) as? String ?? "-"
+        let bundleID = bundle.bundleIdentifier ?? "-"
+        let previewSessionID = abbreviateIdentifier(previewVisibilitySessionID)
+        let storedPreviewSessionID = abbreviateIdentifier(defaults.string(forKey: CZSettingsKeys.previewCurrentReadingDirectionSessionID) ?? "-")
+        let activeSessionID = abbreviateIdentifier(defaults.string(forKey: CZSettingsKeys.keyHelperActiveSessionID) ?? "-")
+
+        return [
+            "Viewer: \(version) (\(build))",
+            "Bundle: \(bundleID)",
+            "Host: \(ProcessInfo.processInfo.processName)",
+            "File: \(currentZipFilename.isEmpty ? "-" : currentZipFilename)",
+            "Page: \(imageManager.getCurrentPageNumber()) / \(imageManager.getImageCount())",
+            "Mode: \(viewModeText(currentViewMode)) pref=\(userPreferredViewMode.rawValue)",
+            "Session: \(previewSessionID)",
+            "Preview RTL: \(boolText(isRightToLeftReading))",
+            "Global RTL: \(boolText(defaults.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool))",
+            "Stored preview RTL: \(boolText(defaults.object(forKey: CZSettingsKeys.previewCurrentReadingDirection) as? Bool)) session=\(storedPreviewSessionID)",
+            "Stored preview updated: \(dateText(defaults.double(forKey: CZSettingsKeys.previewCurrentReadingDirectionUpdatedAt)))",
+            "KeyHelper enabled: \(boolText(defaults.object(forKey: CZSettingsKeys.isKeyHelperEnabled) as? Bool))",
+            "KeyHelper AX: \(boolText(defaults.object(forKey: CZSettingsKeys.keyHelperLastAccessibilityTrusted) as? Bool)) tap=\(boolText(defaults.object(forKey: CZSettingsKeys.keyHelperIsEventTapInstalled) as? Bool))",
+            "KeyHelper active: \(activeSessionID) until=\(dateText(defaults.double(forKey: CZSettingsKeys.keyHelperVisibleUntil)))",
+            "KeyHelper cached RTL: \(boolText(defaults.object(forKey: CZSettingsKeys.keyHelperCachedReadingDirection) as? Bool))",
+            "KeyHelper RTL source: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastReadingDirectionSource) ?? "-")",
+            "KeyHelper RTL updated: \(dateText(defaults.double(forKey: CZSettingsKeys.keyHelperLastReadingDirectionUpdatedAt)))",
+            "Last settingsChanged: \(dateText(defaults.double(forKey: CZSettingsKeys.keyHelperLastSettingsChangedAt))) payload=\(boolText(defaults.object(forKey: CZSettingsKeys.keyHelperLastSettingsChangedHadReadingPayload) as? Bool))",
+            "Last settings session: \(abbreviateIdentifier(defaults.string(forKey: CZSettingsKeys.keyHelperLastSettingsChangedSessionID) ?? "-"))",
+            "Last key: \(lastKeyText(defaults: defaults))",
+            "Last command: \(lastCommandText(defaults: defaults))",
+            "Last decision: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastDecision) ?? "-")",
+            "Window: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastWindowSummary) ?? "-")"
+        ]
+    }
+
+    private func viewModeText(_ viewMode: ViewMode) -> String {
+        switch viewMode {
+        case .single:
+            return "single"
+        case .spread:
+            return "spread"
+        }
+    }
+
+    private func boolText(_ value: Bool?) -> String {
+        guard let value else { return "-" }
+        return value ? "true" : "false"
+    }
+
+    private func dateText(_ timestamp: Double) -> String {
+        guard timestamp > 0 else { return "-" }
+        return Self.debugDateFormatter.string(from: Date(timeIntervalSince1970: timestamp))
+    }
+
+    private func lastKeyText(defaults: UserDefaults) -> String {
+        let timestamp = defaults.double(forKey: CZSettingsKeys.keyHelperLastKeyAt)
+        guard timestamp > 0 else { return "-" }
+        let keyCode = defaults.object(forKey: CZSettingsKeys.keyHelperLastKeyCode) as? Int
+        return "\(keyCode.map { String($0) } ?? "?") at \(dateText(timestamp))"
+    }
+
+    private func lastCommandText(defaults: UserDefaults) -> String {
+        let timestamp = defaults.double(forKey: CZSettingsKeys.keyHelperLastCommandAt)
+        guard timestamp > 0 else { return "-" }
+        let command = defaults.string(forKey: CZSettingsKeys.keyHelperLastCommand) ?? "?"
+        return "\(command) at \(dateText(timestamp))"
+    }
+
+    private func abbreviateIdentifier(_ value: String) -> String {
+        guard value.count > 12 else { return value }
+        return "\(value.prefix(8))..."
+    }
+
+    private static let debugDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .medium
+        return formatter
+    }()
     
     private func updateContextMenuStates() {
         // コンテキストメニューを再作成して状態を更新
@@ -984,7 +1092,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return #selector(toggleTransition(_:))
         case .setSlideshowEnabled:
             return #selector(toggleSlideshow(_:))
-        case .goToFirstPage, .goToLastPage, .goForwardPage, .goBackwardPage, .jumpRelativePages:
+        case .goToFirstPage, .goToLastPage, .goForwardPage, .goBackwardPage, .goLeftArrowPage, .goRightArrowPage, .jumpRelativePages:
             return nil
         }
     }
@@ -1009,7 +1117,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return isTransitionEnabled ? .on : .off
         case .setSlideshowEnabled:
             return isSlideshowEnabled ? .on : .off
-        case .goToFirstPage, .goToLastPage, .goForwardPage, .goBackwardPage, .jumpRelativePages:
+        case .goToFirstPage, .goToLastPage, .goForwardPage, .goBackwardPage, .goLeftArrowPage, .goRightArrowPage, .jumpRelativePages:
             return .off
         }
     }
@@ -1033,20 +1141,24 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     // 読み方向切替アクション
     @objc private func setRightToLeft(_ sender: NSMenuItem) {
-        applyReadingDirection(true)
+        applyReadingDirection(true, persistGlobalSetting: true)
         postReadingDirectionChanged(isRightToLeft: true)
     }
 
     @objc private func setLeftToRight(_ sender: NSMenuItem) {
-        applyReadingDirection(false)
+        applyReadingDirection(false, persistGlobalSetting: true)
         postReadingDirectionChanged(isRightToLeft: false)
     }
 
     private func postReadingDirectionChanged(isRightToLeft: Bool) {
+        storePreviewReadingDirectionForKeyHelper(isRightToLeft: isRightToLeft)
         DistributedNotificationCenter.default().postNotificationName(
             CZDistributedNotifications.settingsChanged,
             object: nil,
-            userInfo: [CZSettingsKeys.isRightToLeftReading: isRightToLeft],
+            userInfo: [
+                CZSettingsKeys.isRightToLeftReading: isRightToLeft,
+                CZPreviewVisibilityUserInfoKeys.sessionID: previewVisibilitySessionID
+            ],
             deliverImmediately: true
         )
     }
@@ -1067,7 +1179,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         saveReadingPositionToHistory()
     }
 
-    private func applyReadingDirection(_ isRightToLeft: Bool) {
+    private func applyReadingDirection(_ isRightToLeft: Bool, persistGlobalSetting: Bool = false) {
+        if persistGlobalSetting {
+            CZUserDefaults.shared.set(isRightToLeft, forKey: CZSettingsKeys.isRightToLeftReading)
+            CZUserDefaults.shared.synchronize()
+        }
         isRightToLeftReading = isRightToLeft
         didRestoreRTLFromHistory = true
         thumbnailStripView?.isRightToLeft = isRightToLeft
@@ -1232,6 +1348,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             _ = performPageNavigation(forward: true)
         case .goBackwardPage:
             _ = performPageNavigation(forward: false)
+        case .goLeftArrowPage:
+            _ = performPageNavigation(forward: isRightToLeftReading)
+        case .goRightArrowPage:
+            _ = performPageNavigation(forward: !isRightToLeftReading)
         case .jumpRelativePages:
             let delta = userInfo[CZPreviewSessionCommandUserInfoKeys.intValue] as? Int ?? 0
             let target = imageManager.getCurrentPageNumber() + delta

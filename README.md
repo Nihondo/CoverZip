@@ -74,6 +74,8 @@ After enabling, selecting a ZIP file in Finder will show its thumbnail, and pres
 
 To use arrow keys in the Finder QuickLook viewer, open CoverZip Settings → Viewer and enable **Use arrow keys for pages in Finder Quick Look**. macOS will require the bundled helper app to be registered as a login item and allowed in **System Settings → Privacy & Security → Accessibility**.
 
+For troubleshooting Finder QuickLook key input, hold Shift while right-clicking inside the QuickLook viewer. The context menu shows debug information such as the viewer version, build number, current reading direction, and key helper status.
+
 ---
 
 ## Configuring Routing Rules

@@ -57,9 +57,18 @@ public enum CZSettingsKeys {
     public static let keyHelperLastWindowSummary = "keyHelperLastWindowSummary"
     public static let keyHelperLastCommandAt = "keyHelperLastCommandAt"
     public static let keyHelperLastCommand = "keyHelperLastCommand"
+    public static let keyHelperCachedReadingDirection = "keyHelperCachedReadingDirection"
+    public static let keyHelperLastReadingDirectionSource = "keyHelperLastReadingDirectionSource"
+    public static let keyHelperLastReadingDirectionUpdatedAt = "keyHelperLastReadingDirectionUpdatedAt"
+    public static let keyHelperLastSettingsChangedAt = "keyHelperLastSettingsChangedAt"
+    public static let keyHelperLastSettingsChangedSessionID = "keyHelperLastSettingsChangedSessionID"
+    public static let keyHelperLastSettingsChangedHadReadingPayload = "keyHelperLastSettingsChangedHadReadingPayload"
     public static let previewLastVisibilityPostAt = "previewLastVisibilityPostAt"
     public static let previewLastVisibilityPostName = "previewLastVisibilityPostName"
     public static let previewLastVisibilitySessionID = "previewLastVisibilitySessionID"
+    public static let previewCurrentReadingDirection = "previewCurrentReadingDirection"
+    public static let previewCurrentReadingDirectionSessionID = "previewCurrentReadingDirectionSessionID"
+    public static let previewCurrentReadingDirectionUpdatedAt = "previewCurrentReadingDirectionUpdatedAt"
 }
 
 public enum CZAppGroup {
@@ -79,8 +88,10 @@ public enum CZPreviewSessionCommand: String {
     case setSlideshowEnabled
     case goToFirstPage
     case goToLastPage
-    case goForwardPage   // 読書順で「次」（論理方向）。物理キー→論理コマンド変換は送信側責務
-    case goBackwardPage  // 読書順で「前」（論理方向）。受信側で isRightToLeftReading による反転は不要
+    case goForwardPage   // 読書順で「次」（論理方向）
+    case goBackwardPage  // 読書順で「前」（論理方向）
+    case goLeftArrowPage   // 物理左キー。受信側の現在の読み方向で前後を決める
+    case goRightArrowPage  // 物理右キー。受信側の現在の読み方向で前後を決める
     case jumpRelativePages  // intValue に相対量（正=前進、負=後退）
 }
 
@@ -146,6 +157,10 @@ public enum CZPreviewContextMenuLayout {
             return CZLocalized.string("context.menu.page.forward", defaultValue: "Next Page")
         case .goBackwardPage:
             return CZLocalized.string("context.menu.page.backward", defaultValue: "Previous Page")
+        case .goLeftArrowPage:
+            return CZLocalized.string("context.menu.page.left_arrow", defaultValue: "Left Arrow Page")
+        case .goRightArrowPage:
+            return CZLocalized.string("context.menu.page.right_arrow", defaultValue: "Right Arrow Page")
         case .jumpRelativePages:
             return CZLocalized.string("context.menu.page.jump", defaultValue: "Jump Pages")
         }
@@ -188,6 +203,10 @@ public enum CZMenuSymbols {
             return "chevron.right"
         case .goBackwardPage:
             return "chevron.left"
+        case .goLeftArrowPage:
+            return "arrow.left"
+        case .goRightArrowPage:
+            return "arrow.right"
         case .jumpRelativePages:
             return "arrow.left.arrow.right.square"
         }

@@ -12,6 +12,7 @@ import Foundation
 /// Finder QuickLook 上の CoverZip Preview Extension に対してキー操作を中継するコントローラ。
 final class KeyHelperController: NSObject {
     private let visibilityTimeout: TimeInterval = 2.5
+    private let previewReadingDirectionFreshnessInterval: TimeInterval = 5.0
     private let trustedCheckInterval: TimeInterval = 5.0
     private let allowedFrontmostBundleIDs: Set<String> = [
         "com.apple.finder",
@@ -32,7 +33,9 @@ final class KeyHelperController: NSObject {
         super.init()
         NSLog("[CoverZipKeyHelper] started")
         setupDistributedNotificationObservers()
-        cachedIsRightToLeftReading = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
+        let initialReadingDirection = loadRightToLeftReading(preferredSessionID: nil)
+        cachedIsRightToLeftReading = initialReadingDirection.value
+        recordReadingDirectionDiagnostics(value: initialReadingDirection.value, source: "initial.\(initialReadingDirection.source)")
         NSLog("[CoverZipKeyHelper] initial rtl=\(cachedIsRightToLeftReading ? 1 : 0)")
         refreshAccessibilityTrust(installIfNeeded: true, promptIfNeeded: isKeyHelperEnabledForRuntime())
         startTrustedCheckTimer()
@@ -85,11 +88,61 @@ final class KeyHelperController: NSObject {
     }
 
     @objc private func handleSettingsChanged(_ notification: Notification) {
-        guard let value = notification.userInfo?[CZSettingsKeys.isRightToLeftReading] as? Bool else { return }
+        let notificationSessionID = notification.userInfo?[CZPreviewVisibilityUserInfoKeys.sessionID] as? String
+        let hasReadingPayload = notification.userInfo?[CZSettingsKeys.isRightToLeftReading] is Bool
+        CZUserDefaults.shared.set(Date().timeIntervalSince1970, forKey: CZSettingsKeys.keyHelperLastSettingsChangedAt)
+        CZUserDefaults.shared.set(notificationSessionID ?? "-", forKey: CZSettingsKeys.keyHelperLastSettingsChangedSessionID)
+        CZUserDefaults.shared.set(hasReadingPayload, forKey: CZSettingsKeys.keyHelperLastSettingsChangedHadReadingPayload)
+
+        if let sessionID = notification.userInfo?[CZPreviewVisibilityUserInfoKeys.sessionID] as? String,
+           let activeSessionID,
+           sessionID != activeSessionID {
+            recordReadingDirectionDiagnostics(value: cachedIsRightToLeftReading, source: "settingsChanged.ignoredSession")
+            return
+        }
+        if let value = notification.userInfo?[CZSettingsKeys.isRightToLeftReading] as? Bool {
+            refreshCachedReadingDirection(value, source: "settingsChanged.userInfo")
+        } else {
+            let fallback = loadRightToLeftReading(preferredSessionID: activeSessionID)
+            refreshCachedReadingDirection(fallback.value, source: "settingsChanged.\(fallback.source)")
+        }
+    }
+
+    private func loadRightToLeftReading(preferredSessionID: String?) -> (value: Bool, source: String) {
+        CZUserDefaults.shared.synchronize()
+        let storedSessionID = CZUserDefaults.shared.string(forKey: CZSettingsKeys.previewCurrentReadingDirectionSessionID)
+        let previewUpdatedAt = CZUserDefaults.shared.double(forKey: CZSettingsKeys.previewCurrentReadingDirectionUpdatedAt)
+        let previewValue = CZUserDefaults.shared.object(forKey: CZSettingsKeys.previewCurrentReadingDirection) as? Bool
+
+        if let preferredSessionID,
+           storedSessionID == preferredSessionID,
+           let sessionValue = previewValue {
+            return (sessionValue, "previewCurrentReadingDirection")
+        }
+
+        if preferredSessionID == nil,
+           let sessionValue = previewValue,
+           Date().timeIntervalSince1970 - previewUpdatedAt <= previewReadingDirectionFreshnessInterval {
+            return (sessionValue, "recentPreviewCurrentReadingDirection")
+        }
+
+        let globalValue = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
+        return (globalValue, "globalSetting")
+    }
+
+    private func refreshCachedReadingDirection(_ value: Bool, source: String) {
         if value != cachedIsRightToLeftReading {
-            NSLog("[CoverZipKeyHelper] rtl changed to \(value ? 1 : 0)")
+            NSLog("[CoverZipKeyHelper] rtl changed to \(value ? 1 : 0) source=\(source)")
             cachedIsRightToLeftReading = value
         }
+        recordReadingDirectionDiagnostics(value: value, source: source)
+    }
+
+    private func recordReadingDirectionDiagnostics(value: Bool, source: String) {
+        CZUserDefaults.shared.set(value, forKey: CZSettingsKeys.keyHelperCachedReadingDirection)
+        CZUserDefaults.shared.set(source, forKey: CZSettingsKeys.keyHelperLastReadingDirectionSource)
+        CZUserDefaults.shared.set(Date().timeIntervalSince1970, forKey: CZSettingsKeys.keyHelperLastReadingDirectionUpdatedAt)
+        CZUserDefaults.shared.synchronize()
     }
 
     private func startTrustedCheckTimer() {
@@ -180,6 +233,8 @@ final class KeyHelperController: NSObject {
         }
 
         activeSessionID = sessionID
+        let readingDirection = loadRightToLeftReading(preferredSessionID: sessionID)
+        refreshCachedReadingDirection(readingDirection.value, source: "visible.\(readingDirection.source)")
         visibleUntil = Date().addingTimeInterval(visibilityTimeout)
         let now = Date().timeIntervalSince1970
         CZUserDefaults.shared.set(sessionID, forKey: CZSettingsKeys.keyHelperActiveSessionID)
@@ -417,10 +472,9 @@ final class KeyHelperController: NSObject {
     }
 
     private func commandForKeyCode(_ keyCode: Int64) -> CZPreviewSessionCommand? {
-        let isRightToLeft = cachedIsRightToLeftReading
         switch keyCode {
-        case 123: return isRightToLeft ? .goForwardPage : .goBackwardPage
-        case 124: return isRightToLeft ? .goBackwardPage : .goForwardPage
+        case 123: return .goLeftArrowPage
+        case 124: return .goRightArrowPage
         case 125: return .goForwardPage
         case 126: return .goBackwardPage
         default:  return nil
