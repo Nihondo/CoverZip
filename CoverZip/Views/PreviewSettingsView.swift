@@ -7,8 +7,18 @@
 
 import SwiftUI
 
+@MainActor
+final class SettingsDiagnosticsState: ObservableObject {
+    static let shared = SettingsDiagnosticsState()
+
+    @Published var isVisible = false
+
+    private init() {}
+}
+
 struct PreviewSettingsView: View {
     @ObservedObject private var settings = AppSettingsWriter.shared
+    @ObservedObject private var diagnosticsState = SettingsDiagnosticsState.shared
     @State private var keyHelperStatusText = ""
     @State private var isKeyHelperAccessibilityTrusted = false
     @State private var keyHelperErrorText: String?
@@ -114,18 +124,20 @@ struct PreviewSettingsView: View {
                     }
                 }
 
-                DisclosureGroup(CZLocalized.string(
-                    "settings.key_helper.diagnostics",
-                    defaultValue: "Diagnostics"
-                )) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(keyHelperDiagnosticLines, id: \.self) { line in
-                            Text(line)
-                                .font(.system(.caption, design: .monospaced))
-                                .textSelection(.enabled)
+                if diagnosticsState.isVisible {
+                    DisclosureGroup(CZLocalized.string(
+                        "settings.key_helper.diagnostics",
+                        defaultValue: "Diagnostics"
+                    )) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(keyHelperDiagnosticLines, id: \.self) { line in
+                                Text(line)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .textSelection(.enabled)
+                            }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } header: {
                 Label(CZLocalized.string("settings.key_helper.section", defaultValue: "Finder Quick Look Keys"), systemImage: "keyboard")

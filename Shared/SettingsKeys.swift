@@ -45,7 +45,6 @@ public enum CZSettingsKeys {
     public static let isKeyHelperEnabled = "isKeyHelperEnabled"
     public static let keyHelperLastAccessibilityTrusted = "keyHelperLastAccessibilityTrusted"
     public static let keyHelperLastError = "keyHelperLastError"
-    public static let keyHelperFinderFallbackEnabled = "keyHelperFinderFallbackEnabled"
     public static let keyHelperIsEventTapInstalled = "keyHelperIsEventTapInstalled"
     public static let keyHelperActiveSessionID = "keyHelperActiveSessionID"
     public static let keyHelperVisibleUntil = "keyHelperVisibleUntil"

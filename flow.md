@@ -124,7 +124,9 @@ sequenceDiagram
     Preview->>DNC: previewExtensionVisible(sessionID)
     Preview->>Defaults: previewLastVisibility* を保存
     DNC->>Key: 表示中セッションを通知
+    Key->>Key: activeSessionID / visibleUntil を更新
     Key->>Key: Accessibility許可時 CGEventTap を有効化
+    Key->>Key: 対象キー入力時に visibleUntil または AX 前面Quick Look判定を確認
     Key->>DNC: previewSessionCommand(command, commandID): カーソルキーをページ送りへ変換
     DNC->>Preview: コマンド受信
     Preview->>Preview: ページ移動
@@ -133,7 +135,7 @@ sequenceDiagram
     Preview->>DNC: previewExtensionHidden(sessionID)
 ```
 
-Finder 内の Quick Look では App 側の `QLPreviewInputDriver` を使えないため、任意設定の `CoverZipKeyHelper` が前面アプリと表示中セッションを見てキーイベントを中継します。
+Finder 内の Quick Look では App 側の `QLPreviewInputDriver` を使えないため、任意設定の `CoverZipKeyHelper` がキーイベントを中継します。KeyHelper は `previewExtensionVisible` の heartbeat で表示中セッションを維持し、通知の有効期限が切れた場合は AX で前面の Quick Look ウィンドウを確認します。AX で Quick Look が確認できない場合はキーイベントをそのまま通します。
 
 ## 設定同期とメニュー操作
 
@@ -259,7 +261,7 @@ sequenceDiagram
 | --- | --- | --- |
 | `InternalViewer` | `settingsChanged`, `previewSessionCommand` | 右クリックメニューとメニューバー表示メニューの操作を App Group UserDefaults に保存し、同じ操作をセッションコマンドとして Preview へ送る |
 | `QLPreviewInputDriver.KeyForwardingView` | `previewSessionCommand` | 内蔵ビューアウィンドウ内のキー入力をページ操作へ変換する。物理キーと読み方向の対応は送信側で解決済み |
-| `CoverZipKeyHelper` | `previewSessionCommand` | Finder Quick Look 表示中にカーソルキーを捕捉し、`commandID` 付きで送る。Preview は処理後に `previewSessionCommandHandled` を返す |
+| `CoverZipKeyHelper` | `previewSessionCommand` | Finder Quick Look 表示中にカーソルキーを捕捉し、`commandID` 付きで送る。表示中判定は `previewExtensionVisible` の有効期限と AX の前面Quick Look判定で行い、Preview は処理後に `previewSessionCommandHandled` を返す |
 | `AppSettingsWriter` | `settingsChanged` | 設定画面で共有設定が変わったときに送る。設定値本体は App Group UserDefaults に保存される |
 | Preview 自身の右クリックメニュー | `settingsChanged` | Quick Look Extension 側で読み方向を変えたとき、他プロセスの状態同期用に送る |
 | Preview の履歴復元 | `settingsChanged` | ZIPごとの履歴から復元したセッション読み方向を KeyHelper へ即時同期する。グローバル設定の UserDefaults は変更しない |
