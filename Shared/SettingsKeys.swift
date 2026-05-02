@@ -57,18 +57,9 @@ public enum CZSettingsKeys {
     public static let keyHelperLastWindowSummary = "keyHelperLastWindowSummary"
     public static let keyHelperLastCommandAt = "keyHelperLastCommandAt"
     public static let keyHelperLastCommand = "keyHelperLastCommand"
-    public static let keyHelperCachedReadingDirection = "keyHelperCachedReadingDirection"
-    public static let keyHelperLastReadingDirectionSource = "keyHelperLastReadingDirectionSource"
-    public static let keyHelperLastReadingDirectionUpdatedAt = "keyHelperLastReadingDirectionUpdatedAt"
-    public static let keyHelperLastSettingsChangedAt = "keyHelperLastSettingsChangedAt"
-    public static let keyHelperLastSettingsChangedSessionID = "keyHelperLastSettingsChangedSessionID"
-    public static let keyHelperLastSettingsChangedHadReadingPayload = "keyHelperLastSettingsChangedHadReadingPayload"
     public static let previewLastVisibilityPostAt = "previewLastVisibilityPostAt"
     public static let previewLastVisibilityPostName = "previewLastVisibilityPostName"
     public static let previewLastVisibilitySessionID = "previewLastVisibilitySessionID"
-    public static let previewCurrentReadingDirection = "previewCurrentReadingDirection"
-    public static let previewCurrentReadingDirectionSessionID = "previewCurrentReadingDirectionSessionID"
-    public static let previewCurrentReadingDirectionUpdatedAt = "previewCurrentReadingDirectionUpdatedAt"
 }
 
 public enum CZAppGroup {

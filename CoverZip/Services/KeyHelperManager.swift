@@ -58,10 +58,6 @@ final class KeyHelperManager {
             "Last decision: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastDecision) ?? "-")",
             "Window summary: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastWindowSummary) ?? "-")",
             "Last command: \(lastCommandText(defaults: defaults))",
-            "Cached RTL: \(boolText(defaults.object(forKey: CZSettingsKeys.keyHelperCachedReadingDirection) as? Bool))",
-            "RTL source: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastReadingDirectionSource) ?? "-")",
-            "RTL updated: \(dateText(defaults.double(forKey: CZSettingsKeys.keyHelperLastReadingDirectionUpdatedAt)))",
-            "Last settingsChanged: \(lastSettingsChangedText(defaults: defaults))",
             "Preview posted: \(lastPreviewPostText(defaults: defaults))",
             "Last error: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastError) ?? "-")"
         ]
@@ -183,14 +179,6 @@ final class KeyHelperManager {
         let name = defaults.string(forKey: CZSettingsKeys.previewLastVisibilityPostName) ?? "?"
         let sessionID = defaults.string(forKey: CZSettingsKeys.previewLastVisibilitySessionID) ?? "?"
         return "\(name) at \(dateText(timestamp)) session=\(sessionID)"
-    }
-
-    private func lastSettingsChangedText(defaults: UserDefaults) -> String {
-        let timestamp = defaults.double(forKey: CZSettingsKeys.keyHelperLastSettingsChangedAt)
-        guard timestamp > 0 else { return "-" }
-        let sessionID = defaults.string(forKey: CZSettingsKeys.keyHelperLastSettingsChangedSessionID) ?? "-"
-        let hasReadingPayload = defaults.object(forKey: CZSettingsKeys.keyHelperLastSettingsChangedHadReadingPayload) as? Bool
-        return "\(dateText(timestamp)) session=\(sessionID) rtlPayload=\(boolText(hasReadingPayload))"
     }
 
     private static let dateFormatter: DateFormatter = {

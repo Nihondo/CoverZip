@@ -122,7 +122,7 @@ sequenceDiagram
 
     Finder->>Preview: Quick Look プレビュー開始
     Preview->>DNC: previewExtensionVisible(sessionID)
-    Preview->>Defaults: previewLastVisibility* / previewCurrentReadingDirection* を保存
+    Preview->>Defaults: previewLastVisibility* を保存
     DNC->>Key: 表示中セッションを通知
     Key->>Key: activeSessionID / visibleUntil を更新
     Key->>Key: Accessibility許可時 CGEventTap を有効化
@@ -162,7 +162,7 @@ flowchart TB
     dnc --> preview
     dnc --> internal
     dnc --> keyhelper
-    preview -->|読書履歴/ウィンドウ/サムネイル高さ/現在セッション読み方向| defaults
+    preview -->|読書履歴/ウィンドウ/サムネイル高さ| defaults
 ```
 
 共有設定の実体は `Shared/UnifiedAppSettings.swift` の `CZSettings` と、`Shared/UserDefaultsHelper.swift` の `CZUserDefaults.shared` です。App 側は `AppSettingsWriter`、Preview Extension 側は `coverZipViewer/Settings.swift` の `AppSettings` から同じ App Group UserDefaults を参照します。
@@ -195,10 +195,9 @@ sequenceDiagram
 | ストア | 主なキー / 内容 | 書き込み元 | 読み込み元 |
 | --- | --- | --- | --- |
 | App Group UserDefaults | `routingSettingsData` | 設定画面 / `KeywordSettings` | `ZipRoutingService` |
-| App Group UserDefaults | `isRightToLeftReading`, `defaultViewMode`, `spreadPairOffset`, `pageTransitionEnabled`, `slideshowEnabled`, `thumbnailStripVisible` | 設定画面 / `InternalViewer` / Preview 右クリックメニュー | App / Preview Extension / KeyHelper |
+| App Group UserDefaults | `isRightToLeftReading`, `defaultViewMode`, `spreadPairOffset`, `pageTransitionEnabled`, `slideshowEnabled`, `thumbnailStripVisible` | 設定画面 / `InternalViewer` / Preview 右クリックメニュー | App / Preview Extension |
 | App Group UserDefaults | `savedWindowFrameString`, `restoreWindowFrameEnabled` | `QLPreviewInputDriver` / Preview | App / Preview |
 | App Group UserDefaults | `readingHistoryData` | `ReadingHistoryManager` | `ReadingHistoryManager` |
-| App Group UserDefaults | `previewCurrentReadingDirection`, `previewCurrentReadingDirectionSessionID`, `previewCurrentReadingDirectionUpdatedAt` | Preview | `CoverZipKeyHelper` |
 | App Group UserDefaults | `keyHelper*`, `previewLastVisibility*` | `CoverZipKeyHelper` / Preview | 設定画面の診断表示 / Preview の Shift+右クリック診断メニュー |
 | ZIPファイル | 画像エントリ、圧縮データ | ユーザーのファイル | `ImageManager`, `ThumbnailProvider`, `CZZip` |
 | メモリ内キャッシュ | デコード済み画像、リサイズ画像、プリレンダレイヤー | `ImageManager` | `PreviewViewController` |
@@ -207,7 +206,7 @@ sequenceDiagram
 
 | 通知名 | 送信元 | 受信元 | 用途 |
 | --- | --- | --- | --- |
-| `com.dmng.CoverZip.settingsChanged` | App 設定、`InternalViewer`、Preview | Preview、InternalViewer、ViewMenu、KeyHelper | 共有設定変更の反映。読み方向変更時は userInfo に値を載せ、Preview 送信時はセッション識別用の `sessionID` も載せる |
+| `com.dmng.CoverZip.settingsChanged` | App 設定、`InternalViewer`、Preview | Preview、InternalViewer、ViewMenu | 共有設定変更の反映。読み方向変更時は userInfo に値を載せ、Preview 送信時はセッション識別用の `sessionID` も載せる |
 | `com.dmng.CoverZip.previewSessionCommand` | `InternalViewer`, `QLPreviewInputDriver`, `CoverZipKeyHelper` | Preview | ページ送り、表示モード、見開き補正、スライドショーなどのセッション操作 |
 | `com.dmng.CoverZip.previewSessionCommandHandled` | Preview | KeyHelper | KeyHelper が送ったコマンドの処理完了確認 |
 | `com.dmng.CoverZip.previewExtensionVisible` | Preview | KeyHelper | Finder Quick Look 上で CoverZip Preview Extension が表示中であることを通知 |
@@ -225,7 +224,7 @@ sequenceDiagram
 | API / 通知 | 呼び出し元 | Payload | 処理 |
 | --- | --- | --- | --- |
 | `preparePreviewOfFile(at url: URL) async throws` | macOS Quick Look ホスト。Finder Quick Look または App 内蔵 `QLPreviewView` | `url`: 表示対象 ZIP | 設定初期値を読み込み、`ImageManager.loadImages(from:)` で ZIP 内画像を列挙し、履歴復元、表示モード適用、サムネイルストリップ設定を行う |
-| `com.dmng.CoverZip.settingsChanged` | `AppSettingsWriter`, `InternalViewer`, Preview 右クリックメニュー、Preview 履歴復元 | 任意: `isRightToLeftReading: Bool`, `sessionID: String`。それ以外の値は App Group UserDefaults から再取得 | 読み方向、遷移、サムネイル表示、スライドショー、表示モード、見開き補正を再同期し、表示とメニュー状態を更新する。KeyHelper は `userInfo` 欠落時に現在セッションの `previewCurrentReadingDirection*` をフォールバックとして読む |
+| `com.dmng.CoverZip.settingsChanged` | `AppSettingsWriter`, `InternalViewer`, Preview 右クリックメニュー | 任意: `isRightToLeftReading: Bool`, `sessionID: String`。それ以外の値は App Group UserDefaults から再取得 | 読み方向、遷移、サムネイル表示、スライドショー、表示モード、見開き補正を再同期し、表示とメニュー状態を更新する |
 | `com.dmng.CoverZip.previewSessionCommand` | `InternalViewer`, `QLPreviewInputDriver`, `CoverZipKeyHelper` | `command: String` が必須。任意で `boolValue`, `intValue`, `commandID` | `CZPreviewSessionCommand` として解釈し、ページ移動やセッション設定変更を即時適用する。`commandID` がある場合は処理後に `previewSessionCommandHandled` を返す |
 
 ### `previewSessionCommand` Payload
@@ -266,9 +265,8 @@ sequenceDiagram
 | `QLPreviewInputDriver.KeyForwardingView` | `previewSessionCommand` | 内蔵ビューアウィンドウ内のキー入力をページ操作へ変換する。物理キーと読み方向の対応は送信側で解決済み |
 | `CoverZipKeyHelper` | `previewSessionCommand` | Finder Quick Look 表示中にカーソルキーを捕捉し、`commandID` 付きで送る。左右キーは物理キーコマンドとして送り、Preview 側が現在の読み方向で次/前ページへ変換する。上下キーは読み方向に依存しない `goForwardPage` / `goBackwardPage` を送る。Preview は処理後に `previewSessionCommandHandled` を返す |
 | `AppSettingsWriter` | `settingsChanged` | 設定画面で共有設定が変わったときに送る。設定値本体は App Group UserDefaults に保存される |
-| Preview 自身の右クリックメニュー | `settingsChanged` | Quick Look Extension 側で読み方向を変えたとき、グローバル設定と現在セッション読み方向を保存して他プロセスへ同期する |
+| Preview 自身の右クリックメニュー | `settingsChanged` | Quick Look Extension 側で読み方向を変えたとき、グローバル設定と現在セッション読み方向を更新し、他プロセスへ通知する |
 | Preview 自身の Shift+右クリックメニュー | なし | 通知は送らず、App Group UserDefaults と Bundle 情報からバージョン、ビルド番号、現在セッション読み方向、KeyHelper の診断状態をメニュー内に表示する |
-| Preview の履歴復元 | `settingsChanged` | ZIPごとの履歴から復元したセッション読み方向を `previewCurrentReadingDirection*` と通知 payload で KeyHelper へ即時同期する。グローバル設定の UserDefaults は変更しない |
 
 ## 責務境界
 

@@ -183,7 +183,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
 
     private func postPreviewVisibilityNotification(_ name: Notification.Name) {
-        storePreviewReadingDirectionForKeyHelper(isRightToLeft: isRightToLeftReading)
         let userInfo: [String: Any] = [
             CZPreviewVisibilityUserInfoKeys.sessionID: previewVisibilitySessionID,
             CZPreviewVisibilityUserInfoKeys.timestamp: Date().timeIntervalSince1970
@@ -197,13 +196,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             userInfo: userInfo,
             deliverImmediately: true
         )
-    }
-
-    private func storePreviewReadingDirectionForKeyHelper(isRightToLeft: Bool) {
-        CZUserDefaults.shared.set(isRightToLeft, forKey: CZSettingsKeys.previewCurrentReadingDirection)
-        CZUserDefaults.shared.set(previewVisibilitySessionID, forKey: CZSettingsKeys.previewCurrentReadingDirectionSessionID)
-        CZUserDefaults.shared.set(Date().timeIntervalSince1970, forKey: CZSettingsKeys.previewCurrentReadingDirectionUpdatedAt)
-        CZUserDefaults.shared.synchronize()
     }
 
     // MARK: - マウスモニター管理
@@ -992,7 +984,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let build = bundle.object(forInfoDictionaryKey: kCFBundleVersionKey as String) as? String ?? "-"
         let bundleID = bundle.bundleIdentifier ?? "-"
         let previewSessionID = abbreviateIdentifier(previewVisibilitySessionID)
-        let storedPreviewSessionID = abbreviateIdentifier(defaults.string(forKey: CZSettingsKeys.previewCurrentReadingDirectionSessionID) ?? "-")
         let activeSessionID = abbreviateIdentifier(defaults.string(forKey: CZSettingsKeys.keyHelperActiveSessionID) ?? "-")
 
         return [
@@ -1005,16 +996,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             "Session: \(previewSessionID)",
             "Preview RTL: \(boolText(isRightToLeftReading))",
             "Global RTL: \(boolText(defaults.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool))",
-            "Stored preview RTL: \(boolText(defaults.object(forKey: CZSettingsKeys.previewCurrentReadingDirection) as? Bool)) session=\(storedPreviewSessionID)",
-            "Stored preview updated: \(dateText(defaults.double(forKey: CZSettingsKeys.previewCurrentReadingDirectionUpdatedAt)))",
             "KeyHelper enabled: \(boolText(defaults.object(forKey: CZSettingsKeys.isKeyHelperEnabled) as? Bool))",
             "KeyHelper AX: \(boolText(defaults.object(forKey: CZSettingsKeys.keyHelperLastAccessibilityTrusted) as? Bool)) tap=\(boolText(defaults.object(forKey: CZSettingsKeys.keyHelperIsEventTapInstalled) as? Bool))",
             "KeyHelper active: \(activeSessionID) until=\(dateText(defaults.double(forKey: CZSettingsKeys.keyHelperVisibleUntil)))",
-            "KeyHelper cached RTL: \(boolText(defaults.object(forKey: CZSettingsKeys.keyHelperCachedReadingDirection) as? Bool))",
-            "KeyHelper RTL source: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastReadingDirectionSource) ?? "-")",
-            "KeyHelper RTL updated: \(dateText(defaults.double(forKey: CZSettingsKeys.keyHelperLastReadingDirectionUpdatedAt)))",
-            "Last settingsChanged: \(dateText(defaults.double(forKey: CZSettingsKeys.keyHelperLastSettingsChangedAt))) payload=\(boolText(defaults.object(forKey: CZSettingsKeys.keyHelperLastSettingsChangedHadReadingPayload) as? Bool))",
-            "Last settings session: \(abbreviateIdentifier(defaults.string(forKey: CZSettingsKeys.keyHelperLastSettingsChangedSessionID) ?? "-"))",
             "Last key: \(lastKeyText(defaults: defaults))",
             "Last command: \(lastCommandText(defaults: defaults))",
             "Last decision: \(defaults.string(forKey: CZSettingsKeys.keyHelperLastDecision) ?? "-")",
@@ -1151,7 +1135,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
 
     private func postReadingDirectionChanged(isRightToLeft: Bool) {
-        storePreviewReadingDirectionForKeyHelper(isRightToLeft: isRightToLeft)
         DistributedNotificationCenter.default().postNotificationName(
             CZDistributedNotifications.settingsChanged,
             object: nil,
@@ -2266,9 +2249,6 @@ private extension PreviewViewController {
             NSLog("[ReadingHistory] No history found for %@", currentZipFilename)
         }
 
-        // KeyHelper は物理キーを論理ページコマンドへ変換するため、履歴復元後の
-        // セッション読み方向を即時同期する。UserDefaults のグローバル設定は変更しない。
-        postReadingDirectionChanged(isRightToLeft: isRightToLeftReading)
     }
 
     func saveReadingPositionToHistory() {
