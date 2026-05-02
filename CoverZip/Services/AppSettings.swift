@@ -17,7 +17,12 @@ final class AppSettingsWriter: ObservableObject {
     private var isLoadingSettings = false
 
     @Published var isRightToLeftReading: Bool = true {
-        didSet { core.isRightToLeftReading = isRightToLeftReading }
+        didSet {
+            core.isRightToLeftReading = isRightToLeftReading
+            if !isLoadingSettings {
+                PreviewSessionCommandDispatcher.postReadingDirectionChanged(isRightToLeft: isRightToLeftReading)
+            }
+        }
     }
 
     @Published var sliderVisibilityWidthThreshold: Double = 600.0 {

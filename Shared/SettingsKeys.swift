@@ -80,8 +80,8 @@ public enum CZPreviewSessionCommand: String {
     case setSlideshowEnabled
     case goToFirstPage
     case goToLastPage
-    case goForwardPage
-    case goBackwardPage
+    case goForwardPage   // 読書順で「次」（論理方向）。物理キー→論理コマンド変換は送信側責務
+    case goBackwardPage  // 読書順で「前」（論理方向）。受信側で isRightToLeftReading による反転は不要
     case jumpRelativePages  // intValue に相対量（正=前進、負=後退）
 }
 

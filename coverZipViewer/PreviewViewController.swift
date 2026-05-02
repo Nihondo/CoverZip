@@ -1034,10 +1034,21 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     // 読み方向切替アクション
     @objc private func setRightToLeft(_ sender: NSMenuItem) {
         applyReadingDirection(true)
+        postReadingDirectionChanged(isRightToLeft: true)
     }
 
     @objc private func setLeftToRight(_ sender: NSMenuItem) {
         applyReadingDirection(false)
+        postReadingDirectionChanged(isRightToLeft: false)
+    }
+
+    private func postReadingDirectionChanged(isRightToLeft: Bool) {
+        DistributedNotificationCenter.default().postNotificationName(
+            CZDistributedNotifications.settingsChanged,
+            object: nil,
+            userInfo: [CZSettingsKeys.isRightToLeftReading: isRightToLeft],
+            deliverImmediately: true
+        )
     }
     
     @objc private func toggleSlideshow(_ sender: NSMenuItem) {

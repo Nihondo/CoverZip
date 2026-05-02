@@ -8,6 +8,16 @@
 import Foundation
 
 enum PreviewSessionCommandDispatcher {
+    /// 読み方向変更をヘルパーへ即時配信する。UserDefaults 同期に依存せず値を直接渡す。
+    static func postReadingDirectionChanged(isRightToLeft: Bool) {
+        DistributedNotificationCenter.default().postNotificationName(
+            CZDistributedNotifications.settingsChanged,
+            object: nil,
+            userInfo: [CZSettingsKeys.isRightToLeftReading: isRightToLeft],
+            deliverImmediately: true
+        )
+    }
+
     /// 設定変更通知を App/Extension 間へ即時配信する。
     static func postSettingsChanged() {
         DistributedNotificationCenter.default().postNotificationName(

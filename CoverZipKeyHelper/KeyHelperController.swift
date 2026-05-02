@@ -34,11 +34,14 @@ final class KeyHelperController: NSObject {
     private var trustedCheckTimer: Timer?
     private var isAccessibilityTrusted = false
     private var didUseFinderFallbackForLastCapture = false
+    private var cachedIsRightToLeftReading: Bool = true
 
     override init() {
         super.init()
         NSLog("[CoverZipKeyHelper] started")
         setupDistributedNotificationObservers()
+        cachedIsRightToLeftReading = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
+        NSLog("[CoverZipKeyHelper] initial rtl=\(cachedIsRightToLeftReading ? 1 : 0)")
         refreshAccessibilityTrust(installIfNeeded: true, promptIfNeeded: isKeyHelperEnabledForRuntime())
         startTrustedCheckTimer()
     }
@@ -81,6 +84,21 @@ final class KeyHelperController: NSObject {
             object: nil,
             suspensionBehavior: .deliverImmediately
         )
+        center.addObserver(
+            self,
+            selector: #selector(handleSettingsChanged(_:)),
+            name: CZDistributedNotifications.settingsChanged,
+            object: nil,
+            suspensionBehavior: .deliverImmediately
+        )
+    }
+
+    @objc private func handleSettingsChanged(_ notification: Notification) {
+        guard let value = notification.userInfo?[CZSettingsKeys.isRightToLeftReading] as? Bool else { return }
+        if value != cachedIsRightToLeftReading {
+            NSLog("[CoverZipKeyHelper] rtl changed to \(value ? 1 : 0)")
+            cachedIsRightToLeftReading = value
+        }
     }
 
     private func startTrustedCheckTimer() {
@@ -296,7 +314,7 @@ final class KeyHelperController: NSObject {
 
     private func shouldCaptureKeyEvent(_ event: CGEvent) -> Bool {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        guard Self.commandForKeyCode(keyCode) != nil else {
+        guard commandForKeyCode(keyCode) != nil else {
             return false
         }
 
@@ -521,7 +539,7 @@ final class KeyHelperController: NSObject {
             return Unmanaged.passUnretained(event)
         }
 
-        guard let command = Self.commandForKeyCode(keyCode) else {
+        guard let command = commandForKeyCode(keyCode) else {
             return Unmanaged.passUnretained(event)
         }
 
@@ -535,20 +553,15 @@ final class KeyHelperController: NSObject {
         return nil
     }
 
-    private static func commandForKeyCode(_ keyCode: Int64) -> CZPreviewSessionCommand? {
-        let isRightToLeft = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
-
+    private func commandForKeyCode(_ keyCode: Int64) -> CZPreviewSessionCommand? {
+        let isRightToLeft = cachedIsRightToLeftReading
+        NSLog("[CoverZipKeyHelper] key \(keyCode) rtl=\(isRightToLeft ? 1 : 0)")
         switch keyCode {
-        case 123:
-            return isRightToLeft ? .goForwardPage : .goBackwardPage
-        case 124:
-            return isRightToLeft ? .goBackwardPage : .goForwardPage
-        case 125:
-            return .goForwardPage
-        case 126:
-            return .goBackwardPage
-        default:
-            return nil
+        case 123: return isRightToLeft ? .goForwardPage : .goBackwardPage
+        case 124: return isRightToLeft ? .goBackwardPage : .goForwardPage
+        case 125: return .goForwardPage
+        case 126: return .goBackwardPage
+        default:  return nil
         }
     }
 

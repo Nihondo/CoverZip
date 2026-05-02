@@ -79,14 +79,14 @@ final class InternalViewer: NSObject {
     func applySetRightToLeft() {
         applyReadingDirection(isRightToLeft: true)
         CZUserDefaults.shared.set(true, forKey: CZSettingsKeys.isRightToLeftReading)
-        postSettingsChanged()
+        PreviewSessionCommandDispatcher.postReadingDirectionChanged(isRightToLeft: true)
         PreviewSessionCommandDispatcher.post(command: .setRightToLeftReading)
     }
 
     func applySetLeftToRight() {
         applyReadingDirection(isRightToLeft: false)
         CZUserDefaults.shared.set(false, forKey: CZSettingsKeys.isRightToLeftReading)
-        postSettingsChanged()
+        PreviewSessionCommandDispatcher.postReadingDirectionChanged(isRightToLeft: false)
         PreviewSessionCommandDispatcher.post(command: .setLeftToRightReading)
     }
 

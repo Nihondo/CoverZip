@@ -11,7 +11,5 @@ import Foundation
 public enum CZUserDefaults {
     /// App Group共有のUserDefaultsインスタンス
     /// フォールバックとして標準UserDefaultsを使用
-    public static var shared: UserDefaults {
-        UserDefaults(suiteName: CZAppGroup.identifier) ?? .standard
-    }
+    public static let shared: UserDefaults = UserDefaults(suiteName: CZAppGroup.identifier) ?? .standard
 }
