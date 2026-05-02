@@ -2145,6 +2145,10 @@ private extension PreviewViewController {
         } else {
             NSLog("[ReadingHistory] No history found for %@", currentZipFilename)
         }
+
+        // KeyHelper は物理キーを論理ページコマンドへ変換するため、履歴復元後の
+        // セッション読み方向を即時同期する。UserDefaults のグローバル設定は変更しない。
+        postReadingDirectionChanged(isRightToLeft: isRightToLeftReading)
     }
 
     func saveReadingPositionToHistory() {
