@@ -187,7 +187,7 @@ final class KeyHelperController: NSObject {
         CZUserDefaults.shared.set(visibleUntil?.timeIntervalSince1970 ?? 0, forKey: CZSettingsKeys.keyHelperVisibleUntil)
         CZUserDefaults.shared.set("visible received", forKey: CZSettingsKeys.keyHelperLastDecision)
         NSLog("[CoverZipKeyHelper] visible session=%@", sessionID)
-        refreshAccessibilityTrust(installIfNeeded: true, promptIfNeeded: true)
+        refreshAccessibilityTrust(installIfNeeded: true, promptIfNeeded: false)
     }
 
     @objc private func handlePreviewHidden(_ notification: Notification) {

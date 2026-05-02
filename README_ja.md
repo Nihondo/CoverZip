@@ -71,7 +71,7 @@ CoverZip を ZIP ファイルに関連付けておくと、ZIP をダブルク�
 
 有効化後、Finder で ZIP ファイルを選択するとサムネイルが表示され、スペースキーでコミックビューアが使えるようになります。
 
-Finder の QuickLook ビューアで矢印キーを使うには、CoverZip の設定 → `Viewer` で **Use arrow keys for pages in Finder Quick Look** を有効にします。macOS の仕様上、同梱ヘルパーをログイン項目として登録し、**システム設定 → プライバシーとセキュリティ → アクセシビリティ** で許可する必要があります。
+Finder の QuickLook ビューアで矢印キーを使うには、CoverZip の設定 → `Viewer` で **Finder Quick Look で矢印キーによるページ移動を使う** を有効にします。macOS の仕様上、同梱ヘルパーをログイン項目として登録し、**システム設定 → プライバシーとセキュリティ → アクセシビリティ** で許可する必要があります。
 
 ---
 

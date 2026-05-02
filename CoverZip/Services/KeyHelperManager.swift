@@ -65,11 +65,15 @@ final class KeyHelperManager {
 
     func enable() throws {
         do {
-            if loginItem.status == .notRegistered || loginItem.status == .notFound {
+            let registrationNeeded = loginItem.status == .notRegistered || loginItem.status == .notFound
+            if registrationNeeded {
                 try loginItem.register()
+                // register() がヘルパーを即時起動するため、二重起動を避けて明示的な起動はスキップ
             }
             CZSettings.shared.isKeyHelperEnabled = true
-            launchHelperIfPossible()
+            if !registrationNeeded {
+                launchHelperIfPossible()
+            }
         } catch {
             CZSettings.shared.isKeyHelperEnabled = false
             throw error
@@ -111,10 +115,13 @@ final class KeyHelperManager {
     func repairRegistrationIfNeeded() {
         guard CZSettings.shared.isKeyHelperEnabled else { return }
         do {
-            if loginItem.status == .notRegistered || loginItem.status == .notFound {
+            let registrationNeeded = loginItem.status == .notRegistered || loginItem.status == .notFound
+            if registrationNeeded {
                 try loginItem.register()
+                // register() がヘルパーを即時起動するため、二重起動を避けて明示的な起動はスキップ
+            } else {
+                launchHelperIfPossible()
             }
-            launchHelperIfPossible()
         } catch {
             CZUserDefaults.shared.set(error.localizedDescription, forKey: CZSettingsKeys.keyHelperLastError)
         }

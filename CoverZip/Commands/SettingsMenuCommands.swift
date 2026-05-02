@@ -15,6 +15,7 @@ struct SettingsMenuCommands: Commands {
         CommandGroup(replacing: .appSettings) {
             Button {
                 NSApp.activate(ignoringOtherApps: true)
+                SettingsDiagnosticsState.shared.isVisible = NSEvent.modifierFlags.contains(.shift)
                 openWindow(id: AppWindowIdentifier.settings)
             }
             label: {
