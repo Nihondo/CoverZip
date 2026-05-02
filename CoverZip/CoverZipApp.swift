@@ -15,6 +15,7 @@ private enum SettingsTab: Hashable, CaseIterable {
     case viewer
     case slideshow
     case window
+    case update
     case routing
 
     var title: String {
@@ -25,6 +26,8 @@ private enum SettingsTab: Hashable, CaseIterable {
             CZLocalized.string("app.tab.slideshow", defaultValue: "Slideshow")
         case .window:
             CZLocalized.string("app.tab.window", defaultValue: "Window")
+        case .update:
+            CZLocalized.string("app.tab.update", defaultValue: "Update")
         case .routing:
             CZLocalized.string("app.tab.routing", defaultValue: "File Routing")
         }
@@ -38,6 +41,8 @@ private enum SettingsTab: Hashable, CaseIterable {
             "play.rectangle"
         case .window:
             "macwindow"
+        case .update:
+            "arrow.down.circle"
         case .routing:
             "arrow.triangle.branch"
         }
@@ -68,6 +73,8 @@ private struct SettingsRootView: View {
             SlideshowSettingsView()
         case .window:
             WindowSettingsView()
+        case .update:
+            UpdateSettingsView(releasesURL: URL(string: "https://github.com/Nihondo/CoverZip/releases")!)
         case .routing:
             RoutingSettingsView()
         }
@@ -81,6 +88,7 @@ struct CoverZipApp: App {
     init() {
         // 初回起動時にルーティング設定の初期値を投入
         seedRoutingSettingsIfNeeded()
+        _ = AppUpdateController.shared
     }
     
     var body: some Scene {

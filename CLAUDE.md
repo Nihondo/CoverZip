@@ -223,6 +223,32 @@ App Group UserDefaults の `CZSettingsKeys.routingSettingsData` キーに JSON �
 - **絶対パス** (`/Applications/Foo.app`): 直接使用（保存時に `ApplicationResolver` で解決済み）
 - アプリ名 / Bundle ID は `ApplicationResolver.resolveApplicationURL(from:)` で絶対パスに解決してから保存する
 
+## Sparkle Updates
+
+- Sparkle is linked only to the `CoverZip` app target, not to the Quick Look extensions or the key helper.
+- `CoverZip/Info.plist` owns the Sparkle keys:
+  - `SUFeedURL`: `https://products.desireforwealth.com/appcast/coverzip/appcast.xml`
+  - `SUPublicEDKey`: replace `REPLACE_WITH_COVERZIP_SPARKLE_EDDSA_PUBLIC_KEY` with the CoverZip EdDSA public key before release.
+  - `SUEnableAutomaticChecks`: enabled, with `SUScheduledCheckInterval` set to 24 hours.
+- `CoverZip/Update/AppUpdateController.swift` wraps `SPUStandardUpdaterController` and exposes update state for SwiftUI.
+- `CoverZip/Update/UpdateSettingsView.swift` provides the Settings > Update tab.
+- Manual checks are available from Settings > Update and the app menu item `Check for Updates...`.
+
+### Sparkle EdDSA Key
+
+The EdDSA private key must be stored outside the repository, preferably in macOS Keychain with a secure backup.
+
+- Public key: committed in `Info.plist` under `SUPublicEDKey`.
+- Private key: do not commit it. Store a secure backup in the password manager.
+- If the private key is lost, generate a new key pair with Sparkle `generate_keys`, update `SUPublicEDKey`, and publish a new release. Users on old builds may need one manual update.
+
+### Release Process
+
+1. Bump `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in project settings.
+2. Archive with Developer ID Application signing, notarize, then create `CoverZip.zip`.
+3. Create a GitHub Release with tag `v{MARKETING_VERSION}` and attach `CoverZip.zip`.
+4. Generate and publish the Sparkle appcast for `coverzip` in the product site/appcast pipeline.
+
 ## 開発時の注意点
 
 ### 共有設定の管理

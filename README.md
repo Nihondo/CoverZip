@@ -76,6 +76,8 @@ To use arrow keys in the Finder QuickLook viewer, open CoverZip Settings → Vie
 
 For troubleshooting Finder QuickLook key input, hold Shift while right-clicking inside the QuickLook viewer. The context menu shows debug information such as the viewer version, build number, current reading direction, and key helper status.
 
+You can open the online manual from **Help → CoverZip Manual**.
+
 ---
 
 ## Configuring Routing Rules
@@ -86,6 +88,7 @@ The Settings window uses a macOS sidebar layout with these tabs:
 - `Viewer`: Reading direction, view mode, thumbnail visibility, page transition, Finder QuickLook arrow-key helper, and decode cache policy
 - `Slideshow`: Page auto-advance interval
 - `Window`: Restore preview window size/position and reset saved frame
+- `Update`: Current version, manual update check, automatic update checks, and the releases page
 - `File Routing`: Rule-based routing and ZIP default-app association
 
 Rules are evaluated from top to bottom, and the first match is used.
@@ -139,6 +142,17 @@ When system memory runs low, caches are automatically released to minimize impac
 CoverZip supports standard ZIP files (.zip). It recognizes common image formats inside ZIP files, including JPEG, PNG, GIF, BMP, and TIFF.
 
 Password-protected ZIP files, Zip64 format, and compression methods other than DEFLATE are not supported.
+
+---
+
+## Automatic Updates
+
+CoverZip uses [Sparkle](https://sparkle-project.org/) for automatic updates.
+
+- **Startup check**: Checks for updates automatically when the app launches.
+- **Scheduled check**: Rechecks every 24 hours in the background.
+- **Manual check**: Open the **Update** tab in Settings or choose **Check for Updates...** from the CoverZip app menu.
+- Updates are downloaded and installed after you confirm.
 
 ---
 
