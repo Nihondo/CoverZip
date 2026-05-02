@@ -102,13 +102,13 @@ sequenceDiagram
     Image->>Zip: imageEntryInfoList / extractImageData
     Preview->>Preview: 表示モード、ページ、サムネイルを描画
 
-    Driver->>DNC: previewSessionCommand: キー操作をページコマンド化
-    DNC->>Preview: goForwardPage / goBackwardPage / jumpRelativePages
+    Driver->>DNC: previewSessionCommand: キー操作を物理キー系/論理ページコマンド化
+    DNC->>Preview: 物理左右キー系 / goForwardPage / goBackwardPage / jumpRelativePages
     Internal->>DNC: settingsChanged / previewSessionCommand: メニュー操作を反映
     DNC->>Preview: 表示設定・セッションコマンドを反映
 ```
 
-内蔵ビューアは独自の画像表示ロジックを持たず、`QLPreviewView` に ZIP を渡して Quick Look Preview Extension を起動します。キー入力は `QLPreviewInputDriver.KeyForwardingView` が受け、`previewSessionCommand` 通知へ変換します。
+内蔵ビューアは独自の画像表示ロジックを持たず、`QLPreviewView` に ZIP を渡して Quick Look Preview Extension を起動します。キー入力は `QLPreviewInputDriver.KeyForwardingView` が受け、左右キーとその Shift/Cmd 派生は物理キー系の `previewSessionCommand` として Preview へ渡します。Preview は現在セッションの読み方向で前後、10ページジャンプ、先頭/末尾を決定します。
 
 ## Finder Quick Look 経路
 
@@ -127,15 +127,15 @@ sequenceDiagram
     Key->>Key: activeSessionID / visibleUntil を更新
     Key->>Key: Accessibility許可時 CGEventTap を有効化
     Key->>Key: 対象キー入力時に visibleUntil または AX 前面Quick Look判定を確認
-    Key->>DNC: previewSessionCommand(goLeftArrowPage/goRightArrowPage, commandID)
+    Key->>DNC: previewSessionCommand(物理キー系/相対ジャンプ/先頭末尾, commandID)
     DNC->>Preview: コマンド受信
-    Preview->>Preview: 現在の読み方向で物理キーをページ移動へ変換
+    Preview->>Preview: 現在の読み方向で物理左右キーをページ移動/ジャンプ/先頭末尾へ変換
     Preview->>DNC: previewSessionCommandHandled(commandID)
     DNC->>Key: 処理済みを受信
     Preview->>DNC: previewExtensionHidden(sessionID)
 ```
 
-Finder 内の Quick Look では App 側の `QLPreviewInputDriver` を使えないため、任意設定の `CoverZipKeyHelper` がキーイベントを中継します。KeyHelper は `previewExtensionVisible` の heartbeat で表示中セッションを維持し、通知の有効期限が切れた場合は AX で前面の Quick Look ウィンドウを確認します。左右矢印キーでは読み方向を KeyHelper 側で判断せず、物理キーを `goLeftArrowPage` / `goRightArrowPage` として送ります。Preview は受信時点の `isRightToLeftReading` に基づいて前進/後退へ変換します。AX で Quick Look が確認できない場合はキーイベントをそのまま通します。
+Finder 内の Quick Look では App 側の `QLPreviewInputDriver` を使えないため、任意設定の `CoverZipKeyHelper` がキーイベントを中継します。KeyHelper は `previewExtensionVisible` の heartbeat で表示中セッションを維持し、通知の有効期限が切れた場合は AX で前面の Quick Look ウィンドウを確認します。左右矢印キーとその Shift/Cmd 派生では読み方向を KeyHelper 側で判断せず、物理キー系コマンドとして送ります。Preview は受信時点の `isRightToLeftReading` に基づいて前進/後退、10ページジャンプ、先頭/末尾を決定します。AX で Quick Look が確認できない場合はキーイベントをそのまま通します。
 
 ## 設定同期とメニュー操作
 
@@ -249,21 +249,25 @@ sequenceDiagram
 | `setThumbnailStripVisible` | `InternalViewer` の右クリック/メニューバー表示メニュー | `boolValue`: 表示状態。未指定時は現在値を反転 | サムネイルストリップの表示/非表示を変更 |
 | `setPageTransitionEnabled` | `InternalViewer` の右クリック/メニューバー表示メニュー | `boolValue`: 有効状態。未指定時は現在値を反転 | ページ切替トランジションの有効/無効を変更 |
 | `setSlideshowEnabled` | `InternalViewer` の右クリック/メニューバー表示メニュー | `boolValue`: 有効状態。未指定時は現在値を反転 | スライドショーを開始/停止 |
-| `goToFirstPage` | `QLPreviewInputDriver` の `Cmd+←/→`, Home | なし | 1ページ目へ移動 |
-| `goToLastPage` | `QLPreviewInputDriver` の `Cmd+←/→`, End | なし | 最終ページへ移動 |
+| `goToFirstPage` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の Home | なし | 1ページ目へ移動 |
+| `goToLastPage` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の End | なし | 最終ページへ移動 |
 | `goForwardPage` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の上下キー | 任意: `commandID` | 読書順で次ページへ移動 |
 | `goBackwardPage` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の上下キー | 任意: `commandID` | 読書順で前ページへ移動 |
-| `goLeftArrowPage` | `CoverZipKeyHelper` の左キー | 任意: `commandID` | Preview 側の現在の読み方向に基づいて次/前ページへ移動 |
-| `goRightArrowPage` | `CoverZipKeyHelper` の右キー | 任意: `commandID` | Preview 側の現在の読み方向に基づいて次/前ページへ移動 |
-| `jumpRelativePages` | `QLPreviewInputDriver` の `Shift+←/→`, PageUp/PageDown | `intValue`: 正数で前進、負数で後退 | 現在ページから相対移動し、範囲内にクランプする |
+| `goLeftArrowPage` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の左キー | 任意: `commandID` | Preview 側の現在の読み方向に基づいて次/前ページへ移動 |
+| `goRightArrowPage` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の右キー | 任意: `commandID` | Preview 側の現在の読み方向に基づいて次/前ページへ移動 |
+| `jumpLeftArrowPages` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の `Shift+←` | `intValue`: ジャンプページ数（通常 `10`） | Preview 側の現在の読み方向に基づいて相対ジャンプ方向を決め、範囲内にクランプする |
+| `jumpRightArrowPages` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の `Shift+→` | `intValue`: ジャンプページ数（通常 `10`） | Preview 側の現在の読み方向に基づいて相対ジャンプ方向を決め、範囲内にクランプする |
+| `goToLeftArrowEdgePage` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の `Cmd+←` | 任意: `commandID` | Preview 側の現在の読み方向に基づいて先頭/末尾へ移動 |
+| `goToRightArrowEdgePage` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の `Cmd+→` | 任意: `commandID` | Preview 側の現在の読み方向に基づいて先頭/末尾へ移動 |
+| `jumpRelativePages` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の PageUp/PageDown | `intValue`: 正数で前進、負数で後退 | 現在ページから相対移動し、範囲内にクランプする |
 
 ### 呼び出し元別の送信内容
 
 | 呼び出し元 | 送信するメッセージ | 備考 |
 | --- | --- | --- |
 | `InternalViewer` | `settingsChanged`, `previewSessionCommand` | 右クリックメニューとメニューバー表示メニューの操作を App Group UserDefaults に保存し、同じ操作をセッションコマンドとして Preview へ送る |
-| `QLPreviewInputDriver.KeyForwardingView` | `previewSessionCommand` | 内蔵ビューアウィンドウ内のキー入力をページ操作へ変換する。物理キーと読み方向の対応は送信側で解決済み |
-| `CoverZipKeyHelper` | `previewSessionCommand` | Finder Quick Look 表示中にカーソルキーを捕捉し、`commandID` 付きで送る。左右キーは物理キーコマンドとして送り、Preview 側が現在の読み方向で次/前ページへ変換する。上下キーは読み方向に依存しない `goForwardPage` / `goBackwardPage` を送る。Preview は処理後に `previewSessionCommandHandled` を返す |
+| `QLPreviewInputDriver.KeyForwardingView` | `previewSessionCommand` | 内蔵ビューアウィンドウ内のキー入力をページ操作へ変換する。左右キーと Shift/Cmd 左右キーは物理キー系コマンドとして送り、Preview 側が現在の読み方向で次/前、10ページジャンプ、先頭/末尾へ変換する |
+| `CoverZipKeyHelper` | `previewSessionCommand` | Finder Quick Look 表示中に対象キーを捕捉し、`commandID` 付きで送る。左右キーと Shift/Cmd 左右キーは物理キー系コマンドとして送り、Preview 側が現在の読み方向で次/前、10ページジャンプ、先頭/末尾へ変換する。上下キーと PageUp/PageDown は読み方向に依存しない論理コマンドを送る。Preview は処理後に `previewSessionCommandHandled` を返す |
 | `AppSettingsWriter` | `settingsChanged` | 設定画面で共有設定が変わったときに送る。設定値本体は App Group UserDefaults に保存される |
 | Preview 自身の右クリックメニュー | `settingsChanged` | Quick Look Extension 側で読み方向を変えたとき、グローバル設定と現在セッション読み方向を更新し、他プロセスへ通知する |
 | Preview 自身の Shift+右クリックメニュー | なし | 通知は送らず、App Group UserDefaults と Bundle 情報からバージョン、ビルド番号、現在セッション読み方向、KeyHelper の診断状態をメニュー内に表示する |

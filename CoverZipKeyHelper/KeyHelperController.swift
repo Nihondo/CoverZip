@@ -382,40 +382,70 @@ final class KeyHelperController: NSObject {
     private func handleKeyEvent(_ event: CGEvent) -> Unmanaged<CGEvent>? {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
 
-        guard let command = commandForKeyCode(keyCode) else {
+        guard let previewCommand = commandForKeyEvent(event) else {
             return Unmanaged.passUnretained(event)
         }
 
-        guard shouldCaptureKeyEvent(keyCode: keyCode, command: command) else {
+        guard shouldCaptureKeyEvent(keyCode: keyCode, command: previewCommand.command) else {
             return Unmanaged.passUnretained(event)
         }
 
         let commandID = UUID().uuidString
         DispatchQueue.main.async { [weak self] in
-            self?.postCommand(command, commandID: commandID)
+            self?.postCommand(previewCommand.command, commandID: commandID, intValue: previewCommand.intValue)
         }
         return nil
     }
 
-    private func commandForKeyCode(_ keyCode: Int64) -> CZPreviewSessionCommand? {
+    private func commandForKeyEvent(_ event: CGEvent) -> (command: CZPreviewSessionCommand, intValue: Int?)? {
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        let flags = event.flags
+        let isCommand = flags.contains(.maskCommand)
+        let isShift = flags.contains(.maskShift)
+
         switch keyCode {
-        case 123: return .goLeftArrowPage
-        case 124: return .goRightArrowPage
-        case 125: return .goForwardPage
-        case 126: return .goBackwardPage
-        default:  return nil
+        case 123:
+            if isCommand { return (.goToLeftArrowEdgePage, nil) }
+            if isShift { return (.jumpLeftArrowPages, 10) }
+            return (.goLeftArrowPage, nil)
+        case 124:
+            if isCommand { return (.goToRightArrowEdgePage, nil) }
+            if isShift { return (.jumpRightArrowPages, 10) }
+            return (.goRightArrowPage, nil)
+        case 125:
+            return (.goForwardPage, nil)
+        case 126:
+            return (.goBackwardPage, nil)
+        case 115:
+            return (.goToFirstPage, nil)
+        case 119:
+            return (.goToLastPage, nil)
+        case 116:
+            return (.jumpRelativePages, -10)
+        case 121:
+            return (.jumpRelativePages, 10)
+        default:
+            return nil
         }
     }
 
-    private func postCommand(_ command: CZPreviewSessionCommand, commandID: String) {
-        NSLog("[CoverZipKeyHelper] post command=%@", command.rawValue)
+    private func postCommand(_ command: CZPreviewSessionCommand, commandID: String, intValue: Int? = nil) {
+        if let intValue {
+            NSLog("[CoverZipKeyHelper] post command=%@ intValue=%d", command.rawValue, intValue)
+        } else {
+            NSLog("[CoverZipKeyHelper] post command=%@", command.rawValue)
+        }
         CZUserDefaults.shared.set(Date().timeIntervalSince1970, forKey: CZSettingsKeys.keyHelperLastCommandAt)
         CZUserDefaults.shared.set(command.rawValue, forKey: CZSettingsKeys.keyHelperLastCommand)
-        CZUserDefaults.shared.set("posted \(command.rawValue)", forKey: CZSettingsKeys.keyHelperLastDecision)
-        let userInfo: [String: Any] = [
+        let decision = intValue.map { "posted \(command.rawValue) intValue=\($0)" } ?? "posted \(command.rawValue)"
+        CZUserDefaults.shared.set(decision, forKey: CZSettingsKeys.keyHelperLastDecision)
+        var userInfo: [String: Any] = [
             CZPreviewSessionCommandUserInfoKeys.command: command.rawValue,
             CZPreviewSessionCommandUserInfoKeys.commandID: commandID
         ]
+        if let intValue {
+            userInfo[CZPreviewSessionCommandUserInfoKeys.intValue] = intValue
+        }
         DistributedNotificationCenter.default().postNotificationName(
             CZDistributedNotifications.previewSessionCommand,
             object: command.rawValue,

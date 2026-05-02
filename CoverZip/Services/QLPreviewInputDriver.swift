@@ -292,16 +292,12 @@ enum QLPreviewInputDriver {
                 let isLeft  = (Int(event.keyCode) == 123)
                 let isCmd   = event.modifierFlags.contains(.command)
                 let isShift = event.modifierFlags.contains(.shift)
-                let isRTL = CZUserDefaults.shared.object(forKey: CZSettingsKeys.isRightToLeftReading) as? Bool ?? true
-                let isForward = (isLeft == isRTL)  // RTL: ←=前進, LTR: →=前進
-                if isCmd || isShift {
-                    if isCmd {
-                        PreviewSessionCommandDispatcher.post(command: isForward ? .goToLastPage : .goToFirstPage)
-                    } else {
-                        PreviewSessionCommandDispatcher.post(command: .jumpRelativePages, intValue: isForward ? +10 : -10)
-                    }
+                if isCmd {
+                    PreviewSessionCommandDispatcher.post(command: isLeft ? .goToLeftArrowEdgePage : .goToRightArrowEdgePage)
+                } else if isShift {
+                    PreviewSessionCommandDispatcher.post(command: isLeft ? .jumpLeftArrowPages : .jumpRightArrowPages, intValue: 10)
                 } else {
-                    PreviewSessionCommandDispatcher.post(command: isForward ? .goForwardPage : .goBackwardPage)
+                    PreviewSessionCommandDispatcher.post(command: isLeft ? .goLeftArrowPage : .goRightArrowPage)
                 }
             case 49:  // Space: 読み方向に応じてページ送り/戻し
                 let goForward = !event.modifierFlags.contains(.shift)

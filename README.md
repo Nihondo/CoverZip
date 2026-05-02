@@ -22,7 +22,7 @@ Select a ZIP file in Finder and press the spacebar to open CoverZip's comic view
 
 Here's what you can do in the viewer. You can also change settings like view mode and reading direction from the right-click context menu.
 
-- **Page navigation** is done by clicking the left or right side of the screen, by scrolling the mouse wheel up and down, or by using arrow keys when the optional Finder QuickLook key helper is enabled. Without the helper, Finder captures arrow keys and changes the selected file.
+- **Page navigation** is done by clicking the left or right side of the screen, by scrolling the mouse wheel up and down, or by using keyboard controls when the optional Finder QuickLook key helper is enabled. Without the helper, Finder captures arrow keys and changes the selected file.
 - **View mode** can be set to "Single Page" (one page at a time) or "Spread" (two pages side by side). The "Auto" option automatically determines the layout based on image dimensions.
 If the page pairing looks off in spread mode, select "**Adjust Spread Alignment**" from the menu to shift the pairing by one page.
 - **Reading direction** can be switched between right-to-left (for Japanese manga) and left-to-right (for Western books).
@@ -49,9 +49,9 @@ When the routing target is the "Built-in Viewer", CoverZip continues running. Wh
 
 You can also use Option+Cmd+O (menu: `Open in Built-in Viewer...`) to open a ZIP file directly in the built-in viewer, regardless of routing settings.
 
-### Keyboard Controls in the Built-in Viewer
+### Keyboard Controls
 
-In the built-in viewer, the following keyboard controls are available in addition to clicking and scrolling. Forward/backward directions for arrow keys automatically adapt to the reading direction setting (right-to-left / left-to-right).
+In the built-in viewer, the following keyboard controls are available in addition to clicking and scrolling. When the optional Finder QuickLook key helper is enabled, the same navigation keys are also available in Finder QuickLook, except for the Space shortcuts. Forward/backward directions for arrow keys automatically adapt to the reading direction setting (right-to-left / left-to-right).
 
 | Key | Action |
 |-----|--------|

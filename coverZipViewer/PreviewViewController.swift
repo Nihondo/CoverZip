@@ -1076,7 +1076,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return #selector(toggleTransition(_:))
         case .setSlideshowEnabled:
             return #selector(toggleSlideshow(_:))
-        case .goToFirstPage, .goToLastPage, .goForwardPage, .goBackwardPage, .goLeftArrowPage, .goRightArrowPage, .jumpRelativePages:
+        case .goToFirstPage, .goToLastPage, .goForwardPage, .goBackwardPage,
+             .goLeftArrowPage, .goRightArrowPage, .jumpLeftArrowPages, .jumpRightArrowPages,
+             .goToLeftArrowEdgePage, .goToRightArrowEdgePage, .jumpRelativePages:
             return nil
         }
     }
@@ -1101,7 +1103,9 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return isTransitionEnabled ? .on : .off
         case .setSlideshowEnabled:
             return isSlideshowEnabled ? .on : .off
-        case .goToFirstPage, .goToLastPage, .goForwardPage, .goBackwardPage, .goLeftArrowPage, .goRightArrowPage, .jumpRelativePages:
+        case .goToFirstPage, .goToLastPage, .goForwardPage, .goBackwardPage,
+             .goLeftArrowPage, .goRightArrowPage, .jumpLeftArrowPages, .jumpRightArrowPages,
+             .goToLeftArrowEdgePage, .goToRightArrowEdgePage, .jumpRelativePages:
             return .off
         }
     }
@@ -1335,12 +1339,35 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             _ = performPageNavigation(forward: isRightToLeftReading)
         case .goRightArrowPage:
             _ = performPageNavigation(forward: !isRightToLeftReading)
+        case .jumpLeftArrowPages:
+            jumpArrowPages(isLeftArrow: true, userInfo: userInfo)
+        case .jumpRightArrowPages:
+            jumpArrowPages(isLeftArrow: false, userInfo: userInfo)
+        case .goToLeftArrowEdgePage:
+            moveToArrowEdgePage(isLeftArrow: true)
+        case .goToRightArrowEdgePage:
+            moveToArrowEdgePage(isLeftArrow: false)
         case .jumpRelativePages:
             let delta = userInfo[CZPreviewSessionCommandUserInfoKeys.intValue] as? Int ?? 0
-            let target = imageManager.getCurrentPageNumber() + delta
-            let clamped = max(1, min(target, imageManager.getImageCount()))
-            moveToPageFromThumbnail(clamped)
+            jumpRelativePages(delta)
         }
+    }
+
+    private func jumpArrowPages(isLeftArrow: Bool, userInfo: [AnyHashable: Any]) {
+        let pageCount = userInfo[CZPreviewSessionCommandUserInfoKeys.intValue] as? Int ?? 10
+        let isForward = isLeftArrow == isRightToLeftReading
+        jumpRelativePages(isForward ? pageCount : -pageCount)
+    }
+
+    private func moveToArrowEdgePage(isLeftArrow: Bool) {
+        let isForward = isLeftArrow == isRightToLeftReading
+        moveToPageFromThumbnail(isForward ? imageManager.getImageCount() : 1)
+    }
+
+    private func jumpRelativePages(_ delta: Int) {
+        let target = imageManager.getCurrentPageNumber() + delta
+        let clamped = max(1, min(target, imageManager.getImageCount()))
+        moveToPageFromThumbnail(clamped)
     }
 
     private func postPreviewSessionCommandHandled(commandID: String?) {
