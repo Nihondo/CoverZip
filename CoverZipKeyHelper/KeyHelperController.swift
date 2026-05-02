@@ -295,29 +295,27 @@ final class KeyHelperController: NSObject {
         return false
     }
 
-    private func updateFinderFallbackSessionForControlKey(_ keyCode: Int64, event: CGEvent, frontmostBundleID: String) {
+    private func updateFinderFallbackSessionForControlKey(_ keyCode: Int64, event: CGEvent) {
         if keyCode == Self.escapeKeyCode {
             clearFinderFallbackSession(reason: "finder fallback closed by escape")
             return
         }
-        let flags = CGEventFlags(rawValue: UInt64(event.flags.rawValue))
-        if keyCode == Self.wKeyCode, flags.contains(.maskCommand) {
-            clearFinderFallbackSession(reason: "finder fallback closed by command-w")
-            return
+        if keyCode == Self.wKeyCode {
+            let flags = CGEventFlags(rawValue: UInt64(event.flags.rawValue))
+            if flags.contains(.maskCommand) {
+                clearFinderFallbackSession(reason: "finder fallback closed by command-w")
+                return
+            }
         }
-        guard frontmostBundleID == "com.apple.finder" else { return }
         guard keyCode == Self.spaceKeyCode else { return }
+        let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"
+        guard frontmostBundleID == "com.apple.finder" else { return }
         if !isFrontmostQuickLookWindowVisible(), !isFinderFallbackActive() {
             scheduleFinderFallbackActivationAfterSpace()
         }
     }
 
-    private func shouldCaptureKeyEvent(_ event: CGEvent) -> Bool {
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        guard commandForKeyCode(keyCode) != nil else {
-            return false
-        }
-
+    private func shouldCaptureKeyEvent(keyCode: Int64, command: CZPreviewSessionCommand) -> Bool {
         didUseFinderFallbackForLastCapture = false
         let now = Date().timeIntervalSince1970
         let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"
@@ -358,7 +356,13 @@ final class KeyHelperController: NSObject {
         }
 
         CZUserDefaults.shared.set("capturing key \(keyCode)", forKey: CZSettingsKeys.keyHelperLastDecision)
-        NSLog("[CoverZipKeyHelper] key %lld captured frontmost=%@", keyCode, frontmostBundleID)
+        NSLog(
+            "[CoverZipKeyHelper] key %lld captured command=%@ rtl=%d frontmost=%@",
+            keyCode,
+            command.rawValue,
+            cachedIsRightToLeftReading ? 1 : 0,
+            frontmostBundleID
+        )
         return true
     }
 
@@ -532,14 +536,13 @@ final class KeyHelperController: NSObject {
 
     private func handleKeyEvent(_ event: CGEvent) -> Unmanaged<CGEvent>? {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"
-        updateFinderFallbackSessionForControlKey(keyCode, event: event, frontmostBundleID: frontmostBundleID)
+        updateFinderFallbackSessionForControlKey(keyCode, event: event)
 
-        guard shouldCaptureKeyEvent(event) else {
+        guard let command = commandForKeyCode(keyCode) else {
             return Unmanaged.passUnretained(event)
         }
 
-        guard let command = commandForKeyCode(keyCode) else {
+        guard shouldCaptureKeyEvent(keyCode: keyCode, command: command) else {
             return Unmanaged.passUnretained(event)
         }
 
@@ -555,7 +558,6 @@ final class KeyHelperController: NSObject {
 
     private func commandForKeyCode(_ keyCode: Int64) -> CZPreviewSessionCommand? {
         let isRightToLeft = cachedIsRightToLeftReading
-        NSLog("[CoverZipKeyHelper] key \(keyCode) rtl=\(isRightToLeft ? 1 : 0)")
         switch keyCode {
         case 123: return isRightToLeft ? .goForwardPage : .goBackwardPage
         case 124: return isRightToLeft ? .goBackwardPage : .goForwardPage
