@@ -128,7 +128,8 @@ sequenceDiagram
     Darwin->>Key: qlVisible を受信
     Key->>Key: visibleUntil を更新（now + 15秒）
     Key->>Key: Accessibility許可時 CGEventTap を有効化
-    Key->>Key: 対象キー入力時に visibleUntil を確認
+    Key->>Key: 対象キー入力時に visibleUntil を確認（heartbeat が有効か）
+    Key->>Key: AX でフロントウィンドウが浮遊 QL か確認（カラム内ビューアは除外）
     Key->>DNC: previewSessionCommand(物理キー系/相対ジャンプ/先頭末尾, commandID)
     DNC->>Preview: コマンド受信
     Preview->>Preview: 現在の読み方向で物理左右キーをページ移動/ジャンプ/先頭末尾へ変換
@@ -138,7 +139,7 @@ sequenceDiagram
     Darwin->>Key: qlHidden を受信 → visibleUntil をクリア
 ```
 
-Finder 内の Quick Look では App 側の `QLPreviewInputDriver` を使えないため、任意設定の `CoverZipKeyHelper` がキーイベントを中継します。KeyHelper は Darwin 通知（`CFNotificationCenterGetDarwinNotifyCenter()`）経由で受信する heartbeat で `visibleUntil`（now + 15秒）を更新します。Darwin 通知を採用した理由は、QuickLook Extension の sandbox が `NSDistributedNotificationCenter` と App Group UserDefaults の書き込みをプロセス外に届けられないためです（Extension のホストが `QuickLookUIService` であり、CoverZip コンテナアプリのグループを継承しない）。Darwin 通知はカーネルレベルの `notify_post` を使うため sandbox 制限の対象外です。`visibleUntil` が有効な間だけキーを捕捉するため、CoverZip 以外の QuickLook プレビュー（PDF など）ではキーを奪いません。左右矢印キーとその Shift/Cmd 派生では読み方向を KeyHelper 側で判断せず、物理キー系コマンドとして送ります。Preview は受信時点の `isRightToLeftReading` に基づいて前進/後退、10ページジャンプ、先頭/末尾を決定します。
+Quick Look では App 側の `QLPreviewInputDriver` を使えないため、任意設定の `CoverZipKeyHelper` がキーイベントを中継します。Darwin 通知（`CFNotificationCenterGetDarwinNotifyCenter()`）経由で受信する heartbeat で `visibleUntil`（now + 15秒）を更新します。Darwin 通知を採用した理由は、QuickLook Extension の sandbox が `NSDistributedNotificationCenter` と App Group UserDefaults の書き込みをプロセス外に届けられないためです（Extension のホストが `QuickLookUIService` であり、CoverZip コンテナアプリのグループを継承しない）。Darwin 通知はカーネルレベルの `notify_post` を使うため sandbox 制限の対象外です。キー入力時は **heartbeat（`visibleUntil` 有効）** と **AX によるフロントウィンドウ確認** の2段階でキャプチャを判定します。AX チェックにより Finder カラム表示内の QL（フロントウィンドウが QL パネルでなくブラウザウィンドウ）は捕捉対象から除外されます。フロントアプリは Finder に限定せず、AX でフロントウィンドウが QL パネルと判定できれば捕捉します。PDF など CoverZip 以外の QL では heartbeat が届かないためキーを奪いません。左右矢印キーとその Shift/Cmd 派生では読み方向を KeyHelper 側で判断せず、物理キー系コマンドとして送ります。Preview は受信時点の `isRightToLeftReading` に基づいて前進/後退、10ページジャンプ、先頭/末尾を決定します。
 
 ## 設定同期とメニュー操作
 
@@ -279,7 +280,7 @@ QuickLook Extension は `QuickLookUIService` がホストするため sandbox �
 | --- | --- | --- |
 | `InternalViewer` | `settingsChanged`, `previewSessionCommand` | 右クリックメニューとメニューバー表示メニューの操作を App Group UserDefaults に保存し、同じ操作をセッションコマンドとして Preview へ送る |
 | `QLPreviewInputDriver.KeyForwardingView` | `previewSessionCommand` | 内蔵ビューアウィンドウ内のキー入力をページ操作へ変換する。左右キーと Shift/Cmd 左右キーは物理キー系コマンドとして送り、Preview 側が現在の読み方向で次/前、10ページジャンプ、先頭/末尾へ変換する |
-| `CoverZipKeyHelper` | `previewSessionCommand` | Finder Quick Look 表示中に対象キーを捕捉し、`commandID` 付きで送る。左右キーと Shift/Cmd 左右キーは物理キー系コマンドとして送り、Preview 側が現在の読み方向で次/前、10ページジャンプ、先頭/末尾へ変換する。上下キーと PageUp/PageDown は読み方向に依存しない論理コマンドを送る。Preview は処理後に `previewSessionCommandHandled` を返す |
+| `CoverZipKeyHelper` | `previewSessionCommand` | CoverZip Quick Look の浮遊ウィンドウが前面にある間、対象キーを捕捉し `commandID` 付きで送る。左右キーと Shift/Cmd 左右キーは物理キー系コマンドとして送り、Preview 側が現在の読み方向で次/前、10ページジャンプ、先頭/末尾へ変換する。上下キーと PageUp/PageDown は読み方向に依存しない論理コマンドを送る。Preview は処理後に `previewSessionCommandHandled` を返す |
 | `AppSettingsWriter` | `settingsChanged` | 設定画面で共有設定が変わったときに送る。設定値本体は App Group UserDefaults に保存される |
 | Preview 自身の右クリックメニュー | `settingsChanged` | Quick Look Extension 側で読み方向を変えたとき、グローバル設定と現在セッション読み方向を更新し、他プロセスへ通知する |
 | Preview 自身の Shift+右クリックメニュー | なし | 通知は送らず、App Group UserDefaults と Bundle 情報からバージョン、ビルド番号、現在セッション読み方向、KeyHelper の診断状態をメニュー内に表示する |
@@ -289,5 +290,5 @@ QuickLook Extension は `QuickLookUIService` がホストするため sandbox �
 - `CoverZip` App は設定 UI、ZIP ルーティング、外部アプリ起動、内蔵ビューアウィンドウの生成を担当します。
 - `coverZipViewer` は ZIP 内画像の表示、ページ移動、見開き、サムネイルストリップ、読書履歴を担当します。
 - `coverZipExtension` は Finder サムネイル生成だけを担当します。
-- `CoverZipKeyHelper` は Finder Quick Look 表示中のキー入力中継だけを担当し、ページ表示自体は行いません。
+- `CoverZipKeyHelper` は CoverZip Quick Look（浮遊ウィンドウ）表示中のキー入力中継だけを担当し、ページ表示自体は行いません。
 - `Shared` は App Group 設定キー、共有 UserDefaults、ZIP 解析、自然順ソート、画像判定、共通メニュー定義を提供します。

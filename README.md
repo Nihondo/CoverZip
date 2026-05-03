@@ -164,5 +164,5 @@ CoverZip uses [Sparkle](https://sparkle-project.org/) for automatic updates.
 ---
 
 ## Known Issues
-- Arrow keys in the Finder QuickLook viewer require the optional key helper and Accessibility permission. If the helper is disabled or permission is not granted, Finder captures key input and the selected file changes.
+- Arrow keys in the QuickLook viewer require the optional key helper and Accessibility permission. If the helper is disabled or permission is not granted, the host app (e.g. Finder) captures key input instead. The key helper works regardless of which app triggered the QuickLook preview.
 - If you select a different ZIP file in Finder while the QuickLook viewer is still open, mouse click page navigation will likely stop working. Pressing the spacebar to reopen the window will restore click navigation. Mouse wheel scrolling continues to work normally.
