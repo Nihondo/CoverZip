@@ -13,12 +13,6 @@ import Foundation
 final class KeyHelperController: NSObject {
     private let visibilityTimeout: TimeInterval = 15.0
     private let trustedCheckInterval: TimeInterval = 5.0
-    private let allowedFrontmostBundleIDs: Set<String> = [
-        "com.apple.finder",
-        "com.apple.QuickLookUIService",
-        "com.apple.quicklook.ui.helper",
-        "com.apple.quicklook.QuickLookUIService"
-    ]
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -284,8 +278,8 @@ final class KeyHelperController: NSObject {
             clearActiveSession()
             return rejectKeyEvent(reason: "no active visible QuickLook session", keyCode: keyCode)
         }
-        guard allowedFrontmostBundleIDs.contains(frontmostBundleID) else {
-            return rejectKeyEvent(reason: "frontmost not allowed: \(frontmostBundleID)", keyCode: keyCode)
+        guard isFrontmostQuickLookWindowVisible() else {
+            return rejectKeyEvent(reason: "no AX-visible QuickLook window", keyCode: keyCode)
         }
 
         CZUserDefaults.shared.set("capturing key \(keyCode)", forKey: CZSettingsKeys.keyHelperLastDecision)
