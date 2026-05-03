@@ -190,6 +190,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         CZUserDefaults.shared.set(Date().timeIntervalSince1970, forKey: CZSettingsKeys.previewLastVisibilityPostAt)
         CZUserDefaults.shared.set(name.rawValue, forKey: CZSettingsKeys.previewLastVisibilityPostName)
         CZUserDefaults.shared.set(previewVisibilitySessionID, forKey: CZSettingsKeys.previewLastVisibilitySessionID)
+        // Darwin 通知: NSDistributedNotificationCenter・App Group が届かない QL sandbox でも動作する
+        let darwinName = (name == CZDistributedNotifications.previewExtensionVisible)
+            ? CZDarwinNotifications.qlVisible
+            : CZDarwinNotifications.qlHidden
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(darwinName as CFString),
+            nil, nil, true
+        )
         DistributedNotificationCenter.default().postNotificationName(
             name,
             object: nil,

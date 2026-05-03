@@ -41,6 +41,7 @@ flowchart LR
     viewer <-->|設定参照| defaults
     internal <-->|設定参照| defaults
     thumb -. App Group entitlement .-> defaults
+    viewer -. Darwin notification .-> keyhelper
 ```
 
 ## ZIPオープンとルーティング
@@ -117,25 +118,27 @@ sequenceDiagram
     participant Finder as Finder Quick Look
     participant Preview as coverZipViewer.PreviewViewController
     participant Defaults as App Group UserDefaults
+    participant Darwin as CFNotificationCenter (Darwin)
     participant Key as CoverZipKeyHelper
     participant DNC as DistributedNotificationCenter
 
     Finder->>Preview: Quick Look プレビュー開始
-    Preview->>DNC: previewExtensionVisible(sessionID)
-    Preview->>Defaults: previewLastVisibility* を保存
-    DNC->>Key: 表示中セッションを通知
-    Key->>Key: activeSessionID / visibleUntil を更新
+    Preview->>Darwin: qlVisible heartbeat（1秒ごと）
+    Preview->>Defaults: previewLastVisibility* を保存（診断用）
+    Darwin->>Key: qlVisible を受信
+    Key->>Key: visibleUntil を更新（now + 15秒）
     Key->>Key: Accessibility許可時 CGEventTap を有効化
-    Key->>Key: 対象キー入力時に visibleUntil または AX 前面Quick Look判定を確認
+    Key->>Key: 対象キー入力時に visibleUntil を確認
     Key->>DNC: previewSessionCommand(物理キー系/相対ジャンプ/先頭末尾, commandID)
     DNC->>Preview: コマンド受信
     Preview->>Preview: 現在の読み方向で物理左右キーをページ移動/ジャンプ/先頭末尾へ変換
     Preview->>DNC: previewSessionCommandHandled(commandID)
     DNC->>Key: 処理済みを受信
-    Preview->>DNC: previewExtensionHidden(sessionID)
+    Preview->>Darwin: qlHidden
+    Darwin->>Key: qlHidden を受信 → visibleUntil をクリア
 ```
 
-Finder 内の Quick Look では App 側の `QLPreviewInputDriver` を使えないため、任意設定の `CoverZipKeyHelper` がキーイベントを中継します。KeyHelper は `previewExtensionVisible` の heartbeat で表示中セッションを維持し、通知の有効期限が切れた場合は AX で前面の Quick Look ウィンドウを確認します。左右矢印キーとその Shift/Cmd 派生では読み方向を KeyHelper 側で判断せず、物理キー系コマンドとして送ります。Preview は受信時点の `isRightToLeftReading` に基づいて前進/後退、10ページジャンプ、先頭/末尾を決定します。AX で Quick Look が確認できない場合はキーイベントをそのまま通します。
+Finder 内の Quick Look では App 側の `QLPreviewInputDriver` を使えないため、任意設定の `CoverZipKeyHelper` がキーイベントを中継します。KeyHelper は Darwin 通知（`CFNotificationCenterGetDarwinNotifyCenter()`）経由で受信する heartbeat で `visibleUntil`（now + 15秒）を更新します。Darwin 通知を採用した理由は、QuickLook Extension の sandbox が `NSDistributedNotificationCenter` と App Group UserDefaults の書き込みをプロセス外に届けられないためです（Extension のホストが `QuickLookUIService` であり、CoverZip コンテナアプリのグループを継承しない）。Darwin 通知はカーネルレベルの `notify_post` を使うため sandbox 制限の対象外です。`visibleUntil` が有効な間だけキーを捕捉するため、CoverZip 以外の QuickLook プレビュー（PDF など）ではキーを奪いません。左右矢印キーとその Shift/Cmd 派生では読み方向を KeyHelper 側で判断せず、物理キー系コマンドとして送ります。Preview は受信時点の `isRightToLeftReading` に基づいて前進/後退、10ページジャンプ、先頭/末尾を決定します。
 
 ## 設定同期とメニュー操作
 
@@ -204,16 +207,25 @@ sequenceDiagram
 
 ## 分散通知とメッセージ
 
+### NSDistributedNotificationCenter（プロセス間・payload あり）
+
 | 通知名 | 送信元 | 受信元 | 用途 |
 | --- | --- | --- | --- |
 | `com.dmng.CoverZip.settingsChanged` | App 設定、`InternalViewer`、Preview | Preview、InternalViewer、ViewMenu | 共有設定変更の反映。読み方向変更時は userInfo に値を載せ、Preview 送信時はセッション識別用の `sessionID` も載せる |
 | `com.dmng.CoverZip.previewSessionCommand` | `InternalViewer`, `QLPreviewInputDriver`, `CoverZipKeyHelper` | Preview | ページ送り、表示モード、見開き補正、スライドショーなどのセッション操作 |
 | `com.dmng.CoverZip.previewSessionCommandHandled` | Preview | KeyHelper | KeyHelper が送ったコマンドの処理完了確認 |
-| `com.dmng.CoverZip.previewExtensionVisible` | Preview | KeyHelper | Finder Quick Look 上で CoverZip Preview Extension が表示中であることを通知 |
-| `com.dmng.CoverZip.previewExtensionHidden` | Preview | KeyHelper | Preview Extension の非表示/終了を通知 |
 | `com.dmng.CoverZip.sliderOperationCompleted` | Preview | `QLPreviewInputDriver` | スライダー操作後にキーボードフォーカスを戻す |
 | `com.dmng.CoverZip.keyHelperQuitRequested` | App | KeyHelper | 起動中のキー入力ヘルパーへ終了を依頼 |
 | `com.dmng.CoverZip.viewerWindowStateChanged` | `QLPreviewInputDriver` | `ViewMenuState` | 内蔵ビューアウィンドウの開閉状態。これはプロセス内 `NotificationCenter` |
+
+### Darwin 通知（CFNotificationCenter Darwin・payload なし・sandbox 不問）
+
+QuickLook Extension は `QuickLookUIService` がホストするため sandbox 制限により `NSDistributedNotificationCenter` と App Group UserDefaults のプロセス外書き込みが届きません。Extension → KeyHelper 方向の heartbeat にはカーネルレベルの Darwin 通知を使います。
+
+| 通知名 | 送信元 | 受信元 | 用途 |
+| --- | --- | --- | --- |
+| `com.dmng.CoverZip.qlVisible` | Preview（1秒 heartbeat） | KeyHelper | CoverZip QuickLook が表示中であることを通知。KeyHelper は受信ごとに `visibleUntil = now + 15秒` を更新 |
+| `com.dmng.CoverZip.qlHidden` | Preview（`viewWillDisappear`） | KeyHelper | QuickLook が閉じられたことを通知。KeyHelper は `visibleUntil` を即クリア |
 
 ## Quick Lookビューア受信API
 

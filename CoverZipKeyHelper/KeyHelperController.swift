@@ -11,7 +11,7 @@ import Foundation
 
 /// Finder QuickLook 上の CoverZip Preview Extension に対してキー操作を中継するコントローラ。
 final class KeyHelperController: NSObject {
-    private let visibilityTimeout: TimeInterval = 2.5
+    private let visibilityTimeout: TimeInterval = 15.0
     private let trustedCheckInterval: TimeInterval = 5.0
     private let allowedFrontmostBundleIDs: Set<String> = [
         "com.apple.finder",
@@ -31,6 +31,7 @@ final class KeyHelperController: NSObject {
         super.init()
         NSLog("[CoverZipKeyHelper] started")
         setupDistributedNotificationObservers()
+        setupDarwinNotificationObservers()
         refreshAccessibilityTrust(installIfNeeded: true, promptIfNeeded: isKeyHelperEnabledForRuntime())
         startTrustedCheckTimer()
     }
@@ -39,6 +40,7 @@ final class KeyHelperController: NSObject {
         NSLog("[CoverZipKeyHelper] deinit")
         teardownEventTap()
         DistributedNotificationCenter.default().removeObserver(self)
+        CFNotificationCenterRemoveEveryObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque())
         trustedCheckTimer?.invalidate()
     }
 
@@ -72,6 +74,50 @@ final class KeyHelperController: NSObject {
             object: nil,
             suspensionBehavior: .deliverImmediately
         )
+    }
+
+    private func setupDarwinNotificationObservers() {
+        let center = CFNotificationCenterGetDarwinNotifyCenter()
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+        CFNotificationCenterAddObserver(
+            center, selfPtr,
+            KeyHelperController.darwinVisibleCallback,
+            CZDarwinNotifications.qlVisible as CFString,
+            nil, .deliverImmediately
+        )
+        CFNotificationCenterAddObserver(
+            center, selfPtr,
+            KeyHelperController.darwinHiddenCallback,
+            CZDarwinNotifications.qlHidden as CFString,
+            nil, .deliverImmediately
+        )
+    }
+
+    private static let darwinVisibleCallback: CFNotificationCallback = { _, observer, _, _, _ in
+        guard let observer else { return }
+        let controller = Unmanaged<KeyHelperController>.fromOpaque(observer).takeUnretainedValue()
+        DispatchQueue.main.async { controller.onDarwinVisible() }
+    }
+
+    private static let darwinHiddenCallback: CFNotificationCallback = { _, observer, _, _, _ in
+        guard let observer else { return }
+        let controller = Unmanaged<KeyHelperController>.fromOpaque(observer).takeUnretainedValue()
+        DispatchQueue.main.async { controller.onDarwinHidden() }
+    }
+
+    private func onDarwinVisible() {
+        visibleUntil = Date().addingTimeInterval(visibilityTimeout)
+        CZUserDefaults.shared.set(Date().timeIntervalSince1970, forKey: CZSettingsKeys.keyHelperLastVisibleAt)
+        CZUserDefaults.shared.set("darwin visible", forKey: CZSettingsKeys.keyHelperLastDecision)
+        NSLog("[CoverZipKeyHelper] darwin ql visible, visibleUntil=%@", visibleUntil?.description ?? "nil")
+    }
+
+    private func onDarwinHidden() {
+        clearActiveSession()
+        CZUserDefaults.shared.set(Date().timeIntervalSince1970, forKey: CZSettingsKeys.keyHelperLastHiddenAt)
+        CZUserDefaults.shared.set("darwin hidden", forKey: CZSettingsKeys.keyHelperLastDecision)
+        NSLog("[CoverZipKeyHelper] darwin ql hidden")
+        refreshDiagnosticWindowSummary()
     }
 
     private func startTrustedCheckTimer() {
@@ -234,12 +280,9 @@ final class KeyHelperController: NSObject {
         guard isAccessibilityTrusted else {
             return rejectKeyEvent(reason: "accessibility not trusted", keyCode: keyCode)
         }
-        if visibleUntil == nil || visibleUntil ?? .distantPast <= Date() {
+        guard let visibleUntil, visibleUntil > Date() else {
             clearActiveSession()
-            guard isFrontmostQuickLookWindowVisible() else {
-                return rejectKeyEvent(reason: "no active visible QuickLook session", keyCode: keyCode)
-            }
-            CZUserDefaults.shared.set("QuickLook AX window visible", forKey: CZSettingsKeys.keyHelperLastDecision)
+            return rejectKeyEvent(reason: "no active visible QuickLook session", keyCode: keyCode)
         }
         guard allowedFrontmostBundleIDs.contains(frontmostBundleID) else {
             return rejectKeyEvent(reason: "frontmost not allowed: \(frontmostBundleID)", keyCode: keyCode)

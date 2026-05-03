@@ -60,6 +60,8 @@ public enum CZSettingsKeys {
     public static let previewLastVisibilityPostAt = "previewLastVisibilityPostAt"
     public static let previewLastVisibilityPostName = "previewLastVisibilityPostName"
     public static let previewLastVisibilitySessionID = "previewLastVisibilitySessionID"
+    /// Extension が active な間 `Date().addingTimeInterval(5).timeIntervalSince1970` を書き込む。KeyHelper がキー入力直前に直接読む
+    public static let keyHelperPreviewActiveUntil = "keyHelperPreviewActiveUntil"
 }
 
 public enum CZAppGroup {
@@ -265,6 +267,13 @@ public enum CZPreviewContextMenuFactory {
     }
 }
 #endif
+
+/// Extension から KeyHelper へ CoverZip QuickLook の可視状態を伝える Darwin 通知名。
+/// NSDistributedNotificationCenter や App Group が届かない QL Extension sandbox でも動作する。
+public enum CZDarwinNotifications {
+    public static let qlVisible = "com.dmng.CoverZip.qlVisible"
+    public static let qlHidden  = "com.dmng.CoverZip.qlHidden"
+}
 
 // App と Extensions 間で設定を同期するための分散通知
 public enum CZDistributedNotifications {
