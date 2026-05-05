@@ -13,6 +13,8 @@ import Foundation
 final class KeyHelperController: NSObject {
     private let visibilityTimeout: TimeInterval = 15.0
     private let trustedCheckInterval: TimeInterval = 5.0
+    private let finderBundleIdentifier = "com.apple.finder"
+    private let fullscreenWindowSizeTolerance: CGFloat = 2.0
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -293,84 +295,291 @@ final class KeyHelperController: NSObject {
     }
 
     private func isFrontmostQuickLookWindowVisible() -> Bool {
-        guard let frontmostSummary = resolveFrontmostWindowSummary() else {
+        guard let frontmostApplication = NSWorkspace.shared.frontmostApplication else {
             refreshDiagnosticWindowSummary()
             return false
         }
-        recordFrontmostWindowSummary(frontmostSummary)
-        if isQuickLookWindowCandidate(ownerName: frontmostSummary.applicationName, windowName: frontmostSummary.windowTitle) {
-            NSLog("[CoverZipKeyHelper] QuickLook AX window=%@", frontmostSummary.diagnosticText)
+
+        let axSummaries = resolveFrontmostWindowSummaries(for: frontmostApplication)
+        if let quickLookSummary = axSummaries.first(where: {
+            isQuickLookWindowCandidate(ownerName: "\($0.bundleIdentifier) \($0.applicationName)", windowName: $0.windowTitle)
+        }) {
+            recordWindowSummary(quickLookSummary.diagnosticText)
+            NSLog("[CoverZipKeyHelper] QuickLook AX window=%@", quickLookSummary.diagnosticText)
             return true
+        }
+
+        if isFinderApplication(frontmostApplication) {
+            let finderSummary = resolveFinderFullscreenWindowSummary(for: frontmostApplication)
+            if finderSummary.isFullscreenPair {
+                recordWindowSummary(finderSummary.diagnosticText)
+                NSLog("[CoverZipKeyHelper] QuickLook Finder fullscreen window pair=%@", finderSummary.diagnosticText)
+                return true
+            }
+            recordWindowSummary(makeRejectedWindowSummary(axSummaries: axSummaries, finderSummary: finderSummary))
+            return false
+        }
+
+        if let firstSummary = axSummaries.first {
+            recordWindowSummary(firstSummary.diagnosticText)
+        } else {
+            recordNoAXWindowSummary(frontmostApplication)
         }
         return false
     }
 
     private func refreshDiagnosticWindowSummary() {
-        guard let frontmostSummary = resolveFrontmostWindowSummary() else {
-            let frontmostApplication = NSWorkspace.shared.frontmostApplication
-            let bundleIdentifier = frontmostApplication?.bundleIdentifier ?? "unknown"
-            let applicationName = frontmostApplication?.localizedName ?? "unknown"
-            CZUserDefaults.shared.set(
-                "AX:\(bundleIdentifier):\(applicationName):(no focused window)",
-                forKey: CZSettingsKeys.keyHelperLastWindowSummary
-            )
+        guard let frontmostApplication = NSWorkspace.shared.frontmostApplication else {
+            recordWindowSummary("AX:unknown:unknown:(no frontmost app)")
             return
         }
-        recordFrontmostWindowSummary(frontmostSummary)
+
+        let axSummaries = resolveFrontmostWindowSummaries(for: frontmostApplication)
+        if isFinderApplication(frontmostApplication) {
+            let finderSummary = resolveFinderFullscreenWindowSummary(for: frontmostApplication)
+            recordWindowSummary(makeRejectedWindowSummary(axSummaries: axSummaries, finderSummary: finderSummary))
+            return
+        }
+
+        if let firstSummary = axSummaries.first {
+            recordWindowSummary(firstSummary.diagnosticText)
+        } else {
+            recordNoAXWindowSummary(frontmostApplication)
+        }
     }
 
-    private func recordFrontmostWindowSummary(_ summary: FrontmostWindowSummary) {
-        CZUserDefaults.shared.set(summary.diagnosticText, forKey: CZSettingsKeys.keyHelperLastWindowSummary)
+    private func recordWindowSummary(_ summary: String) {
+        CZUserDefaults.shared.set(summary, forKey: CZSettingsKeys.keyHelperLastWindowSummary)
+    }
+
+    private func recordNoAXWindowSummary(_ application: NSRunningApplication) {
+        let bundleIdentifier = application.bundleIdentifier ?? "unknown"
+        let applicationName = application.localizedName ?? "unknown"
+        recordWindowSummary("AX:none:\(bundleIdentifier):\(applicationName):(no window)")
+    }
+
+    private func makeRejectedWindowSummary(
+        axSummaries: [FrontmostWindowSummary],
+        finderSummary: FinderFullscreenWindowSummary
+    ) -> String {
+        if let firstSummary = axSummaries.first {
+            return "\(firstSummary.diagnosticText) | \(finderSummary.diagnosticText)"
+        }
+        return "AX:none:com.apple.finder:Finder:(no window) | \(finderSummary.diagnosticText)"
     }
 
     private struct FrontmostWindowSummary {
         let applicationName: String
         let bundleIdentifier: String
+        let source: String
         let windowTitle: String
 
         var diagnosticText: String {
-            "AX:\(bundleIdentifier):\(applicationName):\(windowTitle)"
+            let title = windowTitle.isEmpty ? "(no title)" : windowTitle
+            return "AX:\(source):\(bundleIdentifier):\(applicationName):\(title)"
         }
     }
 
-    private func resolveFrontmostWindowSummary() -> FrontmostWindowSummary? {
-        guard let frontmostApplication = NSWorkspace.shared.frontmostApplication else { return nil }
-        let applicationElement = AXUIElementCreateApplication(frontmostApplication.processIdentifier)
-        guard let windowElement = resolveFocusedWindowElement(from: applicationElement),
-              let windowTitle = resolveWindowTitle(from: windowElement) else {
-            return nil
+    private struct FinderFullscreenWindowSummary {
+        let isFullscreenPair: Bool
+        let diagnosticText: String
+    }
+
+    private struct DisplayPixelSize {
+        let width: Int
+        let height: Int
+
+        var label: String {
+            "\(width)x\(height)"
         }
-        let applicationName = frontmostApplication.localizedName ?? ""
-        let bundleIdentifier = frontmostApplication.bundleIdentifier ?? "unknown"
-        return FrontmostWindowSummary(
-            applicationName: applicationName,
-            bundleIdentifier: bundleIdentifier,
-            windowTitle: windowTitle
+    }
+
+    private struct FinderWindowInfo {
+        let windowID: Int
+        let bounds: CGRect
+
+        var sizeLabel: String {
+            "\(Int(bounds.width.rounded()))x\(Int(bounds.height.rounded()))"
+        }
+
+        var diagnosticText: String {
+            let x = Int(bounds.origin.x.rounded())
+            let y = Int(bounds.origin.y.rounded())
+            return "id=\(windowID) size=\(sizeLabel) origin=\(x),\(y)"
+        }
+    }
+
+    private func resolveFrontmostWindowSummaries(for application: NSRunningApplication) -> [FrontmostWindowSummary] {
+        let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
+        var summaries: [FrontmostWindowSummary] = []
+
+        if let focusedWindow = resolveAXWindowElement(
+            from: applicationElement,
+            attribute: kAXFocusedWindowAttribute as CFString
+        ) {
+            summaries.append(makeFrontmostWindowSummary(application, focusedWindow, source: "focusedWindow"))
+        }
+
+        if let focusedElementWindow = resolveFocusedElementWindow(from: applicationElement) {
+            summaries.append(makeFrontmostWindowSummary(application, focusedElementWindow, source: "focusedElement.window"))
+        }
+
+        for (index, windowElement) in resolveAXWindowList(from: applicationElement).enumerated() {
+            summaries.append(makeFrontmostWindowSummary(application, windowElement, source: "windows[\(index)]"))
+        }
+        return summaries
+    }
+
+    private func makeFrontmostWindowSummary(
+        _ application: NSRunningApplication,
+        _ windowElement: AXUIElement,
+        source: String
+    ) -> FrontmostWindowSummary {
+        FrontmostWindowSummary(
+            applicationName: application.localizedName ?? "",
+            bundleIdentifier: application.bundleIdentifier ?? "unknown",
+            source: source,
+            windowTitle: resolveWindowTitle(from: windowElement) ?? ""
         )
     }
 
-    private func resolveFocusedWindowElement(from applicationElement: AXUIElement) -> AXUIElement? {
-        if let focusedWindowValue = copyAttributeValue(
+    private func resolveFocusedElementWindow(from applicationElement: AXUIElement) -> AXUIElement? {
+        guard let focusedElement = resolveAXWindowElement(
+            from: applicationElement,
+            attribute: kAXFocusedUIElementAttribute as CFString
+        ) else {
+            return nil
+        }
+        return resolveAXWindowElement(from: focusedElement, attribute: kAXWindowAttribute as CFString)
+    }
+
+    private func resolveAXWindowElement(from element: AXUIElement, attribute: CFString) -> AXUIElement? {
+        guard let elementValue = copyAttributeValue(
+            of: element,
+            attribute: attribute
+        ), CFGetTypeID(elementValue) == AXUIElementGetTypeID() else {
+            return nil
+        }
+        return unsafeBitCast(elementValue, to: AXUIElement.self)
+    }
+
+    private func resolveAXWindowList(from applicationElement: AXUIElement) -> [AXUIElement] {
+        guard let windowsValue = copyAttributeValue(
             of: applicationElement,
-            attribute: kAXFocusedWindowAttribute as CFString
-        ), CFGetTypeID(focusedWindowValue) == AXUIElementGetTypeID() {
-            return unsafeBitCast(focusedWindowValue, to: AXUIElement.self)
+            attribute: kAXWindowsAttribute as CFString
+        ), CFGetTypeID(windowsValue) == CFArrayGetTypeID(),
+              let rawWindows = windowsValue as? [AnyObject] else {
+            return []
         }
 
-        guard let focusedElementValue = copyAttributeValue(
-            of: applicationElement,
-            attribute: kAXFocusedUIElementAttribute as CFString
-        ), CFGetTypeID(focusedElementValue) == AXUIElementGetTypeID() else {
-            return nil
+        return rawWindows.compactMap { rawWindow in
+            let windowValue = rawWindow as CFTypeRef
+            guard CFGetTypeID(windowValue) == AXUIElementGetTypeID() else { return nil }
+            return unsafeBitCast(windowValue, to: AXUIElement.self)
         }
-        let focusedElement = unsafeBitCast(focusedElementValue, to: AXUIElement.self)
-        guard let windowElementValue = copyAttributeValue(
-            of: focusedElement,
-            attribute: kAXWindowAttribute as CFString
-        ), CFGetTypeID(windowElementValue) == AXUIElementGetTypeID() else {
-            return nil
+    }
+
+    private func resolveFinderFullscreenWindowSummary(
+        for application: NSRunningApplication
+    ) -> FinderFullscreenWindowSummary {
+        let displaySizes = resolveOnlineDisplayPixelSizes()
+        let finderWindows = resolveOnscreenFinderWindows(processIdentifier: application.processIdentifier)
+        let fullscreenCandidates = finderWindows.filter { window in
+            displaySizes.contains { isWindow(window.bounds.size, equalTo: $0) }
         }
-        return unsafeBitCast(windowElementValue, to: AXUIElement.self)
+
+        if let match = findFullscreenWindowPair(in: fullscreenCandidates, displaySizes: displaySizes) {
+            return FinderFullscreenWindowSummary(
+                isFullscreenPair: true,
+                diagnosticText: makeFinderPairDiagnostic(displaySize: match.displaySize, windows: match.windows)
+            )
+        }
+
+        return FinderFullscreenWindowSummary(
+            isFullscreenPair: false,
+            diagnosticText: makeFinderNoPairDiagnostic(
+                displaySizes: displaySizes,
+                windowCount: finderWindows.count,
+                candidates: fullscreenCandidates
+            )
+        )
+    }
+
+    private func resolveOnlineDisplayPixelSizes() -> [DisplayPixelSize] {
+        var displayCount: UInt32 = 0
+        guard CGGetOnlineDisplayList(0, nil, &displayCount) == .success, displayCount > 0 else { return [] }
+
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(displayCount))
+        guard CGGetOnlineDisplayList(displayCount, &displays, &displayCount) == .success else { return [] }
+        return displays.prefix(Int(displayCount)).map {
+            DisplayPixelSize(width: Int(CGDisplayPixelsWide($0)), height: Int(CGDisplayPixelsHigh($0)))
+        }
+    }
+
+    private func resolveOnscreenFinderWindows(processIdentifier: pid_t) -> [FinderWindowInfo] {
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            return []
+        }
+
+        return windowList.compactMap { windowInfo in
+            guard let ownerPID = windowInfo[kCGWindowOwnerPID as String] as? NSNumber,
+                  ownerPID.int32Value == processIdentifier,
+                  let bounds = resolveWindowBounds(from: windowInfo) else {
+                return nil
+            }
+            let windowID = (windowInfo[kCGWindowNumber as String] as? NSNumber)?.intValue ?? 0
+            return FinderWindowInfo(windowID: windowID, bounds: bounds)
+        }
+    }
+
+    private func resolveWindowBounds(from windowInfo: [String: Any]) -> CGRect? {
+        guard let boundsDictionary = windowInfo[kCGWindowBounds as String] as? NSDictionary else { return nil }
+        var bounds = CGRect.zero
+        guard CGRectMakeWithDictionaryRepresentation(boundsDictionary, &bounds) else { return nil }
+        return bounds
+    }
+
+    private func findFullscreenWindowPair(
+        in windows: [FinderWindowInfo],
+        displaySizes: [DisplayPixelSize]
+    ) -> (displaySize: DisplayPixelSize, windows: [FinderWindowInfo])? {
+        for displaySize in displaySizes {
+            let matchingWindows = windows.filter { isWindow($0.bounds.size, equalTo: displaySize) }
+            let windowsByOrigin = Dictionary(grouping: matchingWindows) { roundedOriginKey(for: $0.bounds.origin) }
+            if let pair = windowsByOrigin.values.first(where: { $0.count >= 2 }) {
+                return (displaySize, Array(pair.prefix(4)))
+            }
+        }
+        return nil
+    }
+
+    private func isWindow(_ windowSize: CGSize, equalTo displaySize: DisplayPixelSize) -> Bool {
+        abs(windowSize.width - CGFloat(displaySize.width)) <= fullscreenWindowSizeTolerance
+            && abs(windowSize.height - CGFloat(displaySize.height)) <= fullscreenWindowSizeTolerance
+    }
+
+    private func roundedOriginKey(for origin: CGPoint) -> String {
+        "\(Int(origin.x.rounded())):\(Int(origin.y.rounded()))"
+    }
+
+    private func makeFinderPairDiagnostic(displaySize: DisplayPixelSize, windows: [FinderWindowInfo]) -> String {
+        let windowText = windows.map(\.diagnosticText).joined(separator: ";")
+        return "CGWindow:Finder fullscreen pair display=\(displaySize.label) count=\(windows.count) windows=\(windowText)"
+    }
+
+    private func makeFinderNoPairDiagnostic(
+        displaySizes: [DisplayPixelSize],
+        windowCount: Int,
+        candidates: [FinderWindowInfo]
+    ) -> String {
+        let displays = displaySizes.map(\.label).joined(separator: ",")
+        let candidateText = candidates.prefix(4).map(\.diagnosticText).joined(separator: ";")
+        return "CGWindow:Finder fullscreen pair not found displays=\(displays) windows=\(windowCount) matched=\(candidates.count) candidates=\(candidateText)"
+    }
+
+    private func isFinderApplication(_ application: NSRunningApplication) -> Bool {
+        application.bundleIdentifier == finderBundleIdentifier
     }
 
     private func resolveWindowTitle(from windowElement: AXUIElement) -> String? {

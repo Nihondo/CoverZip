@@ -129,7 +129,12 @@ sequenceDiagram
     Key->>Key: visibleUntil を更新（now + 15秒）
     Key->>Key: Accessibility許可時 CGEventTap を有効化
     Key->>Key: 対象キー入力時に visibleUntil を確認（heartbeat が有効か）
-    Key->>Key: AX でフロントウィンドウが浮遊 QL か確認（カラム内ビューアは除外）
+    Key->>Key: AX で focusedWindow / focusedElement.window / windows 配列を確認
+    alt AX で浮遊 QL と判定
+        Key->>Key: QuickLook系タイトルまたは ZIP タイトルとして捕捉
+    else Finder フルスクリーン候補
+        Key->>Key: CGWindow とディスプレイサイズから Finder の全画面ウィンドウペアを確認
+    end
     Key->>DNC: previewSessionCommand(物理キー系/相対ジャンプ/先頭末尾, commandID)
     DNC->>Preview: コマンド受信
     Preview->>Preview: 現在の読み方向で物理左右キーをページ移動/ジャンプ/先頭末尾へ変換
@@ -139,7 +144,11 @@ sequenceDiagram
     Darwin->>Key: qlHidden を受信 → visibleUntil をクリア
 ```
 
-Quick Look では App 側の `QLPreviewInputDriver` を使えないため、任意設定の `CoverZipKeyHelper` がキーイベントを中継します。Darwin 通知（`CFNotificationCenterGetDarwinNotifyCenter()`）経由で受信する heartbeat で `visibleUntil`（now + 15秒）を更新します。Darwin 通知を採用した理由は、QuickLook Extension の sandbox が `NSDistributedNotificationCenter` と App Group UserDefaults の書き込みをプロセス外に届けられないためです（Extension のホストが `QuickLookUIService` であり、CoverZip コンテナアプリのグループを継承しない）。Darwin 通知はカーネルレベルの `notify_post` を使うため sandbox 制限の対象外です。キー入力時は **heartbeat（`visibleUntil` 有効）** と **AX によるフロントウィンドウ確認** の2段階でキャプチャを判定します。AX チェックにより Finder カラム表示内の QL（フロントウィンドウが QL パネルでなくブラウザウィンドウ）は捕捉対象から除外されます。フロントアプリは Finder に限定せず、AX でフロントウィンドウが QL パネルと判定できれば捕捉します。PDF など CoverZip 以外の QL では heartbeat が届かないためキーを奪いません。左右矢印キーとその Shift/Cmd 派生では読み方向を KeyHelper 側で判断せず、物理キー系コマンドとして送ります。Preview は受信時点の `isRightToLeftReading` に基づいて前進/後退、10ページジャンプ、先頭/末尾を決定します。
+Quick Look では App 側の `QLPreviewInputDriver` を使えないため、任意設定の `CoverZipKeyHelper` がキーイベントを中継します。Darwin 通知（`CFNotificationCenterGetDarwinNotifyCenter()`）経由で受信する heartbeat で `visibleUntil`（now + 15秒）を更新します。Darwin 通知を採用した理由は、QuickLook Extension の sandbox が `NSDistributedNotificationCenter` と App Group UserDefaults の書き込みをプロセス外に届けられないためです（Extension のホストが `QuickLookUIService` であり、CoverZip コンテナアプリのグループを継承しない）。Darwin 通知はカーネルレベルの `notify_post` を使うため sandbox 制限の対象外です。
+
+キー入力時は **heartbeat（`visibleUntil` 有効）** と **前面 Quick Look 確認** の2段階でキャプチャを判定します。前面確認では AX の `focusedWindow`、`focusedElement.window`、`windows` 配列を順に見て、QuickLook 系のアプリ/ウィンドウ名または `.zip` タイトルなら捕捉します。Finder が前面で、フルスクリーン Quick Look の AX タイトルを取れない場合だけ、CGWindow の Finder 所有 onscreen window とオンラインディスプレイのピクセルサイズを照合し、同一ディスプレイサイズ・同一 origin の全画面ウィンドウが2枚以上ある状態を Quick Look フルスクリーン候補として扱います。複数ディスプレイ環境ではディスプレイサイズごとに判定し、全ディスプレイ合算の枚数では捕捉しません。
+
+AX/CGWindow チェックにより Finder カラム表示内の QL（フロントウィンドウが QL パネルでなくブラウザウィンドウ）は捕捉対象から除外されます。フロントアプリは Finder に限定せず、AX でフロントウィンドウが QL パネルと判定できれば捕捉します。PDF など CoverZip 以外の QL では heartbeat が届かないためキーを奪いません。左右矢印キーとその Shift/Cmd 派生では読み方向を KeyHelper 側で判断せず、物理キー系コマンドとして送ります。Preview は受信時点の `isRightToLeftReading` に基づいて前進/後退、10ページジャンプ、先頭/末尾を決定します。
 
 ## 設定同期とメニュー操作
 
