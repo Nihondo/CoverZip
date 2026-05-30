@@ -287,7 +287,14 @@ enum QLPreviewInputDriver {
         }
         override func keyDown(with event: NSEvent) {
             NSLog("[QLInputDriver] keyDown code=%d flags=%lu", Int(event.keyCode), event.modifierFlags.rawValue)
+            let isBarePreviewCommand = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
             switch Int(event.keyCode) {
+            case 29 where isBarePreviewCommand: PreviewSessionCommandDispatcher.post(command: .setViewModeAuto)    // 0
+            case 18 where isBarePreviewCommand: PreviewSessionCommandDispatcher.post(command: .setViewModeSingle)  // 1
+            case 19 where isBarePreviewCommand: PreviewSessionCommandDispatcher.post(command: .setViewModeSpread)  // 2
+            case 17 where isBarePreviewCommand: PreviewSessionCommandDispatcher.post(command: .setSpreadPairOffset) // T
+            case 37 where isBarePreviewCommand: PreviewSessionCommandDispatcher.post(command: .setThumbnailStripVisible) // L
+            case 1 where isBarePreviewCommand: PreviewSessionCommandDispatcher.post(command: .setSlideshowEnabled) // S
             case 123, 124: // ← or →
                 let isLeft  = (Int(event.keyCode) == 123)
                 let isCmd   = event.modifierFlags.contains(.command)

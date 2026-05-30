@@ -137,7 +137,7 @@ struct ViewMenuCommands: Commands {
                 )) {
                     menuLabel(for: .setViewModeAuto)
                 }
-                .keyboardShortcut("0")
+                .keyboardShortcut("0", modifiers: [])
 
                 Toggle(isOn: Binding(
                     get: { state.currentViewMode == .single },
@@ -145,7 +145,7 @@ struct ViewMenuCommands: Commands {
                 )) {
                     menuLabel(for: .setViewModeSingle)
                 }
-                .keyboardShortcut("1")
+                .keyboardShortcut("1", modifiers: [])
 
                 Toggle(isOn: Binding(
                     get: { state.currentViewMode == .spread },
@@ -153,7 +153,7 @@ struct ViewMenuCommands: Commands {
                 )) {
                     menuLabel(for: .setViewModeSpread)
                 }
-                .keyboardShortcut("2")
+                .keyboardShortcut("2", modifiers: [])
 
                 Divider()
 
@@ -164,7 +164,7 @@ struct ViewMenuCommands: Commands {
                 )) {
                     menuLabel(for: .setSpreadPairOffset)
                 }
-                .keyboardShortcut("t", modifiers: [.command])
+                .keyboardShortcut("t", modifiers: [])
 
                 Toggle(isOn: Binding(
                     get: { state.isThumbnailStripVisible },
@@ -172,7 +172,7 @@ struct ViewMenuCommands: Commands {
                 )) {
                     menuLabel(for: .setThumbnailStripVisible)
                 }
-                .keyboardShortcut("l")
+                .keyboardShortcut("l", modifiers: [])
 
                 Divider()
 
@@ -190,7 +190,7 @@ struct ViewMenuCommands: Commands {
                 )) {
                     menuLabel(for: .setSlideshowEnabled)
                 }
-                .keyboardShortcut("s")
+                .keyboardShortcut("s", modifiers: [])
             }
             .disabled(!state.isViewerOpen)
         }

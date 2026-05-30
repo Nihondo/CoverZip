@@ -51,7 +51,7 @@ You can also use Option+Cmd+O (menu: `Open in Built-in Viewer...`) to open a ZIP
 
 ### Keyboard Controls
 
-In the built-in viewer, the following keyboard controls are available in addition to clicking and scrolling. When the optional Finder QuickLook key helper is enabled, the same navigation keys are also available in Finder QuickLook, except for the Space shortcuts. Forward/backward directions for arrow keys automatically adapt to the reading direction setting (right-to-left / left-to-right).
+In the built-in viewer, the following keyboard controls are available in addition to clicking and scrolling. When the optional Finder QuickLook key helper is enabled, the same navigation and display keys are also available in Finder QuickLook, except for the Space shortcuts. Forward/backward directions for arrow keys automatically adapt to the reading direction setting (right-to-left / left-to-right).
 
 | Key | Action |
 |-----|--------|
@@ -59,6 +59,10 @@ In the built-in viewer, the following keyboard controls are available in additio
 | `Space` / `Shift + Space` | Next / previous page |
 | `Shift + ←` / `Shift + →`, `Page Down` / `Page Up` | Jump 10 pages |
 | `Cmd + ←` / `Cmd + →`, `Home` / `End` | Go to first / last page |
+| `0` / `1` / `2` | Switch view mode to Auto / Single Page / Spread |
+| `T` | Toggle spread page offset correction |
+| `L` | Show / hide the thumbnail list |
+| `S` | Start / stop slideshow |
 
 You can also switch view modes and change reading direction from the `View` menu or the right-click context menu.
 

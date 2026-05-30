@@ -29,6 +29,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var isHandlingPassThroughControlInteraction = false
     private var pendingSingleClick: DispatchWorkItem?
     private var currentImageAspect: CGFloat?
+    private var lastKnownSinglePageAspect: CGFloat?
+    private var lastKnownLeftPageAspect: CGFloat?
+    private var lastKnownRightPageAspect: CGFloat?
+    private var whitePagePlaceholderCache: [Int: NSImage] = [:]
+    private let defaultWhitePageAspect: CGFloat = 0.70
+    private let whitePagePlaceholderHeight: CGFloat = 1000
     // スライダー表示/非表示のための制約管理
     private var sliderConstraints: [NSLayoutConstraint] = []
     private var directLabelTopConstraint: NSLayoutConstraint?
@@ -82,6 +88,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     enum ViewMode {
         case single
         case spread
+    }
+    private enum SpreadPageSide {
+        case left
+        case right
     }
     private var currentViewMode: ViewMode = .single
     private var didApplyInitialViewMode = false
@@ -964,6 +974,24 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             },
             stateForCommand: { [weak self] command in
                 self?.menuState(for: command) ?? .off
+            },
+            shortcutForCommand: { command in
+                switch command {
+                case .setViewModeAuto:
+                    return ("0", [])
+                case .setViewModeSingle:
+                    return ("1", [])
+                case .setViewModeSpread:
+                    return ("2", [])
+                case .setSpreadPairOffset:
+                    return ("t", [])
+                case .setThumbnailStripVisible:
+                    return ("l", [])
+                case .setSlideshowEnabled:
+                    return ("s", [])
+                default:
+                    return nil
+                }
             }
         )
         if includeDebugInfo {
@@ -1588,10 +1616,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
         if usePrerender, let cachedLayer = imageManager.getCurrentPrerenderedLayer() {
             os_signpost(.event, log: performanceLog, name: "layerCacheHit", "mode=single")
-            let fallbackImage = imageManager.getCurrentImageIfCachedOnly(quality: .normal)
+            let cachedImage = imageManager.getCurrentImageIfCachedOnly(quality: .normal)
                 ?? imageManager.getCurrentImageIfCachedOnly(quality: .low)
+            let fallbackImage = cachedImage ?? makeWhitePagePlaceholder(aspect: lastKnownSinglePageAspect)
             let didApplyPrerender = setPrerenderedLayer(cachedLayer, toImageView: imageView, fallbackImage: fallbackImage)
-            if !didApplyPrerender, let fallbackImage {
+            if !didApplyPrerender {
                 setImageSafely(fallbackImage, toImageView: imageView)
             }
             if didApplyPrerender {
@@ -1600,19 +1629,18 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 lastPrerenderApplyRetryKey = displayKey
                 scheduleDisplayCurrentImageIfNeeded()
             }
-            if let fallbackImage {
-                currentImageAspect = (fallbackImage.size.height > 0) ? (fallbackImage.size.width / fallbackImage.size.height) : nil
+            if let cachedImage {
+                updateSinglePageAspect(from: cachedImage)
             }
             lastPrerenderRequestKey = nil
         } else if usePrerender {
             if let currentImage = imageManager.getCurrentImageIfCachedOnly(quality: .normal)
                 ?? imageManager.getCurrentImageIfCachedOnly(quality: .low) {
                 setImageSafely(currentImage, toImageView: imageView)
-                currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
+                updateSinglePageAspect(from: currentImage)
             } else {
-                // 現在ページ画像が未準備の間、前ページ画像が残らないように明示クリア
-                setImageSafely(nil, toImageView: imageView)
-                currentImageAspect = nil
+                // 現在ページ画像が未準備の間、前ページ画像が残らないように白ページを表示する
+                setImageSafely(makeWhitePagePlaceholder(aspect: lastKnownSinglePageAspect), toImageView: imageView)
                 requestSingleFallbackImageIfNeeded(displayKey: displayKey)
             }
             if lastPrerenderRequestKey != displayKey {
@@ -1622,7 +1650,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             }
         } else if let currentImage = imageManager.getCurrentImage() {
             setImageSafely(currentImage, toImageView: imageView)
-            currentImageAspect = (currentImage.size.height > 0) ? (currentImage.size.width / currentImage.size.height) : nil
+            updateSinglePageAspect(from: currentImage)
         }
 
         imageManager.preloadAdjacentImages(isSpreadMode: false, isRightToLeft: isRightToLeftReading)
@@ -1642,16 +1670,23 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         } else {
             spreadImages = imageManager.getSpreadImages(isRightToLeft: isRightToLeftReading)
         }
+        let spreadPairIndices = imageManager.getCurrentSpreadPairIndices(isRightToLeft: isRightToLeftReading)
 
         if usePrerender, let cachedLayers = imageManager.getSpreadPrerenderedLayers(isRightToLeft: isRightToLeftReading) {
             os_signpost(.event, log: performanceLog, name: "layerCacheHit", "mode=spread")
-            let didApplyLeft = setPrerenderedLayer(cachedLayers.left, toImageView: imageView, fallbackImage: spreadImages.left)
-            let didApplyRight = setPrerenderedLayer(cachedLayers.right, toImageView: rightImageView, fallbackImage: spreadImages.right)
+            let leftFallback = spreadImages.left ?? makeSpreadPlaceholderIfNeeded(side: .left, isExpected: spreadPairIndices.left != nil)
+            let rightFallback = spreadImages.right ?? makeSpreadPlaceholderIfNeeded(side: .right, isExpected: spreadPairIndices.right != nil)
+            let didApplyLeft = setPrerenderedLayer(cachedLayers.left, toImageView: imageView, fallbackImage: leftFallback)
+            let didApplyRight = setPrerenderedLayer(cachedLayers.right, toImageView: rightImageView, fallbackImage: rightFallback)
             if !didApplyLeft {
-                setImageSafely(spreadImages.left, toImageView: imageView)
+                setSpreadImageOrPlaceholder(spreadImages.left, toImageView: imageView, side: .left, isExpected: spreadPairIndices.left != nil)
+            } else if let leftImage = spreadImages.left {
+                updateSpreadPageAspect(from: leftImage, side: .left)
             }
             if !didApplyRight {
-                setImageSafely(spreadImages.right, toImageView: rightImageView)
+                setSpreadImageOrPlaceholder(spreadImages.right, toImageView: rightImageView, side: .right, isExpected: spreadPairIndices.right != nil)
+            } else if let rightImage = spreadImages.right {
+                updateSpreadPageAspect(from: rightImage, side: .right)
             }
             let didFailExpectedLayer = (cachedLayers.left != nil && !didApplyLeft) || (cachedLayers.right != nil && !didApplyRight)
             if !didFailExpectedLayer {
@@ -1662,16 +1697,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             }
             lastPrerenderRequestKey = nil
         } else {
-            if let leftImage = spreadImages.left {
-                setImageSafely(leftImage, toImageView: imageView)
-            } else {
-                setImageSafely(nil, toImageView: imageView)
-            }
-            if let rightImage = spreadImages.right {
-                setImageSafely(rightImage, toImageView: rightImageView)
-            } else {
-                setImageSafely(nil, toImageView: rightImageView)
-            }
+            setSpreadImageOrPlaceholder(spreadImages.left, toImageView: imageView, side: .left, isExpected: spreadPairIndices.left != nil)
+            setSpreadImageOrPlaceholder(spreadImages.right, toImageView: rightImageView, side: .right, isExpected: spreadPairIndices.right != nil)
             if spreadImages.left == nil || spreadImages.right == nil {
                 requestSpreadFallbackImagesIfNeeded(displayKey: displayKey)
             }
@@ -1684,6 +1711,69 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
         calculateSpreadAspectRatio(leftImage: spreadImages.left, rightImage: spreadImages.right)
         imageManager.preloadAdjacentImages(isSpreadMode: true, isRightToLeft: isRightToLeftReading)
+    }
+
+    private func setSpreadImageOrPlaceholder(_ image: NSImage?, toImageView imageView: NSImageView?, side: SpreadPageSide, isExpected: Bool) {
+        if let image {
+            setImageSafely(image, toImageView: imageView)
+            updateSpreadPageAspect(from: image, side: side)
+            return
+        }
+
+        setImageSafely(makeSpreadPlaceholderIfNeeded(side: side, isExpected: isExpected), toImageView: imageView)
+    }
+
+    private func makeSpreadPlaceholderIfNeeded(side: SpreadPageSide, isExpected: Bool) -> NSImage? {
+        guard isExpected else { return nil }
+
+        switch side {
+        case .left:
+            return makeWhitePagePlaceholder(aspect: lastKnownLeftPageAspect)
+        case .right:
+            return makeWhitePagePlaceholder(aspect: lastKnownRightPageAspect)
+        }
+    }
+
+    private func updateSinglePageAspect(from image: NSImage) {
+        guard let aspect = pageAspect(from: image) else { return }
+        lastKnownSinglePageAspect = aspect
+        currentImageAspect = aspect
+    }
+
+    private func updateSpreadPageAspect(from image: NSImage, side: SpreadPageSide) {
+        guard let aspect = pageAspect(from: image) else { return }
+
+        switch side {
+        case .left:
+            lastKnownLeftPageAspect = aspect
+        case .right:
+            lastKnownRightPageAspect = aspect
+        }
+    }
+
+    private func pageAspect(from image: NSImage) -> CGFloat? {
+        guard image.size.width > 0, image.size.height > 0 else { return nil }
+        return image.size.width / image.size.height
+    }
+
+    private func makeWhitePagePlaceholder(aspect: CGFloat?) -> NSImage {
+        let sanitizedAspect = max(0.1, min(aspect ?? defaultWhitePageAspect, 4.0))
+        let cacheKey = Int((sanitizedAspect * 1000).rounded())
+        if let cached = whitePagePlaceholderCache[cacheKey] {
+            return cached
+        }
+
+        let imageSize = NSSize(
+            width: whitePagePlaceholderHeight * sanitizedAspect,
+            height: whitePagePlaceholderHeight
+        )
+        let image = NSImage(size: imageSize)
+        image.lockFocus()
+        NSColor.white.setFill()
+        NSRect(origin: .zero, size: imageSize).fill()
+        image.unlockFocus()
+        whitePagePlaceholderCache[cacheKey] = image
+        return image
     }
 
     private func requestSingleFallbackImageIfNeeded(displayKey: String) {

@@ -103,13 +103,13 @@ sequenceDiagram
     Image->>Zip: imageEntryInfoList / extractImageData
     Preview->>Preview: 表示モード、ページ、サムネイルを描画
 
-    Driver->>DNC: previewSessionCommand: キー操作を物理キー系/論理ページコマンド化
-    DNC->>Preview: 物理左右キー系 / goForwardPage / goBackwardPage / jumpRelativePages
+    Driver->>DNC: previewSessionCommand: キー操作を物理キー系/論理ページ/表示コマンド化
+    DNC->>Preview: 物理左右キー系 / goForwardPage / goBackwardPage / jumpRelativePages / 表示系
     Internal->>DNC: settingsChanged / previewSessionCommand: メニュー操作を反映
     DNC->>Preview: 表示設定・セッションコマンドを反映
 ```
 
-内蔵ビューアは独自の画像表示ロジックを持たず、`QLPreviewView` に ZIP を渡して Quick Look Preview Extension を起動します。キー入力は `QLPreviewInputDriver.KeyForwardingView` が受け、左右キーとその Shift/Cmd 派生は物理キー系の `previewSessionCommand` として Preview へ渡します。Preview は現在セッションの読み方向で前後、10ページジャンプ、先頭/末尾を決定します。
+内蔵ビューアは独自の画像表示ロジックを持たず、`QLPreviewView` に ZIP を渡して Quick Look Preview Extension を起動します。キー入力は `QLPreviewInputDriver.KeyForwardingView` が受け、左右キーとその Shift/Cmd 派生は物理キー系の `previewSessionCommand` として Preview へ渡します。`0/1/2/T/L/S` は Cmd なしの表示系 `previewSessionCommand` として渡します。Preview は現在セッションの読み方向で前後、10ページジャンプ、先頭/末尾を決定します。
 
 ## Finder Quick Look 経路
 
@@ -135,7 +135,7 @@ sequenceDiagram
     else Finder フルスクリーン候補
         Key->>Key: CGWindow とディスプレイサイズから Finder の全画面ウィンドウペアを確認
     end
-    Key->>DNC: previewSessionCommand(物理キー系/相対ジャンプ/先頭末尾, commandID)
+    Key->>DNC: previewSessionCommand(物理キー系/相対ジャンプ/先頭末尾/表示系, commandID)
     DNC->>Preview: コマンド受信
     Preview->>Preview: 現在の読み方向で物理左右キーをページ移動/ジャンプ/先頭末尾へ変換
     Preview->>DNC: previewSessionCommandHandled(commandID)
@@ -148,7 +148,7 @@ Quick Look では App 側の `QLPreviewInputDriver` を使えないため、任�
 
 キー入力時は **heartbeat（`visibleUntil` 有効）** と **前面 Quick Look 確認** の2段階でキャプチャを判定します。前面確認では AX の `focusedWindow`、`focusedElement.window`、`windows` 配列を順に見て、QuickLook 系のアプリ/ウィンドウ名または `.zip` タイトルなら捕捉します。Finder が前面で、フルスクリーン Quick Look の AX タイトルを取れない場合だけ、CGWindow の Finder 所有 onscreen window とオンラインディスプレイのピクセルサイズを照合し、同一ディスプレイサイズ・同一 origin の全画面ウィンドウが2枚以上ある状態を Quick Look フルスクリーン候補として扱います。複数ディスプレイ環境ではディスプレイサイズごとに判定し、全ディスプレイ合算の枚数では捕捉しません。
 
-AX/CGWindow チェックにより Finder カラム表示内の QL（フロントウィンドウが QL パネルでなくブラウザウィンドウ）は捕捉対象から除外されます。フロントアプリは Finder に限定せず、AX でフロントウィンドウが QL パネルと判定できれば捕捉します。PDF など CoverZip 以外の QL では heartbeat が届かないためキーを奪いません。左右矢印キーとその Shift/Cmd 派生では読み方向を KeyHelper 側で判断せず、物理キー系コマンドとして送ります。Preview は受信時点の `isRightToLeftReading` に基づいて前進/後退、10ページジャンプ、先頭/末尾を決定します。
+AX/CGWindow チェックにより Finder カラム表示内の QL（フロントウィンドウが QL パネルでなくブラウザウィンドウ）は捕捉対象から除外されます。フロントアプリは Finder に限定せず、AX でフロントウィンドウが QL パネルと判定できれば捕捉します。PDF など CoverZip 以外の QL では heartbeat が届かないためキーを奪いません。左右矢印キーとその Shift/Cmd 派生では読み方向を KeyHelper 側で判断せず、物理キー系コマンドとして送ります。`0/1/2/T/L/S` は Command/Control/Option なしの場合だけ表示系コマンドとして送ります。Preview は受信時点の `isRightToLeftReading` に基づいて前進/後退、10ページジャンプ、先頭/末尾を決定します。
 
 ## 設定同期とメニュー操作
 
@@ -264,13 +264,13 @@ QuickLook Extension は `QuickLookUIService` がホストするため sandbox �
 | --- | --- | --- | --- |
 | `setRightToLeftReading` | `InternalViewer` の右クリック/メニューバー表示メニュー | なし | 読み方向を右綴じへ変更 |
 | `setLeftToRightReading` | `InternalViewer` の右クリック/メニューバー表示メニュー | なし | 読み方向を左綴じへ変更 |
-| `setViewModeAuto` | `InternalViewer` の右クリック/メニューバー表示メニュー | なし | 表示モードを自動へ変更 |
-| `setViewModeSingle` | `InternalViewer` の右クリック/メニューバー表示メニュー | なし | 表示モードを単ページへ変更 |
-| `setViewModeSpread` | `InternalViewer` の右クリック/メニューバー表示メニュー | なし | 表示モードを見開きへ変更 |
-| `setSpreadPairOffset` | `InternalViewer` の右クリック/メニューバー表示メニュー | `intValue`: `0` または `1`。未指定時は現在値を反転 | 見開きペアリング補正を変更 |
-| `setThumbnailStripVisible` | `InternalViewer` の右クリック/メニューバー表示メニュー | `boolValue`: 表示状態。未指定時は現在値を反転 | サムネイルストリップの表示/非表示を変更 |
+| `setViewModeAuto` | `InternalViewer` の右クリック/メニューバー表示メニュー、`QLPreviewInputDriver` / `CoverZipKeyHelper` の `0` | なし | 表示モードを自動へ変更 |
+| `setViewModeSingle` | `InternalViewer` の右クリック/メニューバー表示メニュー、`QLPreviewInputDriver` / `CoverZipKeyHelper` の `1` | なし | 表示モードを単ページへ変更 |
+| `setViewModeSpread` | `InternalViewer` の右クリック/メニューバー表示メニュー、`QLPreviewInputDriver` / `CoverZipKeyHelper` の `2` | なし | 表示モードを見開きへ変更 |
+| `setSpreadPairOffset` | `InternalViewer` の右クリック/メニューバー表示メニュー、`QLPreviewInputDriver` / `CoverZipKeyHelper` の `T` | `intValue`: `0` または `1`。未指定時は現在値を反転 | 見開きペアリング補正を変更 |
+| `setThumbnailStripVisible` | `InternalViewer` の右クリック/メニューバー表示メニュー、`QLPreviewInputDriver` / `CoverZipKeyHelper` の `L` | `boolValue`: 表示状態。未指定時は現在値を反転 | サムネイルストリップの表示/非表示を変更 |
 | `setPageTransitionEnabled` | `InternalViewer` の右クリック/メニューバー表示メニュー | `boolValue`: 有効状態。未指定時は現在値を反転 | ページ切替トランジションの有効/無効を変更 |
-| `setSlideshowEnabled` | `InternalViewer` の右クリック/メニューバー表示メニュー | `boolValue`: 有効状態。未指定時は現在値を反転 | スライドショーを開始/停止 |
+| `setSlideshowEnabled` | `InternalViewer` の右クリック/メニューバー表示メニュー、`QLPreviewInputDriver` / `CoverZipKeyHelper` の `S` | `boolValue`: 有効状態。未指定時は現在値を反転 | スライドショーを開始/停止 |
 | `goToFirstPage` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の Home | なし | 1ページ目へ移動 |
 | `goToLastPage` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の End | なし | 最終ページへ移動 |
 | `goForwardPage` | `QLPreviewInputDriver`, `CoverZipKeyHelper` の上下キー | 任意: `commandID` | 読書順で次ページへ移動 |
@@ -288,10 +288,10 @@ QuickLook Extension は `QuickLookUIService` がホストするため sandbox �
 | 呼び出し元 | 送信するメッセージ | 備考 |
 | --- | --- | --- |
 | `InternalViewer` | `settingsChanged`, `previewSessionCommand` | 右クリックメニューとメニューバー表示メニューの操作を App Group UserDefaults に保存し、同じ操作をセッションコマンドとして Preview へ送る |
-| `QLPreviewInputDriver.KeyForwardingView` | `previewSessionCommand` | 内蔵ビューアウィンドウ内のキー入力をページ操作へ変換する。左右キーと Shift/Cmd 左右キーは物理キー系コマンドとして送り、Preview 側が現在の読み方向で次/前、10ページジャンプ、先頭/末尾へ変換する |
-| `CoverZipKeyHelper` | `previewSessionCommand` | CoverZip Quick Look の浮遊ウィンドウが前面にある間、対象キーを捕捉し `commandID` 付きで送る。左右キーと Shift/Cmd 左右キーは物理キー系コマンドとして送り、Preview 側が現在の読み方向で次/前、10ページジャンプ、先頭/末尾へ変換する。上下キーと PageUp/PageDown は読み方向に依存しない論理コマンドを送る。Preview は処理後に `previewSessionCommandHandled` を返す |
+| `QLPreviewInputDriver.KeyForwardingView` | `previewSessionCommand` | 内蔵ビューアウィンドウ内のキー入力をページ操作/表示操作へ変換する。左右キーと Shift/Cmd 左右キーは物理キー系コマンドとして送り、`0/1/2/T/L/S` は Cmd なしの表示系コマンドとして送る |
+| `CoverZipKeyHelper` | `previewSessionCommand` | CoverZip Quick Look の浮遊ウィンドウが前面にある間、対象キーを捕捉し `commandID` 付きで送る。左右キーと Shift/Cmd 左右キーは物理キー系コマンドとして送り、上下キーと PageUp/PageDown は読み方向に依存しない論理コマンドを送る。`0/1/2/T/L/S` は Command/Control/Option なしの場合だけ表示系コマンドとして送る。Preview は処理後に `previewSessionCommandHandled` を返す |
 | `AppSettingsWriter` | `settingsChanged` | 設定画面で共有設定が変わったときに送る。設定値本体は App Group UserDefaults に保存される |
-| Preview 自身の右クリックメニュー | `settingsChanged` | Quick Look Extension 側で読み方向を変えたとき、グローバル設定と現在セッション読み方向を更新し、他プロセスへ通知する |
+| Preview 自身の右クリックメニュー | `settingsChanged` | Quick Look Extension 側で読み方向を変えたとき、グローバル設定と現在セッション読み方向を更新し、他プロセスへ通知する。表示系項目には内蔵ビューアと同じ Cmd なし `0/1/2/T/L/S` のショートカットを表示する |
 | Preview 自身の Shift+右クリックメニュー | なし | 通知は送らず、App Group UserDefaults と Bundle 情報からバージョン、ビルド番号、現在セッション読み方向、KeyHelper の診断状態をメニュー内に表示する |
 
 ## 責務境界

@@ -46,17 +46,17 @@ final class InternalViewer: NSObject {
             shortcutForCommand: { command in
                 switch command {
                 case .setViewModeAuto:
-                    return ("0", [.command])
+                    return ("0", [])
                 case .setViewModeSingle:
-                    return ("1", [.command])
+                    return ("1", [])
                 case .setViewModeSpread:
-                    return ("2", [.command])
+                    return ("2", [])
                 case .setSpreadPairOffset:
-                    return ("t", [.command])
+                    return ("t", [])
                 case .setThumbnailStripVisible:
-                    return ("l", [.command])
+                    return ("l", [])
                 case .setSlideshowEnabled:
-                    return ("s", [.command])
+                    return ("s", [])
                 default:
                     return nil
                 }

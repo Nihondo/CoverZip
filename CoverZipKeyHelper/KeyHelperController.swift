@@ -647,9 +647,24 @@ final class KeyHelperController: NSObject {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
         let isCommand = flags.contains(.maskCommand)
+        let isBarePreviewCommand = !isCommand
+            && !flags.contains(.maskControl)
+            && !flags.contains(.maskAlternate)
         let isShift = flags.contains(.maskShift)
 
         switch keyCode {
+        case 29 where isBarePreviewCommand:
+            return (.setViewModeAuto, nil)
+        case 18 where isBarePreviewCommand:
+            return (.setViewModeSingle, nil)
+        case 19 where isBarePreviewCommand:
+            return (.setViewModeSpread, nil)
+        case 17 where isBarePreviewCommand:
+            return (.setSpreadPairOffset, nil)
+        case 37 where isBarePreviewCommand:
+            return (.setThumbnailStripVisible, nil)
+        case 1 where isBarePreviewCommand:
+            return (.setSlideshowEnabled, nil)
         case 123:
             if isCommand { return (.goToLeftArrowEdgePage, nil) }
             if isShift { return (.jumpLeftArrowPages, 10) }
