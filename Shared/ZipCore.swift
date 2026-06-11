@@ -211,17 +211,18 @@ public enum CZZip {
     private static func localFileInfo(in data: Data, entry: CZZipEntry) -> (method: UInt16, fileDataOffset: Int, compressedSize: Int)? {
         let off = entry.localHeaderOffset
         guard off + 30 <= data.count else { return nil }
-        // ローカルヘッダ署名を検証
-        let expected: [UInt8] = [0x50, 0x4b, 0x03, 0x04]
-        if !data.subdata(in: off..<(off+4)).elementsEqual(expected) { return nil }
-        let fnLen = Int(data.subdata(in: off+26..<(off+28)).withUnsafeBytes { $0.load(as: UInt16.self) })
-        let exLen = Int(data.subdata(in: off+28..<(off+30)).withUnsafeBytes { $0.load(as: UInt16.self) })
-        let method = data.subdata(in: off+8..<(off+10)).withUnsafeBytes { $0.load(as: UInt16.self) }
-        let fileDataOffset = off + 30 + fnLen + exLen
-        // data descriptor 使用時は Central Directory 側のサイズを採用
-        let useCompressedSize: Int = (entry.generalPurposeFlag & 0x0008) != 0 ? entry.compressedSize : Int(data.subdata(in: off+18..<(off+22)).withUnsafeBytes { $0.load(as: UInt32.self) })
-        guard useCompressedSize > 0, fileDataOffset + useCompressedSize <= data.count else { return nil }
-        return (method, fileDataOffset, useCompressedSize)
+        return data.withUnsafeBytes { (buf: UnsafeRawBufferPointer) -> (method: UInt16, fileDataOffset: Int, compressedSize: Int)? in
+            // ローカルヘッダ署名を検証
+            guard matchesPKSignature(buf, off, 0x03, 0x04) else { return nil }
+            let fnLen = Int(readLE16(buf, off + 26))
+            let exLen = Int(readLE16(buf, off + 28))
+            let method = readLE16(buf, off + 8)
+            let fileDataOffset = off + 30 + fnLen + exLen
+            // data descriptor 使用時は Central Directory 側のサイズを採用
+            let useCompressedSize: Int = (entry.generalPurposeFlag & 0x0008) != 0 ? entry.compressedSize : Int(readLE32(buf, off + 18))
+            guard useCompressedSize > 0, fileDataOffset + useCompressedSize <= buf.count else { return nil }
+            return (method, fileDataOffset, useCompressedSize)
+        }
     }
 
     private static func thumbnailFromImageData(_ imgData: CFData, maxPixel: Int, isFinal: Bool) -> CGImage? {
@@ -258,79 +259,108 @@ public enum CZZip {
 
     // MARK: - 低レベル ZIP ヘルパー
 
+    /// `buf[offset..<offset+2]` をリトルエンディアンの UInt16 として読む。
+    /// 呼び出し側で `offset + 2 <= buf.count` を保証すること。
+    @inline(__always)
+    private static func readLE16(_ buf: UnsafeRawBufferPointer, _ offset: Int) -> UInt16 {
+        let b0 = UInt16(buf[offset])
+        let b1 = UInt16(buf[offset + 1])
+        return b0 | (b1 << 8)
+    }
+
+    /// `buf[offset..<offset+4]` をリトルエンディアンの UInt32 として読む。
+    /// 呼び出し側で `offset + 4 <= buf.count` を保証すること。
+    @inline(__always)
+    private static func readLE32(_ buf: UnsafeRawBufferPointer, _ offset: Int) -> UInt32 {
+        let b0 = UInt32(buf[offset])
+        let b1 = UInt32(buf[offset + 1])
+        let b2 = UInt32(buf[offset + 2])
+        let b3 = UInt32(buf[offset + 3])
+        return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+    }
+
+    /// `buf[offset..<offset+4]` が ZIP の "PK" 系署名 `50 4b b2 b3` と一致するかを判定する。
+    /// 呼び出し側で `offset + 4 <= buf.count` を保証すること。
+    @inline(__always)
+    private static func matchesPKSignature(_ buf: UnsafeRawBufferPointer, _ offset: Int, _ b2: UInt8, _ b3: UInt8) -> Bool {
+        return buf[offset] == 0x50 && buf[offset + 1] == 0x4b && buf[offset + 2] == b2 && buf[offset + 3] == b3
+    }
+
     private static func findCentralDirectoryOffset(in data: Data) -> Int? {
-        // EOCDR 署名 0x06054b50
-        let sig: [UInt8] = [0x50, 0x4b, 0x05, 0x06]
-        let searchStart = max(0, data.count - 65536)
         if data.count < 22 { return nil }
-        var i = data.count - 4
-        while i >= searchStart {
-            if data.subdata(in: i..<(i+4)).elementsEqual(sig) {
-                if i + 20 <= data.count {
-                    let offsetBytes = data.subdata(in: i+16..<(i+20))
-                    let offset = offsetBytes.withUnsafeBytes { $0.load(as: UInt32.self) }
-                    return Int(offset)
+        return data.withUnsafeBytes { (buf: UnsafeRawBufferPointer) -> Int? in
+            // EOCDR 署名 0x06054b50 を末尾から後方走査
+            let searchStart = max(0, buf.count - 65536)
+            var i = buf.count - 4
+            while i >= searchStart {
+                if matchesPKSignature(buf, i, 0x05, 0x06) {
+                    if i + 20 <= buf.count {
+                        return Int(readLE32(buf, i + 16))
+                    }
+                    break
                 }
-                break
+                i -= 1
             }
-            i -= 1
+            return nil
         }
-        return nil
     }
 
     private static func parseCentralDirectory(data: Data, offset: Int) -> [CZZipEntry] {
-        var entries: [CZZipEntry] = []
-        var cur = offset
-        let expected: [UInt8] = [0x50, 0x4b, 0x01, 0x02]
-        while cur + 46 <= data.count {
-            let sig = data.subdata(in: cur..<(cur+4))
-            if !sig.elementsEqual(expected) { break }
+        return data.withUnsafeBytes { (buf: UnsafeRawBufferPointer) -> [CZZipEntry] in
+            var entries: [CZZipEntry] = []
+            var cur = offset
+            while cur + 46 <= buf.count {
+                if !matchesPKSignature(buf, cur, 0x01, 0x02) { break }
 
-            let gpFlag = data.subdata(in: cur+8..<(cur+10)).withUnsafeBytes { $0.load(as: UInt16.self) }
-            let compMethod = data.subdata(in: cur+10..<(cur+12)).withUnsafeBytes { $0.load(as: UInt16.self) }
-            let cdCompressed = data.subdata(in: cur+20..<(cur+24)).withUnsafeBytes { $0.load(as: UInt32.self) }
-            let fnLen = Int(data.subdata(in: cur+28..<(cur+30)).withUnsafeBytes { $0.load(as: UInt16.self) })
-            let exLen = Int(data.subdata(in: cur+30..<(cur+32)).withUnsafeBytes { $0.load(as: UInt16.self) })
-            let cmLen = Int(data.subdata(in: cur+32..<(cur+34)).withUnsafeBytes { $0.load(as: UInt16.self) })
-            let nameStart = cur + 46
-            let nameEnd = nameStart + fnLen
-            if nameEnd > data.count { break }
-            let filenameData = data.subdata(in: nameStart..<nameEnd)
-            let filename = String(data: filenameData, encoding: .utf8) ?? ""
-            let localHeaderOffset = data.subdata(in: cur+42..<(cur+46)).withUnsafeBytes { $0.load(as: UInt32.self) }
+                let gpFlag = readLE16(buf, cur + 8)
+                let compMethod = readLE16(buf, cur + 10)
+                let cdCompressed = readLE32(buf, cur + 20)
+                let fnLen = Int(readLE16(buf, cur + 28))
+                let exLen = Int(readLE16(buf, cur + 30))
+                let cmLen = Int(readLE16(buf, cur + 32))
+                let nameStart = cur + 46
+                let nameEnd = nameStart + fnLen
+                if nameEnd > buf.count { break }
+                let filename = String(data: Data(buf[nameStart..<nameEnd]), encoding: .utf8) ?? ""
+                let localHeaderOffset = readLE32(buf, cur + 42)
 
-            entries.append(CZZipEntry(
-                filename: filename,
-                localHeaderOffset: Int(localHeaderOffset),
-                compressedSize: Int(cdCompressed),
-                generalPurposeFlag: gpFlag,
-                compressionMethod: compMethod
-            ))
+                entries.append(CZZipEntry(
+                    filename: filename,
+                    localHeaderOffset: Int(localHeaderOffset),
+                    compressedSize: Int(cdCompressed),
+                    generalPurposeFlag: gpFlag,
+                    compressionMethod: compMethod
+                ))
 
-            cur = nameEnd + exLen + cmLen
+                cur = nameEnd + exLen + cmLen
+            }
+            return entries
         }
-        return entries
     }
 
     private static func extractFileData(data: Data, entry: CZZipEntry) -> Data? {
         let off = entry.localHeaderOffset
         guard off + 30 <= data.count else { return nil }
-        let expected: [UInt8] = [0x50, 0x4b, 0x03, 0x04]
-        let sig = data.subdata(in: off..<(off+4))
-        if !sig.elementsEqual(expected) { return nil }
 
-        let fnLen = Int(data.subdata(in: off+26..<(off+28)).withUnsafeBytes { $0.load(as: UInt16.self) })
-        let exLen = Int(data.subdata(in: off+28..<(off+30)).withUnsafeBytes { $0.load(as: UInt16.self) })
-        let lhCompressed = data.subdata(in: off+18..<(off+22)).withUnsafeBytes { $0.load(as: UInt32.self) }
-        let method = data.subdata(in: off+8..<(off+10)).withUnsafeBytes { $0.load(as: UInt16.self) }
+        let header: (method: UInt16, fileDataOffset: Int, compressedSize: Int)? = data.withUnsafeBytes { (buf: UnsafeRawBufferPointer) in
+            guard matchesPKSignature(buf, off, 0x03, 0x04) else { return nil }
 
-        let fileDataOffset = off + 30 + fnLen + exLen
-        let useCompressedSize: Int = (entry.generalPurposeFlag & 0x0008) != 0 ? entry.compressedSize : Int(lhCompressed)
-        guard useCompressedSize > 0, fileDataOffset + useCompressedSize <= data.count else { return nil }
-        let fileData = data.subdata(in: fileDataOffset..<(fileDataOffset + useCompressedSize))
+            let fnLen = Int(readLE16(buf, off + 26))
+            let exLen = Int(readLE16(buf, off + 28))
+            let lhCompressed = readLE32(buf, off + 18)
+            let method = readLE16(buf, off + 8)
 
-        if method == 0 { return fileData }
-        if method == 8 { return inflateData(fileData) }
+            let fileDataOffset = off + 30 + fnLen + exLen
+            let useCompressedSize: Int = (entry.generalPurposeFlag & 0x0008) != 0 ? entry.compressedSize : Int(lhCompressed)
+            guard useCompressedSize > 0, fileDataOffset + useCompressedSize <= buf.count else { return nil }
+            return (method, fileDataOffset, useCompressedSize)
+        }
+        guard let header else { return nil }
+
+        let fileData = data.subdata(in: header.fileDataOffset..<(header.fileDataOffset + header.compressedSize))
+
+        if header.method == 0 { return fileData }
+        if header.method == 8 { return inflateData(fileData) }
         return nil
     }
 
