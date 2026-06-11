@@ -236,7 +236,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             
             // window 状態をより寛容にチェック
             let hasWindow = self.view.window != nil
-            NSLog("[DEBUG] LeftMouseDown: view.window=%@, event.window=%@", 
+            verboseLog("[DEBUG] LeftMouseDown: view.window=%@, event.window=%@", 
                   self.view.window?.description ?? "nil", 
                   event.window?.description ?? "nil")
             
@@ -244,11 +244,11 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             if hasWindow || self.view.superview != nil {
                 // 座標変換を試行、失敗した場合はより寛容なフォールバック
                 if let p = self.convertEventPointToViewRobust(event) {
-                    NSLog("[DEBUG] Converted point: (%f, %f), bounds: %@", p.x, p.y, NSStringFromRect(self.view.bounds))
+                    verboseLog("[DEBUG] Converted point: (%f, %f), bounds: %@", p.x, p.y, NSStringFromRect(self.view.bounds))
                     
                     // 自ビュー領域内の時は吸収（NSControl上は通す）
                     guard self.view.bounds.contains(p) else { 
-                        NSLog("[DEBUG] Point outside bounds, passing event")
+                        verboseLog("[DEBUG] Point outside bounds, passing event")
                         return event 
                     }
                     
@@ -263,21 +263,21 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                     if self.isPointInsidePassThroughControl(p) {
                         self.isHandlingPassThroughControlInteraction = true
                         self.immediatelyJumpSliderIfNeeded(atViewPoint: p)
-                        NSLog("[DEBUG] Mouse down passed through to control")
+                        verboseLog("[DEBUG] Mouse down passed through to control")
                         return event
                     }
                     
                     // 画像エリアのクリックは吸収（ダブルクリック抑止）
                     self.pendingSingleClick?.cancel()
                     self.pendingSingleClick = nil
-                    NSLog("[DEBUG] Mouse down absorbed")
+                    verboseLog("[DEBUG] Mouse down absorbed")
                     return nil
                 } else {
-                    NSLog("[DEBUG] Coordinate conversion failed, passing event")
+                    verboseLog("[DEBUG] Coordinate conversion failed, passing event")
                     return event
                 }
             }
-            NSLog("[DEBUG] No valid window context, passing event")
+            verboseLog("[DEBUG] No valid window context, passing event")
             return event
         }) {
             mouseMonitors.append(down)
@@ -290,14 +290,14 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if let rdown = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown, handler: { [weak self] event -> NSEvent? in
             guard let self else { return event }
             
-            NSLog("[DEBUG] RightMouseDown: view.window=%@", self.view.window?.description ?? "nil")
+            verboseLog("[DEBUG] RightMouseDown: view.window=%@", self.view.window?.description ?? "nil")
             
             // より寛容な window チェック
             if self.view.window != nil || self.view.superview != nil {
                 if let p = self.convertEventPointToViewRobust(event), self.view.bounds.contains(p) {
                     let menu = self.makeContextMenu(includeDebugInfo: event.modifierFlags.contains(.shift))
                     menu.popUp(positioning: nil, at: p, in: self.view)
-                    NSLog("[DEBUG] Context menu displayed")
+                    verboseLog("[DEBUG] Context menu displayed")
                     return nil
                 }
             }
@@ -326,7 +326,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                     
                     // スクロールでページ送り処理を実行
                     if self.handleScrollEvent(event) {
-                        NSLog("[DEBUG] Scroll event handled")
+                        verboseLog("[DEBUG] Scroll event handled")
                         return nil // イベントを吸収
                     }
                 }
@@ -343,26 +343,26 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             guard let self else { return event }
             if self.isHandlingPassThroughControlInteraction {
                 self.isHandlingPassThroughControlInteraction = false
-                NSLog("[DEBUG] MouseUp treated as pass-through control interaction")
+                verboseLog("[DEBUG] MouseUp treated as pass-through control interaction")
                 return event
             }
             
-            NSLog("[DEBUG] LeftMouseUp: view.window=%@", self.view.window?.description ?? "nil")
+            verboseLog("[DEBUG] LeftMouseUp: view.window=%@", self.view.window?.description ?? "nil")
             
             // より寛容な window チェック
             if self.view.window != nil || self.view.superview != nil {
                 if let vPoint = self.convertEventPointToViewRobust(event) {
-                    NSLog("[DEBUG] MouseUp at (%f, %f), bounds: %@", vPoint.x, vPoint.y, NSStringFromRect(self.view.bounds))
+                    verboseLog("[DEBUG] MouseUp at (%f, %f), bounds: %@", vPoint.x, vPoint.y, NSStringFromRect(self.view.bounds))
                     
                     // 自ビュー領域外はホストに渡す
                     guard self.view.bounds.contains(vPoint) else { 
-                        NSLog("[DEBUG] MouseUp outside bounds, passing event")
+                        verboseLog("[DEBUG] MouseUp outside bounds, passing event")
                         return event 
                     }
                     
                     // スライダーなどのNSControl上のクリックは通す
                     if self.isPointInsidePassThroughControl(vPoint) { 
-                        NSLog("[DEBUG] MouseUp passed through to control")
+                        verboseLog("[DEBUG] MouseUp passed through to control")
                         return event 
                     }
                     
@@ -371,7 +371,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                     let isLeftHalf = vPoint.x < bounds.width / 2
                     let isSpreadMode = self.currentViewMode == .spread
                     
-                    NSLog("[DEBUG] Page navigation: isLeftHalf=%d, isSpreadMode=%d, isRTL=%d", 
+                    verboseLog("[DEBUG] Page navigation: isLeftHalf=%d, isSpreadMode=%d, isRTL=%d", 
                           isLeftHalf, isSpreadMode, self.isRightToLeftReading)
                     
                     // スライドショー中の手動操作は一時的に停止・再開
@@ -383,7 +383,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                     if self.isRightToLeftReading {
                         // 反転: 左=進む、右=戻る
                         if isLeftHalf {
-                            NSLog("[DEBUG] RTL: Left click - Next page")
+                            verboseLog("[DEBUG] RTL: Left click - Next page")
                             if self.imageManager.nextImage(isSpreadMode: isSpreadMode) {
                                 self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                                 self.applyTransition(forward: true)
@@ -392,7 +392,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                                 navigationHandled = true
                             }
                         } else {
-                            NSLog("[DEBUG] RTL: Right click - Previous page")
+                            verboseLog("[DEBUG] RTL: Right click - Previous page")
                             if self.imageManager.previousImage(isSpreadMode: isSpreadMode) {
                                 self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                                 self.applyTransition(forward: false)
@@ -404,7 +404,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                     } else {
                         // 通常: 左=戻る、右=進む
                         if isLeftHalf {
-                            NSLog("[DEBUG] LTR: Left click - Previous page")
+                            verboseLog("[DEBUG] LTR: Left click - Previous page")
                             if self.imageManager.previousImage(isSpreadMode: isSpreadMode) {
                                 self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                                 self.applyTransition(forward: false)
@@ -413,7 +413,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                                 navigationHandled = true
                             }
                         } else {
-                            NSLog("[DEBUG] LTR: Right click - Next page")
+                            verboseLog("[DEBUG] LTR: Right click - Next page")
                             if self.imageManager.nextImage(isSpreadMode: isSpreadMode) {
                                 self.setViewMode(self.shouldUseSpreadMode() ? .spread : .single)
                                 self.applyTransition(forward: true)
@@ -424,17 +424,17 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                         }
                     }
                     
-                    NSLog("[DEBUG] Navigation handled: %d", navigationHandled)
+                    verboseLog("[DEBUG] Navigation handled: %d", navigationHandled)
                     
                     // スライドショーが有効だった場合は再開
                     if wasSlideshow { self.startSlideshow() }
                     return nil // ホストには渡さない
                 } else {
-                    NSLog("[DEBUG] MouseUp coordinate conversion failed, passing event")
+                    verboseLog("[DEBUG] MouseUp coordinate conversion failed, passing event")
                     return event
                 }
             }
-            NSLog("[DEBUG] MouseUp no valid window context, passing event")
+            verboseLog("[DEBUG] MouseUp no valid window context, passing event")
             return event
         }) {
             mouseMonitors.append(up)
@@ -2267,7 +2267,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         
         // フォールバック1: NSEvent.mouseLocation を直接使用
         guard let myWin = view.window else { 
-            NSLog("[DEBUG] Fallback failed: view.window is nil")
+            verboseLog("[DEBUG] Fallback failed: view.window is nil")
             return nil 
         }
         
@@ -2275,7 +2275,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let windowPoint = myWin.convertPoint(fromScreen: screenPoint)
         let viewPoint = view.convert(windowPoint, from: nil)
         
-        NSLog("[DEBUG] Fallback coordinate conversion: screen=(%f,%f) -> window=(%f,%f) -> view=(%f,%f)", 
+        verboseLog("[DEBUG] Fallback coordinate conversion: screen=(%f,%f) -> window=(%f,%f) -> view=(%f,%f)", 
               screenPoint.x, screenPoint.y, windowPoint.x, windowPoint.y, viewPoint.x, viewPoint.y)
         
         return viewPoint

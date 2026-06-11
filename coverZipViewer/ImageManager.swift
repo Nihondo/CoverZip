@@ -529,7 +529,7 @@ class ImageManager {
 
         let resizedImage = NSImage(cgImage: resizedCGImage, size: NSSize(width: resizedCGImage.width, height: resizedCGImage.height))
         cacheResizedImage(resizedImage, key: newKey, index: index, maxPixelSize: request.maxPixelSize)
-        NSLog("[ImageManager][Decode] mode=reuse-resize index=%d from=%@ to=%d", index, candidate.key, request.maxPixelSize)
+        verboseLog("[ImageManager][Decode] mode=reuse-resize index=%d from=%@ to=%d", index, candidate.key, request.maxPixelSize)
         return resizedImage
     }
 
@@ -1080,6 +1080,10 @@ extension ImageManager {
     }
 
     private func logDecodeResult(source: CGImageSource, decodedImage: CGImage, elapsedMs: CFTimeInterval, maxPixelSize: Int?) {
+        // メタデータ再パース（CGImageSourceCopyPropertiesAtIndex）を含むため、
+        // 詳細ログ無効時はデコード毎のオーバーヘッドを避けて早期リターンする
+        guard CZVerboseLog.isEnabled else { return }
+
         let decodedWidth = decodedImage.width
         let decodedHeight = decodedImage.height
         var sourceWidth = 0

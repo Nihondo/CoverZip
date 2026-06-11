@@ -38,6 +38,9 @@
 		42BCD0C72E5E18A5007F2065 /* ImageFileFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0B92E5E18A5007F2065 /* ImageFileFilter.swift */; };
 		42BCD0C82E5E18A5007F2065 /* NaturalSort.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BA2E5E18A5007F2065 /* NaturalSort.swift */; };
 		42BCD0C92E5E18A5007F2065 /* ZipCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BC2E5E18A5007F2065 /* ZipCore.swift */; };
+		C0D542EBF0174D78648F52A8 /* CZLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */; };
+		423CD94F50A7F92213B17E79 /* CZLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */; };
+		0881FF487837FE21843C85B4 /* CZLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */; };
 		42CD41A62E5AEA6400BA89CA /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 426EFEF22E2670FC00AD23E5 /* Quartz.framework */; };
 		42CD41B32E5AEA6400BA89CA /* coverZipViewer.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 42CD41A52E5AEA6400BA89CA /* coverZipViewer.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		42D710012FAD000100000001 /* CoverZipKeyHelper.app in Embed Login Items */ = {isa = PBXBuildFile; fileRef = 42D710082FAD000100000001 /* CoverZipKeyHelper.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -110,6 +113,7 @@
 		42BCD0BA2E5E18A5007F2065 /* NaturalSort.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaturalSort.swift; sourceTree = "<group>"; };
 		42BCD0BB2E5E18A5007F2065 /* SettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKeys.swift; sourceTree = "<group>"; };
 		42BCD0BC2E5E18A5007F2065 /* ZipCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipCore.swift; sourceTree = "<group>"; };
+		C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CZLogging.swift; sourceTree = "<group>"; };
 		42CD41A52E5AEA6400BA89CA /* coverZipViewer.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = coverZipViewer.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		42D710082FAD000100000001 /* CoverZipKeyHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CoverZipKeyHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -270,6 +274,7 @@
 				42BCD0BA2E5E18A5007F2065 /* NaturalSort.swift */,
 				42BCD0BB2E5E18A5007F2065 /* SettingsKeys.swift */,
 				42BCD0BC2E5E18A5007F2065 /* ZipCore.swift */,
+				C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -466,6 +471,7 @@
 				429EE9F82EBC1D2D003D0E96 /* ImageUtilities.swift in Sources */,
 				429EE9F92EBC1D2D003D0E96 /* ViewModePreference.swift in Sources */,
 				429EE9FA2EBC1D2D003D0E96 /* UnifiedAppSettings.swift in Sources */,
+				C0D542EBF0174D78648F52A8 /* CZLogging.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -482,6 +488,7 @@
 				429EE9F62EBC1D2D003D0E96 /* UnifiedAppSettings.swift in Sources */,
 				42BCD0C82E5E18A5007F2065 /* NaturalSort.swift in Sources */,
 				42BCD0C92E5E18A5007F2065 /* ZipCore.swift in Sources */,
+				423CD94F50A7F92213B17E79 /* CZLogging.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -498,6 +505,7 @@
 				429EE9F02EBC1D2D003D0E96 /* ImageUtilities.swift in Sources */,
 				429EE9F12EBC1D2D003D0E96 /* ViewModePreference.swift in Sources */,
 				429EE9F22EBC1D2D003D0E96 /* UnifiedAppSettings.swift in Sources */,
+				0881FF487837FE21843C85B4 /* CZLogging.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
