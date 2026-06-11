@@ -49,6 +49,8 @@ class ImageManager {
     private var resizedImageCache: [String: NSImage] = [:]
     private var resizedImageIndexMap: [String: Int] = [:]
     private var resizedImageMaxPixelMap: [String: Int] = [:]
+    // プリロード起源のデコードの重複排除（表示起源は対象外）
+    private var inFlightPreloadDecodeKeys: Set<String> = []
     private let maxResizedCacheSize: Int = 32
     private let imageBucketStep: CGFloat = 64.0
     private let fallbackDecodeMaxPixelSize: Int = 2048
@@ -407,13 +409,13 @@ class ImageManager {
             spreadBaseIndices = []
         }
 
-        let valid = Array(Set(indicesToLoad)).filter { $0 >= 0 && $0 < imageEntryInfos.count }
+        let valid = orderedUnique(indicesToLoad).filter { $0 >= 0 && $0 < imageEntryInfos.count }
         if valid.isEmpty && spreadBaseIndices.isEmpty { return }
 
         decodeQueue.async { [weak self] in
             guard let self else { return }
             for index in valid {
-                _ = self.getImageAtIndex(index, isSpreadMode: isSpreadMode)
+                _ = self.getImageAtIndex(index, isSpreadMode: isSpreadMode, isPreload: true)
                 self.prerenderSingleLayerIfNeeded(pageIndex: index)
             }
 
@@ -440,7 +442,8 @@ class ImageManager {
     private func getImageAtIndex(
         _ index: Int,
         isSpreadMode: Bool = false,
-        quality: DecodeQualityTier = .normal
+        quality: DecodeQualityTier = .normal,
+        isPreload: Bool = false
     ) -> NSImage? {
         guard index >= 0, index < imageEntryInfos.count else { return nil }
 
@@ -458,6 +461,21 @@ class ImageManager {
         guard let zipData else {
             NSLog("[ImageManager] ZIP data not available for lazy loading")
             return nil
+        }
+
+        // プリロード起源は同一キーのデコードが既に進行中ならスキップする（表示起源は常に実行）
+        if isPreload {
+            let canProceed = cacheStateQueue.sync { () -> Bool in
+                if inFlightPreloadDecodeKeys.contains(cacheKey) { return false }
+                inFlightPreloadDecodeKeys.insert(cacheKey)
+                return true
+            }
+            guard canProceed else { return nil }
+        }
+        defer {
+            if isPreload {
+                cacheStateQueue.sync { _ = inFlightPreloadDecodeKeys.remove(cacheKey) }
+            }
         }
 
         os_signpost(.begin, log: performanceLog, name: "extractAndDecode", "index=%d maxPixelSize=%d", index, request.maxPixelSize)
@@ -664,6 +682,17 @@ class ImageManager {
         resizedImageCache.removeValue(forKey: victimKey)
         resizedImageIndexMap.removeValue(forKey: victimKey)
         resizedImageMaxPixelMap.removeValue(forKey: victimKey)
+    }
+
+    /// 順序を維持したまま重複を除去する
+    private func orderedUnique(_ values: [Int]) -> [Int] {
+        var seen = Set<Int>()
+        var result: [Int] = []
+        for value in values where !seen.contains(value) {
+            seen.insert(value)
+            result.append(value)
+        }
+        return result
     }
 
     private func buildSinglePreloadIndices() -> [Int] {
@@ -961,7 +990,6 @@ extension ImageManager {
             currentIndex += 1
         }
 
-        preloadAdjacentImages(isSpreadMode: false)
         return true
     }
 
@@ -981,7 +1009,6 @@ extension ImageManager {
             currentIndex -= 1
         }
 
-        preloadAdjacentImages(isSpreadMode: false)
         return true
     }
 
@@ -1004,7 +1031,6 @@ extension ImageManager {
         guard !imageEntryInfos.isEmpty else { return false }
         let clamped = max(1, min(page, imageEntryInfos.count))
         currentIndex = clamped - 1
-        preloadAdjacentImages()
         return true
     }
 
