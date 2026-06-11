@@ -156,9 +156,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         stopPreviewVisibilityHeartbeat()
         postPreviewVisibilityNotification(CZDistributedNotifications.previewExtensionHidden)
         
-        // 読書履歴を保存
+        // 読書履歴を保存（デバウンスせず即座に永続化）
         saveReadingPositionToHistory()
-        
+        readingHistoryManager.flush()
+
         // ユーザーがこのセッションでリサイズした場合のみ最終フレームを保存
         if hasUserResizedWindow { saveWindowFrameIfEnabled() }
         // 通知クリーンアップ
@@ -176,6 +177,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     deinit {
         stopPreviewVisibilityHeartbeat()
         postPreviewVisibilityNotification(CZDistributedNotifications.previewExtensionHidden)
+        readingHistoryManager.flush()
     }
 
     private func startPreviewVisibilityHeartbeat() {
