@@ -328,11 +328,12 @@ class ImageManager {
         }
 
         let targetIndex = currentIndex
+        let scale = CGFloat(request.scaleToken) / 100.0
         decodeQueue.async { [weak self] in
             guard let self else { return }
             defer { self.endSinglePrerender(key) }
             guard let image = self.getImageAtIndex(targetIndex, isSpreadMode: false),
-                  let layer = self.createPrerenderedLayer(from: image) else {
+                  let layer = self.createPrerenderedLayer(from: image, scale: scale) else {
                 DispatchQueue.main.async { completion?(nil) }
                 return
             }
@@ -373,6 +374,7 @@ class ImageManager {
             return
         }
         let targetIndex = currentIndex
+        let scale = CGFloat(request.scaleToken) / 100.0
 
         decodeQueue.async { [weak self] in
             guard let self else { return }
@@ -380,8 +382,8 @@ class ImageManager {
 
             let leftImage = pair.left.flatMap { self.getImageAtIndex($0, isSpreadMode: true) }
             let rightImage = pair.right.flatMap { self.getImageAtIndex($0, isSpreadMode: true) }
-            let leftLayer = leftImage.flatMap { self.createPrerenderedLayer(from: $0) }
-            let rightLayer = rightImage.flatMap { self.createPrerenderedLayer(from: $0) }
+            let leftLayer = leftImage.flatMap { self.createPrerenderedLayer(from: $0, scale: scale) }
+            let rightLayer = rightImage.flatMap { self.createPrerenderedLayer(from: $0, scale: scale) }
 
             self.prerenderedLayerCache.storeSpread(left: leftLayer, right: rightLayer, for: spreadKey)
             DispatchQueue.main.async {
@@ -760,11 +762,12 @@ class ImageManager {
         if prerenderedLayerCache.layer(for: key) != nil { return }
         guard beginSinglePrerender(key) else { return }
 
+        let scale = CGFloat(request.scaleToken) / 100.0
         layerBuildQueue.async { [weak self] in
             guard let self else { return }
             defer { self.endSinglePrerender(key) }
             guard let image = self.getImageAtIndex(pageIndex, isSpreadMode: false),
-                  let layer = self.createPrerenderedLayer(from: image) else { return }
+                  let layer = self.createPrerenderedLayer(from: image, scale: scale) else { return }
             self.prerenderedLayerCache.store(layer, for: key)
             DispatchQueue.main.async {
                 self.onLayerPrerendered?(pageIndex)
@@ -787,13 +790,14 @@ class ImageManager {
         if prerenderedLayerCache.spreadLayers(for: spreadKey) != nil { return }
         guard beginSpreadPrerender(spreadKey) else { return }
 
+        let scale = CGFloat(request.scaleToken) / 100.0
         layerBuildQueue.async { [weak self] in
             guard let self else { return }
             defer { self.endSpreadPrerender(spreadKey) }
             let leftImage = pair.left.flatMap { self.getImageAtIndex($0, isSpreadMode: true) }
             let rightImage = pair.right.flatMap { self.getImageAtIndex($0, isSpreadMode: true) }
-            let leftLayer = leftImage.flatMap { self.createPrerenderedLayer(from: $0) }
-            let rightLayer = rightImage.flatMap { self.createPrerenderedLayer(from: $0) }
+            let leftLayer = leftImage.flatMap { self.createPrerenderedLayer(from: $0, scale: scale) }
+            let rightLayer = rightImage.flatMap { self.createPrerenderedLayer(from: $0, scale: scale) }
             self.prerenderedLayerCache.storeSpread(left: leftLayer, right: rightLayer, for: spreadKey)
             DispatchQueue.main.async {
                 self.onLayerPrerendered?(baseIndex)
@@ -801,19 +805,16 @@ class ImageManager {
         }
     }
 
-    private func createPrerenderedLayer(from image: NSImage) -> CALayer? {
+    /// レイヤーツリー未アタッチの状態でCALayerを生成するため、バックグラウンドスレッドから呼び出してよい
+    private func createPrerenderedLayer(from image: NSImage, scale: CGFloat) -> CALayer? {
         guard let cgImage = extractCGImage(from: image) else { return nil }
-        return DispatchQueue.main.sync {
-            let layer = CALayer()
-            layer.contents = cgImage
-            layer.contentsGravity = .resizeAspect
-            layer.minificationFilter = .trilinear
-            layer.magnificationFilter = .linear
-            layer.contentsScale = max(1.0, targetDisplayScale)
-            layer.setNeedsDisplay()
-            layer.displayIfNeeded()
-            return layer
-        }
+        let layer = CALayer()
+        layer.contents = cgImage
+        layer.contentsGravity = .resizeAspect
+        layer.minificationFilter = .trilinear
+        layer.magnificationFilter = .linear
+        layer.contentsScale = max(1.0, scale)
+        return layer
     }
 
     private func extractCGImage(from image: NSImage) -> CGImage? {
