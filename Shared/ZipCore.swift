@@ -39,16 +39,20 @@ public struct CZFirstImageOptions: OptionSet {
 }
 
 public enum CZZip {
+    /// ファイル名（lastPathComponent）の自然順でエントリをソートする。
+    /// 比較のたびに再トークン化しないよう、ソートキーを事前計算するSchwartzian transform。
+    private static func sortedByNaturalFilename(_ entries: [CZZipEntry]) -> [CZZipEntry] {
+        return entries
+            .map { ($0, NaturalSort.NaturalSortKey(($0.filename as NSString).lastPathComponent)) }
+            .sorted { $0.1 < $1.1 }
+            .map { $0.0 }
+    }
+
     /// ZIP データから全画像エントリを読み込む（ファイル名の自然順ソート）。
     public static func imageEntries(from data: Data) -> [CZImageEntry] {
         guard let cdOffset = findCentralDirectoryOffset(in: data) else { return [] }
         let entries = parseCentralDirectory(data: data, offset: cdOffset)
-        let imageFiles = entries
-            .filter { ImageFileFilter.isImagePath($0.filename) }
-            .sorted { a, b in
-                NaturalSort.lessFilename((a.filename as NSString).lastPathComponent,
-                                          (b.filename as NSString).lastPathComponent)
-            }
+        let imageFiles = sortedByNaturalFilename(entries.filter { ImageFileFilter.isImagePath($0.filename) })
         var result: [CZImageEntry] = []
         result.reserveCapacity(imageFiles.count)
         for entry in imageFiles {
@@ -70,12 +74,7 @@ public enum CZZip {
     public static func imageEntryInfoList(from data: Data) -> [CZImageEntryInfo] {
         guard let cdOffset = findCentralDirectoryOffset(in: data) else { return [] }
         let entries = parseCentralDirectory(data: data, offset: cdOffset)
-        let imageFiles = entries
-            .filter { ImageFileFilter.isImagePath($0.filename) }
-            .sorted { a, b in
-                NaturalSort.lessFilename((a.filename as NSString).lastPathComponent,
-                                          (b.filename as NSString).lastPathComponent)
-            }
+        let imageFiles = sortedByNaturalFilename(entries.filter { ImageFileFilter.isImagePath($0.filename) })
         return imageFiles.map { CZImageEntryInfo(filename: $0.filename, entry: $0) }
     }
 
@@ -454,10 +453,12 @@ public enum CZZip {
     /// lastPathComponent を NaturalSort で比較し、ソート配列を作らずに先頭エントリを返す。
     private static func firstImageEntryByNaturalOrderLinear(entries: [CZZipEntry]) -> CZZipEntry? {
         guard var best = entries.first else { return nil }
+        var bestKey = NaturalSort.NaturalSortKey((best.filename as NSString).lastPathComponent)
         for e in entries.dropFirst() {
-            if NaturalSort.lessFilename((e.filename as NSString).lastPathComponent,
-                                        (best.filename as NSString).lastPathComponent) {
+            let key = NaturalSort.NaturalSortKey((e.filename as NSString).lastPathComponent)
+            if key < bestKey {
                 best = e
+                bestKey = key
             }
         }
         return best
