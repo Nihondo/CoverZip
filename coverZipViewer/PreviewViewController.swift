@@ -692,7 +692,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     userPreferredViewMode = AppSettings.shared.defaultViewMode
     // 新規ファイルごとに初期適用フラグをリセット
     didApplyInitialViewMode = false
-        
+
+        // 初回デコードのバケットサイズを先に確定し、二重デコードを防ぐ
+        await MainActor.run {
+            updateImageManagerDisplaySize(useScreenFallback: true)
+        }
+
         // ZIPファイルから画像を読み込む
         if imageManager.loadImages(from: url) {
             await MainActor.run {
@@ -2318,17 +2323,27 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 // MARK: - パフォーマンス最適化
 private extension PreviewViewController {
     /// ImageManagerに現在のウィンドウサイズを設定して最適化を有効にする
+    ///
+    /// - Parameter useScreenFallback: `true` の場合、`view.window` が未確定でも
+    ///   `view.bounds` / `NSScreen.main` から推定したサイズでバケットを確定させる
+    ///   （`preparePreviewOfFile` 時点での先渡し用）。
     @discardableResult
-    func updateImageManagerDisplaySize() -> Bool {
-        guard let window = view.window else { return false }
-
-        let windowSize = window.frame.size
+    func updateImageManagerDisplaySize(useScreenFallback: Bool = false) -> Bool {
         let contentSize = view.bounds.size
-        let backingScaleFactor = window.backingScaleFactor
-        let targetPointSize = NSSize(
+        let windowSize = view.window?.frame.size ?? .zero
+        let backingScaleFactor = view.window?.backingScaleFactor
+            ?? NSScreen.main?.backingScaleFactor
+            ?? 1.0
+
+        var targetPointSize = NSSize(
             width: max(contentSize.width, windowSize.width),
             height: max(contentSize.height, windowSize.height)
         )
+
+        if targetPointSize.width <= 0 || targetPointSize.height <= 0 {
+            guard useScreenFallback, let screenSize = NSScreen.main?.frame.size else { return false }
+            targetPointSize = screenSize
+        }
 
         let maxSize: CGFloat = 3840
         let limitedSize = NSSize(

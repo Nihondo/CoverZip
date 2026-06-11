@@ -48,6 +48,7 @@ class ImageManager {
     // 画像キャッシュ（表示サイズバケット単位）
     private var resizedImageCache: [String: NSImage] = [:]
     private var resizedImageIndexMap: [String: Int] = [:]
+    private var resizedImageMaxPixelMap: [String: Int] = [:]
     private let maxResizedCacheSize: Int = 32
     private let imageBucketStep: CGFloat = 64.0
     private let fallbackDecodeMaxPixelSize: Int = 2048
@@ -118,10 +119,22 @@ class ImageManager {
         currentBucketSignature = nextSignature
 
         if !wasSameSignature {
+            // 全クリアではなく、新バケットのmaxPixelSize以上でデコード済みのエントリは残す
+            let newSingleMaxPixel = max(nextSignature.singleWidthBucket, nextSignature.singleHeightBucket)
+            let newSpreadMaxPixel = max(nextSignature.spreadWidthBucket, nextSignature.spreadHeightBucket)
             cacheStateQueue.sync {
-                resizedImageCache.removeAll()
-                resizedImageIndexMap.removeAll()
+                let keysToRemove = resizedImageCache.keys.filter { key in
+                    let storedMaxPixel = resizedImageMaxPixelMap[key] ?? 0
+                    let requiredMaxPixel = key.contains("_spread_") ? newSpreadMaxPixel : newSingleMaxPixel
+                    return storedMaxPixel < requiredMaxPixel
+                }
+                for key in keysToRemove {
+                    resizedImageCache.removeValue(forKey: key)
+                    resizedImageIndexMap.removeValue(forKey: key)
+                    resizedImageMaxPixelMap.removeValue(forKey: key)
+                }
             }
+            // プリレンダーレイヤーはキー完全一致でしか参照されないためクリア継続
             prerenderedLayerCache.clearAll()
             clearInFlightPrerenderState()
         }
@@ -156,6 +169,7 @@ class ImageManager {
             cacheStateQueue.sync {
                 resizedImageCache.removeAll()
                 resizedImageIndexMap.removeAll()
+                resizedImageMaxPixelMap.removeAll()
             }
             prerenderedLayerCache.clearAll()
             clearInFlightPrerenderState()
@@ -412,6 +426,7 @@ class ImageManager {
         cacheStateQueue.sync {
             resizedImageCache.removeAll()
             resizedImageIndexMap.removeAll()
+            resizedImageMaxPixelMap.removeAll()
         }
         prerenderedLayerCache.clearAll()
         clearInFlightPrerenderState()
@@ -433,6 +448,11 @@ class ImageManager {
             return cached
         }
 
+        // バケット変更直後でも、より大きいサイズでデコード済みなら縮小再利用して再デコードを避ける
+        if let reused = reuseExistingResizedImage(index: index, request: request, isSpreadMode: isSpreadMode, quality: quality, newKey: cacheKey) {
+            return reused
+        }
+
         guard let zipData else {
             NSLog("[ImageManager] ZIP data not available for lazy loading")
             return nil
@@ -452,8 +472,72 @@ class ImageManager {
             return nil
         }
 
-        cacheResizedImage(image, key: cacheKey, index: index)
+        cacheResizedImage(image, key: cacheKey, index: index, maxPixelSize: request.maxPixelSize)
         return image
+    }
+
+    /// 同一インデックス・モード・品質で、より大きいmaxPixelSizeでデコード済みのキャッシュがあれば
+    /// それを縮小して再利用する（ZIP再展開・再デコードを回避）
+    private func reuseExistingResizedImage(
+        index: Int,
+        request: DecodeRequest,
+        isSpreadMode: Bool,
+        quality: DecodeQualityTier,
+        newKey: String
+    ) -> NSImage? {
+        let modeToken = isSpreadMode ? "spread" : "single"
+        let qualityToken = (quality == .low) ? "low" : "normal"
+        let prefix = "\(index)_\(modeToken)_\(qualityToken)_"
+
+        let candidate: (key: String, image: NSImage, maxPixelSize: Int)? = cacheStateQueue.sync {
+            var best: (key: String, image: NSImage, maxPixelSize: Int)?
+            for (key, image) in resizedImageCache where key.hasPrefix(prefix) {
+                let storedMaxPixel = resizedImageMaxPixelMap[key] ?? 0
+                guard storedMaxPixel >= request.maxPixelSize else { continue }
+                if best == nil || storedMaxPixel < best!.maxPixelSize {
+                    best = (key, image, storedMaxPixel)
+                }
+            }
+            return best
+        }
+
+        guard let candidate,
+              let sourceCGImage = candidate.image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let resizedCGImage = resizeCGImage(sourceCGImage, maxPixelSize: request.maxPixelSize) else {
+            return nil
+        }
+
+        let resizedImage = NSImage(cgImage: resizedCGImage, size: NSSize(width: resizedCGImage.width, height: resizedCGImage.height))
+        cacheResizedImage(resizedImage, key: newKey, index: index, maxPixelSize: request.maxPixelSize)
+        NSLog("[ImageManager][Decode] mode=reuse-resize index=%d from=%@ to=%d", index, candidate.key, request.maxPixelSize)
+        return resizedImage
+    }
+
+    /// デコード済みCGImageをmaxPixelSize以内に縮小する（既にそれ以下ならそのまま返す）
+    private func resizeCGImage(_ cgImage: CGImage, maxPixelSize: Int) -> CGImage? {
+        let width = cgImage.width
+        let height = cgImage.height
+        guard width > 0, height > 0 else { return nil }
+
+        let scale = CGFloat(maxPixelSize) / CGFloat(max(width, height))
+        guard scale < 1.0 else { return cgImage }
+
+        let newWidth = max(1, Int((CGFloat(width) * scale).rounded()))
+        let newHeight = max(1, Int((CGFloat(height) * scale).rounded()))
+
+        guard let context = CGContext(
+            data: nil,
+            width: newWidth,
+            height: newHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: newWidth, height: newHeight))
+        return context.makeImage()
     }
 
     private func getCachedImageAtIndex(
@@ -550,13 +634,14 @@ class ImageManager {
         return "\(index)_\(modeToken)_\(qualityToken)_\(request.widthBucket)x\(request.heightBucket)_s\(request.scaleToken)"
     }
 
-    private func cacheResizedImage(_ image: NSImage, key: String, index: Int) {
+    private func cacheResizedImage(_ image: NSImage, key: String, index: Int, maxPixelSize: Int) {
         cacheStateQueue.sync {
             if resizedImageCache.count >= maxResizedCacheSize && resizedImageCache[key] == nil {
                 removeOldestResizedCachedImageLocked()
             }
             resizedImageCache[key] = image
             resizedImageIndexMap[key] = index
+            resizedImageMaxPixelMap[key] = maxPixelSize
         }
     }
 
@@ -576,6 +661,7 @@ class ImageManager {
 
         resizedImageCache.removeValue(forKey: victimKey)
         resizedImageIndexMap.removeValue(forKey: victimKey)
+        resizedImageMaxPixelMap.removeValue(forKey: victimKey)
     }
 
     private func buildSinglePreloadIndices() -> [Int] {
