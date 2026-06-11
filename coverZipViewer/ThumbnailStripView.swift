@@ -143,6 +143,20 @@ class ThumbnailStripView: NSView {
     private var entries: [CZImageEntryInfo] = []
     private var zipData: Data?
     private var thumbnailCache: [Int: NSImage] = [:]
+    /// thumbnailCache[realIdx] をデコードした際の maxPixelSize（サイズ不一致時の再デコード判定用）
+    private var thumbnailCacheSizeMap: [Int: Int] = [:]
+    /// thumbnailCache のLRU順（先頭が最も古い）
+    private var thumbnailCacheOrder: [Int] = []
+    /// thumbnailCache の上限件数（超過分は古いものから破棄）
+    private let maxThumbnailCacheCount = 200
+    /// デコード中の実インデックス（重複デコード防止）
+    private var inFlightThumbnailDecodes: Set<Int> = []
+    /// configure / reloadThumbnails のたびにインクリメントし、古い世代のデコード結果を破棄する
+    private var generation: Int = 0
+    /// 直近の可視表示インデックス範囲（メインスレッドで更新したスナップショット）
+    private var visibleDisplayIndexRange: Range<Int> = 0..<0
+    /// 可視範囲外デコードをスキップする際のバッファ件数
+    private let visibleRangeBuffer = 8
     private let decodeQueue = DispatchQueue(label: "com.dmng.coverzip.thumbnail", qos: .utility, attributes: .concurrent)
     private var pendingVisibilityIndexPaths: Set<IndexPath> = []
     private let baseHorizontalSectionInset: CGFloat = 8
@@ -235,6 +249,7 @@ class ThumbnailStripView: NSView {
         super.layout()
         updateCollectionViewItemSize()
         applyPendingSelectionVisibility(retriesLeft: 0)
+        refreshVisibleThumbnails()
     }
 
     /// ストリップ高さに合わせてコレクションビューのアイテムサイズを更新する
@@ -297,8 +312,13 @@ class ThumbnailStripView: NSView {
     func configure(zipData: Data, entries: [CZImageEntryInfo]) {
         self.zipData = zipData
         self.entries = entries
+        generation += 1
         pendingVisibilityIndexPaths.removeAll()
         thumbnailCache.removeAll()
+        thumbnailCacheSizeMap.removeAll()
+        thumbnailCacheOrder.removeAll()
+        inFlightThumbnailDecodes.removeAll()
+        visibleDisplayIndexRange = 0..<0
         updateSectionInsetsForReadingDirection()
         collectionView.reloadData()
     }
@@ -335,13 +355,14 @@ class ThumbnailStripView: NSView {
         window?.makeFirstResponder(collectionView) ?? false
     }
 
-    /// サムネイルキャッシュをクリアして再ロードする（ストリップ高さ変更後に呼ぶ）
+    /// サムネイルストリップの高さ変更後に呼ぶ。キャッシュは破棄せず、旧サイズのサムネイルを
+    /// 表示したまま新サイズのデコードを背後で進め、完了次第差し替える
     func reloadThumbnails() {
+        generation += 1
         // 現在の選択を実インデックスで保存（見開き時の複数選択を維持）
         let selectedDisplayIndices = collectionView.selectionIndexPaths.map(\.item).sorted()
         let selectedRealIndices = selectedDisplayIndices.map { realIndex(for: $0) }
         let primaryRealIndex = selectedRealIndices.first
-        thumbnailCache.removeAll()
         collectionView.reloadData()
         // reloadData() 後はレイアウト完了を待ってから選択・スクロールを復元する
         if !selectedRealIndices.isEmpty {
@@ -354,17 +375,32 @@ class ThumbnailStripView: NSView {
     // MARK: - サムネイル読み込み
 
     private func loadThumbnail(at realIdx: Int) {
-        guard thumbnailCache[realIdx] == nil,
-              let zipData = zipData,
-              realIdx < entries.count else { return }
+        guard let zipData = zipData, realIdx < entries.count else { return }
 
-        let entry = entries[realIdx]
         // アイテム高さと画面スケールからサムネイル解像度を決定（Retina対応）
         let itemHeight = (collectionView.collectionViewLayout as? NSCollectionViewFlowLayout)?.itemSize.height ?? 68
         let scale = window?.backingScaleFactor ?? 2.0
         let maxPixelSize = max(120, Int(itemHeight * scale))
+
+        // 既に同サイズでキャッシュ済み、またはデコード中なら何もしない
+        if thumbnailCache[realIdx] != nil, thumbnailCacheSizeMap[realIdx] == maxPixelSize { return }
+        guard !inFlightThumbnailDecodes.contains(realIdx) else { return }
+        inFlightThumbnailDecodes.insert(realIdx)
+
+        let entry = entries[realIdx]
+        let displayIdx = displayIndex(for: realIdx)
+        let captureGeneration = generation
+        let range = expandedVisibleRange(buffer: visibleRangeBuffer)
+
         decodeQueue.async { [weak self] in
             guard let self else { return }
+            defer {
+                DispatchQueue.main.async { [weak self] in
+                    self?.inFlightThumbnailDecodes.remove(realIdx)
+                }
+            }
+            // 可視範囲外（バッファ含む）ならデコードをスキップする（再可視化時に再度呼ばれる）
+            guard range.contains(displayIdx) else { return }
             guard let imageData = CZZip.extractImageData(from: zipData, entryInfo: entry) else { return }
             guard let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return }
 
@@ -377,15 +413,57 @@ class ThumbnailStripView: NSView {
             let image = NSImage(cgImage: cgImage, size: .zero)
 
             DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.thumbnailCache[realIdx] = image
-                let dispIdx = self.displayIndex(for: realIdx)
-                let indexPath = IndexPath(item: dispIdx, section: 0)
+                guard let self, self.generation == captureGeneration else { return }
+                self.cacheThumbnail(image, for: realIdx, maxPixelSize: maxPixelSize)
+                let indexPath = IndexPath(item: displayIdx, section: 0)
                 if let item = self.collectionView.item(at: indexPath) as? ThumbnailCollectionViewItem {
                     item.configure(image: image)
                 }
             }
         }
+    }
+
+    /// 可視セルのうちサムネイル未取得・サイズ不一致のものを再デコードする
+    private func refreshVisibleThumbnails() {
+        updateVisibleDisplayIndexRange()
+        for indexPath in collectionView.indexPathsForVisibleItems() {
+            loadThumbnail(at: realIndex(for: indexPath.item))
+        }
+    }
+
+    /// 直近の可視表示インデックス範囲を更新する
+    private func updateVisibleDisplayIndexRange() {
+        let visibleItems = collectionView.indexPathsForVisibleItems().map(\.item)
+        guard let minItem = visibleItems.min(), let maxItem = visibleItems.max() else { return }
+        visibleDisplayIndexRange = minItem..<(maxItem + 1)
+    }
+
+    /// 可視範囲をバッファ分拡張した表示インデックス範囲を返す
+    private func expandedVisibleRange(buffer: Int) -> Range<Int> {
+        let lower = max(0, visibleDisplayIndexRange.lowerBound - buffer)
+        let upper = min(entries.count, visibleDisplayIndexRange.upperBound + buffer)
+        guard lower < upper else { return 0..<0 }
+        return lower..<upper
+    }
+
+    /// サムネイルキャッシュへ登録し、LRU上限を超えた古いエントリを破棄する
+    private func cacheThumbnail(_ image: NSImage, for realIdx: Int, maxPixelSize: Int) {
+        thumbnailCache[realIdx] = image
+        thumbnailCacheSizeMap[realIdx] = maxPixelSize
+        thumbnailCacheOrder.removeAll { $0 == realIdx }
+        thumbnailCacheOrder.append(realIdx)
+        while thumbnailCacheOrder.count > maxThumbnailCacheCount {
+            let oldest = thumbnailCacheOrder.removeFirst()
+            thumbnailCache.removeValue(forKey: oldest)
+            thumbnailCacheSizeMap.removeValue(forKey: oldest)
+        }
+    }
+
+    /// LRU順序を更新する（再アクセス時に最新として扱う）
+    private func touchCacheEntry(_ realIdx: Int) {
+        guard let pos = thumbnailCacheOrder.firstIndex(of: realIdx) else { return }
+        thumbnailCacheOrder.remove(at: pos)
+        thumbnailCacheOrder.append(realIdx)
     }
 
     // MARK: - キーボードナビゲーション
@@ -564,6 +642,10 @@ extension ThumbnailStripView: NSCollectionViewDataSource {
         let item = collectionView.makeItem(withIdentifier: ThumbnailCollectionViewItem.identifier,
                                           for: indexPath) as! ThumbnailCollectionViewItem
         let rIdx = realIndex(for: indexPath.item)
+        updateVisibleDisplayIndexRange()
+        if thumbnailCache[rIdx] != nil {
+            touchCacheEntry(rIdx)
+        }
         item.configure(image: thumbnailCache[rIdx])
         loadThumbnail(at: rIdx)
         return item
