@@ -670,7 +670,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     func preparePreviewOfFile(at url: URL) async throws {
         NSLog("[DEBUG] preparePreviewOfFile called for: %@", url.lastPathComponent)
-        
+
+        os_signpost(.begin, log: performanceLog, name: "preparePreviewOfFile")
+        defer { os_signpost(.end, log: performanceLog, name: "preparePreviewOfFile") }
+
         // ファイル切り替え時にマウスモニターをクリーンアップ
         cleanupMouseMonitors()
         

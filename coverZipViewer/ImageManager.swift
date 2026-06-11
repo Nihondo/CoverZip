@@ -9,6 +9,7 @@ import Foundation
 import AppKit
 import ImageIO
 import QuartzCore
+import os.signpost
 
 /**
  * プレビュー用の画像管理クラス
@@ -65,6 +66,7 @@ class ImageManager {
     private let decodeQueue = DispatchQueue(label: "com.dmng.coverzip.decode", qos: .userInitiated, attributes: .concurrent)
     private let layerBuildQueue = DispatchQueue(label: "com.dmng.coverzip.layerbuild", qos: .userInitiated)
     private let cacheStateQueue = DispatchQueue(label: "com.dmng.coverzip.cache.state", qos: .userInitiated)
+    private let performanceLog = OSLog(subsystem: "com.dmng.CoverZip.coverZipViewer", category: "Performance")
 
     // デコードキャッシュ方針（設定から取得、デフォルトは .deferred）
     private var decodeCachePolicy: CZImageDecodeCachePolicy { AppSettings.shared.imageDecodeCachePolicy }
@@ -143,7 +145,9 @@ class ImageManager {
     func loadImages(from url: URL) -> Bool {
         do {
             let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+            os_signpost(.begin, log: performanceLog, name: "zipParse")
             let entryInfos = CZZip.imageEntryInfoList(from: data)
+            os_signpost(.end, log: performanceLog, name: "zipParse")
             guard !entryInfos.isEmpty else { return false }
 
             zipData = data
@@ -433,6 +437,9 @@ class ImageManager {
             NSLog("[ImageManager] ZIP data not available for lazy loading")
             return nil
         }
+
+        os_signpost(.begin, log: performanceLog, name: "extractAndDecode", "index=%d maxPixelSize=%d", index, request.maxPixelSize)
+        defer { os_signpost(.end, log: performanceLog, name: "extractAndDecode", "index=%d maxPixelSize=%d", index, request.maxPixelSize) }
 
         let entryInfo = imageEntryInfos[index]
         guard let imageData = CZZip.extractImageData(from: zipData, entryInfo: entryInfo) else {
