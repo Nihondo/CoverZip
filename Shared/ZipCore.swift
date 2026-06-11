@@ -403,6 +403,11 @@ public enum CZZip {
         return best
     }
 
+    /// "01" の前に 0 が1つ以上あるかを判定する正規表現（呼び出しごとの再コンパイルを避けるため静的に保持）。
+    private static let zeroPaddedOneRegex = try? NSRegularExpression(pattern: "(?:^|\\D)0+1(?:\\D|$)")
+    /// 先頭ゼロ群（00/000/0000 など）を検出する正規表現（呼び出しごとの再コンパイルを避けるため静的に保持）。
+    private static let leadingZerosRegex = try? NSRegularExpression(pattern: "(?:^|\\D)0{2,}(?:\\D|$)")
+
     /// "01.jpg" / "001.png" / "0001.tif" や "image001.jpg" のような
     /// 「先頭候補」ファイル名を検出する。
     /// 拡張子を除いたベース名に対し、
@@ -414,15 +419,12 @@ public enum CZZip {
         // 正規表現: (?:^|\D)0+1(?:\D|$)
         // "1" の前に 0 が1つ以上あり、かつ "1" の後ろが非数字または末尾であること。
         // さらに、0 群の前も非数字または先頭に限定し、長い数字列の途中一致を避ける。
-        do {
-            let re = try NSRegularExpression(pattern: "(?:^|\\D)0+1(?:\\D|$)", options: [])
-            let range = NSRange(location: 0, length: (base as NSString).length)
-            return re.firstMatch(in: base, options: [], range: range) != nil
-        } catch {
+        guard let re = zeroPaddedOneRegex else {
             // フォールバック: 正規表現が使えない場合の簡易判定
-            if base.contains("001") || base.contains("01") { return true }
-            return false
+            return base.contains("001") || base.contains("01")
         }
+        let range = NSRange(location: 0, length: (base as NSString).length)
+        return re.firstMatch(in: base, options: [], range: range) != nil
     }
 
     // MARK: - 表紙らしさスコア
@@ -460,14 +462,13 @@ public enum CZZip {
         if base.contains("表紙") { score += 100 }
 
         // 先頭ゼロ群（00/000/0000 など）を検出（0012 のようなページ番号は除外）
-        do {
-            // (?:^|\D)0{2,}(?:\D|$) : トークン境界で 2 個以上の 0、後続は非数字または末尾
-            // "000" / "image_000" / "p-000" は一致、"0001" / "page0001" は不一致
-            let re = try NSRegularExpression(pattern: "(?:^|\\D)0{2,}(?:\\D|$)", options: [])
+        // (?:^|\D)0{2,}(?:\D|$) : トークン境界で 2 個以上の 0、後続は非数字または末尾
+        // "000" / "image_000" / "p-000" は一致、"0001" / "page0001" は不一致
+        if let re = leadingZerosRegex {
             let range = NSRange(location: 0, length: (base as NSString).length)
             if re.firstMatch(in: base, options: [], range: range) != nil { score += 60 }
-        } catch {
-            if lower.hasPrefix("00") || lower.contains("_00") || lower.contains("-00") { score += 60 }
+        } else if lower.hasPrefix("00") || lower.contains("_00") || lower.contains("-00") {
+            score += 60
         }
 
         // ゼロ埋め "1" の手掛かりも弱い表紙シグナルとして再利用（001 を表紙にするアーカイブが多いため）
