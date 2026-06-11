@@ -26,7 +26,9 @@ class ThumbnailProvider: QLThumbnailProvider {
 
         // 1) ストリーミング展開 + 増分デコードで早期サムネイル生成を試みる
         let opts: CZFirstImageOptions = [.preferCoverLike, .preferZeroPaddedOne]
-        if let cgImage = CZZip.firstImageThumbnail(from: request.fileURL, options: opts, maxPixel: targetMaxPixels) {
+        let imageData: Data
+        switch CZZip.firstImageThumbnail(from: request.fileURL, options: opts, maxPixel: targetMaxPixels) {
+        case .thumbnail(let cgImage):
             let cgSize = CGSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
             let thumbSize = CZImageUtilities.calculateFitSize(for: cgSize, within: request.maximumSize)
             let reply = QLThumbnailReply(contextSize: thumbSize, currentContextDrawing: { () -> Bool in
@@ -38,13 +40,15 @@ class ThumbnailProvider: QLThumbnailProvider {
             })
             handler(reply, nil)
             return
-        }
-
-        // 2) フォールバック: 従来の抽出→サムネイル生成
-        guard let imageData = CZZip.firstImageData(from: request.fileURL, options: opts) else {
+        case .rawData(let data):
+            // ストリーミング生成に失敗した画像データをそのまま再利用し、ZIPの再読込・再選定を避ける
+            imageData = data
+        case .none:
             handler(nil, NSError(domain: "CoverZipError", code: 1, userInfo: [NSLocalizedDescriptionKey: "No image found in ZIP file"]))
             return
         }
+
+        // 2) フォールバック: 抽出済みデータからサムネイル生成
         let cfOptions = CZImageIOOptionsBuilder.buildThumbnailOptions(maxPixels: targetMaxPixels, cachePolicy: .noCache)
         guard let src = CGImageSourceCreateWithData(imageData as CFData, nil),
               let cgFallback = CGImageSourceCreateThumbnailAtIndex(src, 0, cfOptions) ?? CGImageSourceCreateImageAtIndex(src, 0, CZImageIOOptionsBuilder.buildDecodeOptions(cachePolicy: .noCache)) else {

@@ -167,18 +167,27 @@ public enum CZZip {
 
     // MARK: - ストリーミングサムネイル生成（部分展開 + ImageIO インクリメンタル）
 
-    /// 圧縮時はストリーミング展開を使って先頭画像のサムネイル CGImage を生成する。
-    /// 大きな画像でも全展開を避けるため、段階的デコードを試み、サムネイル取得時点で処理を打ち切る。
-    public static func firstImageThumbnail(from url: URL, options: CZFirstImageOptions, maxPixel: Int) -> CGImage? {
-        do { return firstImageThumbnail(from: try Data(contentsOf: url, options: [.mappedIfSafe]), options: options, maxPixel: maxPixel) }
-        catch { NSLog("CZZip read error: \(error)"); return nil }
+    /// `firstImageThumbnail` の結果。サムネイル生成に失敗した場合でも、
+    /// 既に抽出済みの画像データ（`.rawData`）を返すことで、呼び出し側が
+    /// ZIPの再読込・CD再パース・表紙再選定を行わずにフォールバックできるようにする。
+    public enum FirstImageThumbnailResult {
+        case thumbnail(CGImage)
+        case rawData(Data)
+        case none
     }
 
-    public static func firstImageThumbnail(from data: Data, options: CZFirstImageOptions, maxPixel: Int) -> CGImage? {
-        guard let cdOffset = findCentralDirectoryOffset(in: data) else { return nil }
+    /// 圧縮時はストリーミング展開を使って先頭画像のサムネイル CGImage を生成する。
+    /// 大きな画像でも全展開を避けるため、段階的デコードを試み、サムネイル取得時点で処理を打ち切る。
+    public static func firstImageThumbnail(from url: URL, options: CZFirstImageOptions, maxPixel: Int) -> FirstImageThumbnailResult {
+        do { return firstImageThumbnail(from: try Data(contentsOf: url, options: [.mappedIfSafe]), options: options, maxPixel: maxPixel) }
+        catch { NSLog("CZZip read error: \(error)"); return .none }
+    }
+
+    public static func firstImageThumbnail(from data: Data, options: CZFirstImageOptions, maxPixel: Int) -> FirstImageThumbnailResult {
+        guard let cdOffset = findCentralDirectoryOffset(in: data) else { return .none }
         let entries = parseCentralDirectory(data: data, offset: cdOffset)
         let images = entries.filter { ImageFileFilter.isImagePath($0.filename) }
-        guard !images.isEmpty else { return nil }
+        guard !images.isEmpty else { return .none }
 
         // 候補エントリを選択（表紙らしさ優先）
         var candidate: CZZipEntry? = nil
@@ -187,9 +196,16 @@ public enum CZZip {
             candidate = images.first(where: { isZeroPaddedOneFilename($0.filename) })
         }
         if candidate == nil { candidate = firstImageEntryByNaturalOrderLinear(entries: images) }
-        guard let entry = candidate else { return nil }
+        guard let entry = candidate else { return .none }
 
-        return createThumbnail(for: entry, in: data, maxPixel: maxPixel)
+        if let cgImage = createThumbnail(for: entry, in: data, maxPixel: maxPixel) {
+            return .thumbnail(cgImage)
+        }
+        // サムネイル生成に失敗した場合は、同じエントリの展開済みデータをそのまま返す
+        if let raw = extractFileData(data: data, entry: entry) {
+            return .rawData(raw)
+        }
+        return .none
     }
 
     // MARK: - ストリーミングサムネイル内部ヘルパー
