@@ -12,6 +12,7 @@ public struct CZZipEntry {
     public let filename: String
     public let localHeaderOffset: Int
     public let compressedSize: Int
+    public let uncompressedSize: Int
     public let generalPurposeFlag: UInt16
     public let compressionMethod: UInt16
 }
@@ -195,16 +196,20 @@ public enum CZZip {
     // MARK: - ストリーミングサムネイル内部ヘルパー
     private static func createThumbnail(for entry: CZZipEntry, in zipData: Data, maxPixel: Int) -> CGImage? {
         guard let info = localFileInfo(in: zipData, entry: entry) else { return nil }
-        let compMethod = info.method
-        let compSlice = zipData.subdata(in: info.fileDataOffset..<(info.fileDataOffset + info.compressedSize))
-        if compMethod == 0 {
-            return thumbnailFromImageData(compSlice as CFData, maxPixel: maxPixel, isFinal: true)
+        return zipData.withUnsafeBytes { (buf: UnsafeRawBufferPointer) -> CGImage? in
+            let payload = UnsafeRawBufferPointer(rebasing: buf[info.fileDataOffset..<(info.fileDataOffset + info.compressedSize)])
+            if info.method == 0 {
+                let compData = Data(bytes: payload.baseAddress!, count: payload.count)
+                return thumbnailFromImageData(compData as CFData, maxPixel: maxPixel, isFinal: true)
+            }
+            if info.method == 8 {
+                let decompressed = inflateDataOneShot(payload, expectedSize: entry.uncompressedSize)
+                    ?? inflateData(Data(bytes: payload.baseAddress!, count: payload.count))
+                guard let decompressed else { return nil }
+                return thumbnailFromImageData(decompressed as CFData, maxPixel: maxPixel, isFinal: true)
+            }
+            return nil
         }
-        if compMethod == 8 {
-            guard let decompressed = inflateData(compSlice) else { return nil }
-            return thumbnailFromImageData(decompressed as CFData, maxPixel: maxPixel, isFinal: true)
-        }
-        return nil
     }
 
     /// ローカルヘッダから method / fileDataOffset / compressedSize を取得する（必要時は data descriptor を解決）。
@@ -315,6 +320,7 @@ public enum CZZip {
                 let gpFlag = readLE16(buf, cur + 8)
                 let compMethod = readLE16(buf, cur + 10)
                 let cdCompressed = readLE32(buf, cur + 20)
+                let cdUncompressed = readLE32(buf, cur + 24)
                 let fnLen = Int(readLE16(buf, cur + 28))
                 let exLen = Int(readLE16(buf, cur + 30))
                 let cmLen = Int(readLE16(buf, cur + 32))
@@ -328,6 +334,7 @@ public enum CZZip {
                     filename: filename,
                     localHeaderOffset: Int(localHeaderOffset),
                     compressedSize: Int(cdCompressed),
+                    uncompressedSize: Int(cdUncompressed),
                     generalPurposeFlag: gpFlag,
                     compressionMethod: compMethod
                 ))
@@ -342,7 +349,7 @@ public enum CZZip {
         let off = entry.localHeaderOffset
         guard off + 30 <= data.count else { return nil }
 
-        let header: (method: UInt16, fileDataOffset: Int, compressedSize: Int)? = data.withUnsafeBytes { (buf: UnsafeRawBufferPointer) in
+        return data.withUnsafeBytes { (buf: UnsafeRawBufferPointer) -> Data? in
             guard matchesPKSignature(buf, off, 0x03, 0x04) else { return nil }
 
             let fnLen = Int(readLE16(buf, off + 26))
@@ -353,15 +360,38 @@ public enum CZZip {
             let fileDataOffset = off + 30 + fnLen + exLen
             let useCompressedSize: Int = (entry.generalPurposeFlag & 0x0008) != 0 ? entry.compressedSize : Int(lhCompressed)
             guard useCompressedSize > 0, fileDataOffset + useCompressedSize <= buf.count else { return nil }
-            return (method, fileDataOffset, useCompressedSize)
+            let payload = UnsafeRawBufferPointer(rebasing: buf[fileDataOffset..<(fileDataOffset + useCompressedSize)])
+
+            if method == 0 {
+                return Data(bytes: payload.baseAddress!, count: payload.count)
+            }
+            if method == 8 {
+                if let oneShot = inflateDataOneShot(payload, expectedSize: entry.uncompressedSize) {
+                    return oneShot
+                }
+                // 一発展開不可（サイズ未知/不一致）の場合のみ、コピーしてストリーミング展開へフォールバック
+                return inflateData(Data(bytes: payload.baseAddress!, count: payload.count))
+            }
+            return nil
         }
-        guard let header else { return nil }
+    }
 
-        let fileData = data.subdata(in: header.fileDataOffset..<(header.fileDataOffset + header.compressedSize))
+    /// Central Directory のuncompressedSizeを使い、出力バッファを一発確保してDEFLATE展開する。
+    /// `expectedSize` が 0 または上限超過、もしくは展開結果サイズが一致しない場合は nil を返し、
+    /// 呼び出し側はストリーミング実装(`inflateData`)へフォールバックする。
+    private static let maxOneShotInflateSize = 256 * 1024 * 1024
 
-        if header.method == 0 { return fileData }
-        if header.method == 8 { return inflateData(fileData) }
-        return nil
+    private static func inflateDataOneShot(_ src: UnsafeRawBufferPointer, expectedSize: Int) -> Data? {
+        guard expectedSize > 0, expectedSize <= maxOneShotInflateSize,
+              let srcBase = src.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return nil }
+
+        var dst = Data(count: expectedSize)
+        let written: Int = dst.withUnsafeMutableBytes { (dstBuf: UnsafeMutableRawBufferPointer) in
+            guard let dstBase = dstBuf.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return 0 }
+            return compression_decode_buffer(dstBase, expectedSize, srcBase, src.count, nil, COMPRESSION_ZLIB)
+        }
+        guard written == expectedSize else { return nil }
+        return dst
     }
 
     private static func inflateData(_ compressedData: Data) -> Data? {
