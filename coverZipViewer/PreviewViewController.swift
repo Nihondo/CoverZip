@@ -1329,6 +1329,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if imageManager.getSpreadPairOffset() != newSpreadOffset {
             imageManager.setSpreadPairOffset(newSpreadOffset)
         }
+        imageManager.refreshDecodeCachePolicy()
         // 表示更新
         if imageManager.hasImages() {
             displayCurrentImage()

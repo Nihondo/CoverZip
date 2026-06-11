@@ -72,7 +72,8 @@ class ImageManager {
     private let performanceLog = OSLog(subsystem: "com.dmng.CoverZip.coverZipViewer", category: "Performance")
 
     // デコードキャッシュ方針（設定から取得、デフォルトは .deferred）
-    private var decodeCachePolicy: CZImageDecodeCachePolicy { AppSettings.shared.imageDecodeCachePolicy }
+    // デコード毎にUserDefaultsを読まないよう、loadImages時と設定変更通知時にのみ更新する
+    private var decodeCachePolicy: CZImageDecodeCachePolicy = AppSettings.shared.imageDecodeCachePolicy
     // 全画像のバックグラウンド読み込み中かどうか（遅延ロード運用のため常にfalse）
     private(set) var isLoadingAll: Bool = false
 
@@ -158,6 +159,7 @@ class ImageManager {
      * @return 読み込み成功時はtrue、失敗時はfalse
      */
     func loadImages(from url: URL) -> Bool {
+        decodeCachePolicy = AppSettings.shared.imageDecodeCachePolicy
         do {
             let data = try Data(contentsOf: url, options: [.mappedIfSafe])
             os_signpost(.begin, log: performanceLog, name: "zipParse")
@@ -280,6 +282,11 @@ class ImageManager {
     }
 
     func getSpreadPairOffset() -> Int { spreadPairOffset }
+
+    /// 設定変更通知を受けてデコードキャッシュ方針のスナップショットを更新する
+    func refreshDecodeCachePolicy() {
+        decodeCachePolicy = AppSettings.shared.imageDecodeCachePolicy
+    }
 
     // MARK: - GPU 事前描画アクセス
 
