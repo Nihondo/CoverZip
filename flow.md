@@ -192,16 +192,17 @@ sequenceDiagram
     Finder->>Ext: QLFileThumbnailRequest(fileURL, maximumSize, scale)
     Ext->>Zip: firstImageThumbnail(options, maxPixel)
     alt ストリーミング/増分デコード成功
-        Zip-->>Ext: CGImage
+        Zip-->>Ext: .thumbnail(CGImage)
     else フォールバック
-        Ext->>Zip: firstImageData(options)
-        Zip-->>Ext: Data
+        Zip-->>Ext: .rawData(展開済み画像Data)
         Ext->>Img: CGImageSourceCreateThumbnailAtIndex
+    else 画像なし
+        Zip-->>Ext: .none → エラー返却
     end
     Ext-->>Finder: QLThumbnailReply
 ```
 
-サムネイル拡張は表示設定や履歴には基本的に依存せず、Shared の ZIP 解析と画像ユーティリティを使って先頭画像からサムネイルを返します。
+サムネイル拡張は表示設定や履歴には基本的に依存せず、Shared の ZIP 解析と画像ユーティリティを使って先頭画像からサムネイルを返します。`firstImageThumbnail` は `FirstImageThumbnailResult`（`.thumbnail` / `.rawData` / `.none`）を返し、増分デコードに失敗した場合も選定済みエントリの展開済みデータをそのまま返すため、フォールバック時に ZIP の再読込・再パース・表紙再選定は発生しません。
 
 ## データストア
 
@@ -210,7 +211,7 @@ sequenceDiagram
 | App Group UserDefaults | `routingSettingsData` | 設定画面 / `KeywordSettings` | `ZipRoutingService` |
 | App Group UserDefaults | `isRightToLeftReading`, `defaultViewMode`, `spreadPairOffset`, `pageTransitionEnabled`, `slideshowEnabled`, `thumbnailStripVisible` | 設定画面 / `InternalViewer` / Preview 右クリックメニュー | App / Preview Extension |
 | App Group UserDefaults | `savedWindowFrameString`, `restoreWindowFrameEnabled` | `QLPreviewInputDriver` / Preview | App / Preview |
-| App Group UserDefaults | `readingHistoryData` | `ReadingHistoryManager` | `ReadingHistoryManager` |
+| App Group UserDefaults | `readingHistoryData` | `ReadingHistoryManager`（0.5秒デバウンスで永続化。クローズ時は即時 flush し、再読込マージで他プロセスの履歴を保持） | `ReadingHistoryManager` |
 | App Group UserDefaults | `keyHelper*`, `previewLastVisibility*` | `CoverZipKeyHelper` / Preview | 設定画面の診断表示 / Preview の Shift+右クリック診断メニュー |
 | ZIPファイル | 画像エントリ、圧縮データ | ユーザーのファイル | `ImageManager`, `ThumbnailProvider`, `CZZip` |
 | メモリ内キャッシュ | デコード済み画像、リサイズ画像、プリレンダレイヤー | `ImageManager` | `PreviewViewController` |
@@ -301,4 +302,4 @@ QuickLook Extension は `QuickLookUIService` がホストするため sandbox �
 - `coverZipViewer` は ZIP 内画像の表示、ページ移動、見開き、サムネイルストリップ、読書履歴を担当します。
 - `coverZipExtension` は Finder サムネイル生成だけを担当します。
 - `CoverZipKeyHelper` は CoverZip Quick Look（浮遊ウィンドウ）表示中のキー入力中継だけを担当し、ページ表示自体は行いません。
-- `Shared` は App Group 設定キー、共有 UserDefaults、ZIP 解析、自然順ソート、画像判定、共通メニュー定義を提供します。
+- `Shared` は App Group 設定キー、共有 UserDefaults、ZIP 解析、自然順ソート、画像判定、共通メニュー定義、詳細ログゲート（`CZVerboseLog`、Debugビルドまたは `CZ_VERBOSE_LOG=1` 限定）を提供します。
