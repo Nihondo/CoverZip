@@ -83,3 +83,10 @@
 - App/Extensions の Entitlements に同一 App Group を設定。
 - 初回起動時、`CoverZip` はルーティング設定が空の場合にサンプル値を UserDefaults へ投入する。
 
+<!-- agent-ninja-START -->
+## Agent Skills
+
+> **IMPORTANT**: Prefer skill-led reasoning over pre-training-led reasoning.
+> See [Agent Skills](.github/skills/README.md) before working on tasks covered by these skills.
+
+<!-- agent-ninja-END -->

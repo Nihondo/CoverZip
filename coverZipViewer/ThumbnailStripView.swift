@@ -4,7 +4,6 @@
 //
 
 import Cocoa
-import ImageIO
 
 /// サムネイルストリップ上端のドラッグリサイズハンドル
 private final class ThumbnailResizeHandle: NSView {
@@ -133,6 +132,9 @@ class ThumbnailStripView: NSView {
         }
     }
 
+    /// tiny画像の取得元（ImageManagerが準拠し、メイン表示プレースホルダとキャッシュを共有する）
+    weak var thumbnailProvider: ThumbnailImageProviding?
+
     /// フォーカス取得のためにinternalアクセスを許可
     private(set) var collectionView: NSCollectionView!
 
@@ -140,24 +142,13 @@ class ThumbnailStripView: NSView {
 
     private let resizeHandle: ThumbnailResizeHandle
     private let scrollView: NSScrollView
-    private var entries: [CZImageEntryInfo] = []
-    private var zipData: Data?
-    private var thumbnailCache: [Int: NSImage] = [:]
-    /// thumbnailCache[realIdx] をデコードした際の maxPixelSize（サイズ不一致時の再デコード判定用）
-    private var thumbnailCacheSizeMap: [Int: Int] = [:]
-    /// thumbnailCache のLRU順（先頭が最も古い）
-    private var thumbnailCacheOrder: [Int] = []
-    /// thumbnailCache の上限件数（超過分は古いものから破棄）
-    private let maxThumbnailCacheCount = 200
-    /// デコード中の実インデックス（重複デコード防止）
-    private var inFlightThumbnailDecodes: Set<Int> = []
+    private var itemCount: Int = 0
     /// configure / reloadThumbnails のたびにインクリメントし、古い世代のデコード結果を破棄する
     private var generation: Int = 0
     /// 直近の可視表示インデックス範囲（メインスレッドで更新したスナップショット）
     private var visibleDisplayIndexRange: Range<Int> = 0..<0
     /// 可視範囲外デコードをスキップする際のバッファ件数
     private let visibleRangeBuffer = 8
-    private let decodeQueue = DispatchQueue(label: "com.dmng.coverzip.thumbnail", qos: .utility, attributes: .concurrent)
     private var pendingVisibilityIndexPaths: Set<IndexPath> = []
     private let baseHorizontalSectionInset: CGFloat = 8
 
@@ -274,9 +265,9 @@ class ThumbnailStripView: NSView {
         let bottomInset = layout.sectionInset.bottom
         let rightInset = baseHorizontalSectionInset
 
-        let itemCount = CGFloat(entries.count)
-        let spacingCount = max(0, entries.count - 1)
-        let totalItemWidth = itemCount * layout.itemSize.width
+        let itemCountFloat = CGFloat(itemCount)
+        let spacingCount = max(0, itemCount - 1)
+        let totalItemWidth = itemCountFloat * layout.itemSize.width
         let totalSpacingWidth = CGFloat(spacingCount) * layout.minimumInteritemSpacing
         let minimumContentWidth = totalItemWidth + totalSpacingWidth + baseHorizontalSectionInset + rightInset
         let viewportWidth = max(0, scrollView.contentView.bounds.width)
@@ -298,26 +289,21 @@ class ThumbnailStripView: NSView {
 
     /// 実インデックス（0始まりのページ番号）→ 表示インデックス（CollectionView上の位置）
     private func displayIndex(for realIndex: Int) -> Int {
-        isRightToLeft ? (entries.count - 1 - realIndex) : realIndex
+        isRightToLeft ? (itemCount - 1 - realIndex) : realIndex
     }
 
     /// 表示インデックス → 実インデックス
     private func realIndex(for displayIndex: Int) -> Int {
-        isRightToLeft ? (entries.count - 1 - displayIndex) : displayIndex
+        isRightToLeft ? (itemCount - 1 - displayIndex) : displayIndex
     }
 
     // MARK: - 公開メソッド
 
-    /// ZIPデータとエントリー情報を設定し、サムネイルの非同期読み込みを開始する
-    func configure(zipData: Data, entries: [CZImageEntryInfo]) {
-        self.zipData = zipData
-        self.entries = entries
+    /// 表示対象の件数を設定し、サムネイルの非同期読み込みを開始する
+    func configure(itemCount: Int) {
+        self.itemCount = itemCount
         generation += 1
         pendingVisibilityIndexPaths.removeAll()
-        thumbnailCache.removeAll()
-        thumbnailCacheSizeMap.removeAll()
-        thumbnailCacheOrder.removeAll()
-        inFlightThumbnailDecodes.removeAll()
         visibleDisplayIndexRange = 0..<0
         updateSectionInsetsForReadingDirection()
         collectionView.reloadData()
@@ -332,7 +318,7 @@ class ThumbnailStripView: NSView {
     func selectItems(at realIndices: [Int], primaryRealIndex: Int?, scrollToVisible: Bool) {
         var seen = Set<Int>()
         let validRealIndices = realIndices.filter { realIdx in
-            guard realIdx >= 0 && realIdx < entries.count else { return false }
+            guard realIdx >= 0 && realIdx < itemCount else { return false }
             return seen.insert(realIdx).inserted
         }
         guard !validRealIndices.isEmpty else { return }
@@ -340,7 +326,7 @@ class ThumbnailStripView: NSView {
         let displayIndices = validRealIndices.map { displayIndex(for: $0) }
         let indexPaths = Set(displayIndices.map { IndexPath(item: $0, section: 0) })
         let primaryDisplayIndex: Int
-        if let primaryRealIndex, primaryRealIndex >= 0, primaryRealIndex < entries.count {
+        if let primaryRealIndex, primaryRealIndex >= 0, primaryRealIndex < itemCount {
             primaryDisplayIndex = displayIndex(for: primaryRealIndex)
         } else {
             primaryDisplayIndex = displayIndices[0]
@@ -375,50 +361,28 @@ class ThumbnailStripView: NSView {
     // MARK: - サムネイル読み込み
 
     private func loadThumbnail(at realIdx: Int) {
-        guard let zipData = zipData, realIdx < entries.count else { return }
+        guard realIdx < itemCount else { return }
 
         // アイテム高さと画面スケールからサムネイル解像度を決定（Retina対応）
         let itemHeight = (collectionView.collectionViewLayout as? NSCollectionViewFlowLayout)?.itemSize.height ?? 68
         let scale = window?.backingScaleFactor ?? 2.0
         let maxPixelSize = max(120, Int(itemHeight * scale))
 
-        // 既に同サイズでキャッシュ済み、またはデコード中なら何もしない
-        if thumbnailCache[realIdx] != nil, thumbnailCacheSizeMap[realIdx] == maxPixelSize { return }
-        guard !inFlightThumbnailDecodes.contains(realIdx) else { return }
-        inFlightThumbnailDecodes.insert(realIdx)
-
-        let entry = entries[realIdx]
         let displayIdx = displayIndex(for: realIdx)
         let captureGeneration = generation
         let range = expandedVisibleRange(buffer: visibleRangeBuffer)
 
-        decodeQueue.async { [weak self] in
-            guard let self else { return }
-            defer {
-                DispatchQueue.main.async { [weak self] in
-                    self?.inFlightThumbnailDecodes.remove(realIdx)
-                }
-            }
-            // 可視範囲外（バッファ含む）ならデコードをスキップする（再可視化時に再度呼ばれる）
-            guard range.contains(displayIdx) else { return }
-            guard let imageData = CZZip.extractImageData(from: zipData, entryInfo: entry) else { return }
-            guard let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return }
-
-            let options: [CFString: Any] = [
-                kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-            ]
-            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return }
-            let image = NSImage(cgImage: cgImage, size: .zero)
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.generation == captureGeneration else { return }
-                self.cacheThumbnail(image, for: realIdx, maxPixelSize: maxPixelSize)
-                let indexPath = IndexPath(item: displayIdx, section: 0)
-                if let item = self.collectionView.item(at: indexPath) as? ThumbnailCollectionViewItem {
-                    item.configure(image: image)
-                }
+        // tinyティアキャッシュ（ImageManagerと共有）からデコードを依頼する。
+        // 可視範囲外（バッファ含む）ならデコードをスキップする（再可視化時に再度呼ばれる）
+        thumbnailProvider?.requestTinyImage(
+            at: realIdx,
+            maxPixelSize: maxPixelSize,
+            isStillNeeded: { range.contains(displayIdx) }
+        ) { [weak self] index, image in
+            guard let self, self.generation == captureGeneration, let image else { return }
+            let indexPath = IndexPath(item: self.displayIndex(for: index), section: 0)
+            if let item = self.collectionView.item(at: indexPath) as? ThumbnailCollectionViewItem {
+                item.configure(image: image)
             }
         }
     }
@@ -441,35 +405,15 @@ class ThumbnailStripView: NSView {
     /// 可視範囲をバッファ分拡張した表示インデックス範囲を返す
     private func expandedVisibleRange(buffer: Int) -> Range<Int> {
         let lower = max(0, visibleDisplayIndexRange.lowerBound - buffer)
-        let upper = min(entries.count, visibleDisplayIndexRange.upperBound + buffer)
+        let upper = min(itemCount, visibleDisplayIndexRange.upperBound + buffer)
         guard lower < upper else { return 0..<0 }
         return lower..<upper
-    }
-
-    /// サムネイルキャッシュへ登録し、LRU上限を超えた古いエントリを破棄する
-    private func cacheThumbnail(_ image: NSImage, for realIdx: Int, maxPixelSize: Int) {
-        thumbnailCache[realIdx] = image
-        thumbnailCacheSizeMap[realIdx] = maxPixelSize
-        thumbnailCacheOrder.removeAll { $0 == realIdx }
-        thumbnailCacheOrder.append(realIdx)
-        while thumbnailCacheOrder.count > maxThumbnailCacheCount {
-            let oldest = thumbnailCacheOrder.removeFirst()
-            thumbnailCache.removeValue(forKey: oldest)
-            thumbnailCacheSizeMap.removeValue(forKey: oldest)
-        }
-    }
-
-    /// LRU順序を更新する（再アクセス時に最新として扱う）
-    private func touchCacheEntry(_ realIdx: Int) {
-        guard let pos = thumbnailCacheOrder.firstIndex(of: realIdx) else { return }
-        thumbnailCacheOrder.remove(at: pos)
-        thumbnailCacheOrder.append(realIdx)
     }
 
     // MARK: - キーボードナビゲーション
 
     private func handleArrowKeyNavigation(_ specialKey: NSEvent.SpecialKey) -> Bool {
-        guard !entries.isEmpty else { return true }
+        guard itemCount > 0 else { return true }
 
         let currentDisplayIndex = collectionView.selectionIndexPaths.first?.item ?? displayIndex(for: 0)
         let step: Int
@@ -482,14 +426,14 @@ class ThumbnailStripView: NSView {
             return false
         }
 
-        let nextDisplayIndex = max(0, min(entries.count - 1, currentDisplayIndex + step))
+        let nextDisplayIndex = max(0, min(itemCount - 1, currentDisplayIndex + step))
         guard nextDisplayIndex != currentDisplayIndex else { return true }
         updateSelection(displayIndex: nextDisplayIndex, scrollToVisible: true, shouldNotify: true)
         return true
     }
 
     private func updateSelection(displayIndex: Int, scrollToVisible: Bool, shouldNotify: Bool) {
-        guard displayIndex >= 0 && displayIndex < entries.count else { return }
+        guard displayIndex >= 0 && displayIndex < itemCount else { return }
         let indexPath = IndexPath(item: displayIndex, section: 0)
         updateSelection(indexPaths: [indexPath], primaryIndexPath: indexPath, scrollToVisible: scrollToVisible, shouldNotify: shouldNotify)
     }
@@ -499,7 +443,7 @@ class ThumbnailStripView: NSView {
                                  scrollToVisible: Bool,
                                  shouldNotify: Bool) {
         guard !indexPaths.isEmpty else { return }
-        guard primaryIndexPath.item >= 0 && primaryIndexPath.item < entries.count else { return }
+        guard primaryIndexPath.item >= 0 && primaryIndexPath.item < itemCount else { return }
 
         if shouldNotify {
             pendingProgrammaticSelectionIndexPaths.removeAll()
@@ -530,7 +474,7 @@ class ThumbnailStripView: NSView {
     private func applyPendingSelectionVisibility(retriesLeft: Int) {
         guard !pendingVisibilityIndexPaths.isEmpty else { return }
         let validIndexPaths = pendingVisibilityIndexPaths.filter { indexPath in
-            indexPath.item >= 0 && indexPath.item < entries.count
+            indexPath.item >= 0 && indexPath.item < itemCount
         }
         guard !validIndexPaths.isEmpty else {
             pendingVisibilityIndexPaths.removeAll()
@@ -634,7 +578,7 @@ class ThumbnailStripView: NSView {
 extension ThumbnailStripView: NSCollectionViewDataSource {
 
     func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int {
-        entries.count
+        itemCount
     }
 
     func collectionView(_ collectionView: NSCollectionView,
@@ -643,10 +587,7 @@ extension ThumbnailStripView: NSCollectionViewDataSource {
                                           for: indexPath) as! ThumbnailCollectionViewItem
         let rIdx = realIndex(for: indexPath.item)
         updateVisibleDisplayIndexRange()
-        if thumbnailCache[rIdx] != nil {
-            touchCacheEntry(rIdx)
-        }
-        item.configure(image: thumbnailCache[rIdx])
+        item.configure(image: thumbnailProvider?.cachedTinyImage(at: rIdx))
         loadThumbnail(at: rIdx)
         return item
     }

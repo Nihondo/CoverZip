@@ -214,6 +214,7 @@ sequenceDiagram
 | App Group UserDefaults | `keyHelper*`, `previewLastVisibility*` | `CoverZipKeyHelper` / Preview | 設定画面の診断表示 / Preview の Shift+右クリック診断メニュー |
 | ZIPファイル | 画像エントリ、圧縮データ | ユーザーのファイル | `ImageManager`, `ThumbnailProvider`, `CZZip` |
 | メモリ内キャッシュ | デコード済み画像、リサイズ画像、プリレンダレイヤー | `ImageManager` | `PreviewViewController` |
+| メモリ内キャッシュ | tinyティア画像（256px基準、LRU最大200件） | `ImageManager` | `PreviewViewController`（白ページプレースホルダ代替）, `ThumbnailStripView`（`thumbnailProvider`経由） |
 
 ## 分散通知とメッセージ
 

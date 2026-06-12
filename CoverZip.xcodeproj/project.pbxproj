@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0881FF487837FE21843C85B4 /* CZLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */; };
+		423CD94F50A7F92213B17E79 /* CZLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */; };
 		4251D87E2E69CF4D00A21728 /* ImageIOOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4251D87D2E69CF4D00A21728 /* ImageIOOptions.swift */; };
 		4251D87F2E69CF4D00A21728 /* ImageIOOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4251D87D2E69CF4D00A21728 /* ImageIOOptions.swift */; };
 		4251D8802E69CF4D00A21728 /* ImageIOOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4251D87D2E69CF4D00A21728 /* ImageIOOptions.swift */; };
@@ -38,14 +40,12 @@
 		42BCD0C72E5E18A5007F2065 /* ImageFileFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0B92E5E18A5007F2065 /* ImageFileFilter.swift */; };
 		42BCD0C82E5E18A5007F2065 /* NaturalSort.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BA2E5E18A5007F2065 /* NaturalSort.swift */; };
 		42BCD0C92E5E18A5007F2065 /* ZipCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BC2E5E18A5007F2065 /* ZipCore.swift */; };
-		C0D542EBF0174D78648F52A8 /* CZLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */; };
-		423CD94F50A7F92213B17E79 /* CZLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */; };
-		0881FF487837FE21843C85B4 /* CZLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */; };
 		42CD41A62E5AEA6400BA89CA /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 426EFEF22E2670FC00AD23E5 /* Quartz.framework */; };
 		42CD41B32E5AEA6400BA89CA /* coverZipViewer.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 42CD41A52E5AEA6400BA89CA /* coverZipViewer.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		42D710012FAD000100000001 /* CoverZipKeyHelper.app in Embed Login Items */ = {isa = PBXBuildFile; fileRef = 42D710082FAD000100000001 /* CoverZipKeyHelper.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		42D710022FAD000100000001 /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BB2E5E18A5007F2065 /* SettingsKeys.swift */; };
 		42D710032FAD000100000001 /* UserDefaultsHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9ED2EBC1D2D003D0E96 /* UserDefaultsHelper.swift */; };
+		C0D542EBF0174D78648F52A8 /* CZLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -113,9 +113,9 @@
 		42BCD0BA2E5E18A5007F2065 /* NaturalSort.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaturalSort.swift; sourceTree = "<group>"; };
 		42BCD0BB2E5E18A5007F2065 /* SettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKeys.swift; sourceTree = "<group>"; };
 		42BCD0BC2E5E18A5007F2065 /* ZipCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipCore.swift; sourceTree = "<group>"; };
-		C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CZLogging.swift; sourceTree = "<group>"; };
 		42CD41A52E5AEA6400BA89CA /* coverZipViewer.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = coverZipViewer.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		42D710082FAD000100000001 /* CoverZipKeyHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CoverZipKeyHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CZLogging.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -549,7 +549,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 24;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -566,7 +566,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.1.3;
+				MARKETING_VERSION = 1.2.0;
 				NEW_SETTING = "";
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip;
@@ -590,7 +590,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 24;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -607,7 +607,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.1.3;
+				MARKETING_VERSION = 1.2.0;
 				NEW_SETTING = "";
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip;
@@ -760,7 +760,7 @@
 				CODE_SIGN_ENTITLEMENTS = coverZipExtension/coverZipExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 24;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -775,7 +775,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.1.3;
+				MARKETING_VERSION = 1.2.0;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -796,7 +796,7 @@
 				CODE_SIGN_ENTITLEMENTS = coverZipExtension/coverZipExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 24;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -811,7 +811,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.1.3;
+				MARKETING_VERSION = 1.2.0;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -832,7 +832,7 @@
 				CODE_SIGN_ENTITLEMENTS = coverZipViewer/coverZipViewer.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 24;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -847,7 +847,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.1.3;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -866,7 +866,7 @@
 				CODE_SIGN_ENTITLEMENTS = coverZipViewer/coverZipViewer.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 24;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -881,7 +881,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.1.3;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -901,7 +901,7 @@
 				CODE_SIGN_ENTITLEMENTS = CoverZipKeyHelper/CoverZipKeyHelper.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 24;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -915,7 +915,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.1.3;
+				MARKETING_VERSION = 1.2.0;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.KeyHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -937,7 +937,7 @@
 				CODE_SIGN_ENTITLEMENTS = CoverZipKeyHelper/CoverZipKeyHelper.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 24;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -951,7 +951,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.1.3;
+				MARKETING_VERSION = 1.2.0;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.KeyHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";

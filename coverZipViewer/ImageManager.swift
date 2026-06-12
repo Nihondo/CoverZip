@@ -11,11 +11,25 @@ import ImageIO
 import QuartzCore
 import os.signpost
 
+/// サムネイルストリップとメイン表示プレースホルダで共有する tiny サイズ画像の提供プロトコル
+protocol ThumbnailImageProviding: AnyObject {
+    /// キャッシュ済みの tiny 画像を即時返す（未キャッシュなら nil、デコードは行わない）
+    func cachedTinyImage(at index: Int) -> NSImage?
+
+    /// tiny 画像を非同期で取得する。isStillNeeded() が false を返した時点でデコードを中断する
+    func requestTinyImage(
+        at index: Int,
+        maxPixelSize: Int,
+        isStillNeeded: @escaping () -> Bool,
+        completion: @escaping (_ index: Int, _ image: NSImage?) -> Void
+    )
+}
+
 /**
  * プレビュー用の画像管理クラス
  * ZIPファイル内の画像リストを管理し、ページング機能を提供する
  */
-class ImageManager {
+class ImageManager: ThumbnailImageProviding {
 
     enum DecodeQualityTier: String {
         case low
@@ -61,6 +75,21 @@ class ImageManager {
     private let spreadPreloadBackwardSetCount = 1
     private let spreadPreloadForwardSetCount = 3
 
+    // tinyティアキャッシュ（サムネイルストリップ・白ページプレースホルダ代替で共有、実ページインデックスをキー）
+    private var tinyImageCache: [Int: NSImage] = [:]
+    private var tinyImageCacheSizeMap: [Int: Int] = [:]
+    private var tinyImageCacheOrder: [Int] = []
+    private let maxTinyCacheCount = 200
+    /// tinyデコードの購読者（isStillNeededはデコードキュー上で評価される）
+    private struct TinyRequestSubscriber {
+        let isStillNeeded: () -> Bool
+        let completion: (_ index: Int, _ image: NSImage?) -> Void
+    }
+    /// 進行中tinyデコードの購読者一覧（cacheStateQueueで保護。同一indexの要求は相乗りして完了時に全員へ通知する）
+    private var pendingTinyRequests: [Int: [TinyRequestSubscriber]] = [:]
+    private let tinyBaseMaxPixelSize = 256
+    private let tinyDecodeQueue = DispatchQueue(label: "com.dmng.coverzip.thumbnail", qos: .utility, attributes: .concurrent)
+
     private var targetDisplaySizeInPoints: NSSize = .zero
     private var targetDisplayScale: CGFloat = 1.0
     private var currentBucketSignature: BucketSignature?
@@ -82,12 +111,6 @@ class ImageManager {
 
     /// 現在表示中のページインデックス（0始まり）
     var currentPageIndex: Int { currentIndex }
-
-    /// サムネイル生成用にZIPデータとエントリー情報を返す
-    func getThumbnailSourceData() -> (zipData: Data, entries: [CZImageEntryInfo])? {
-        guard let zipData = zipData else { return nil }
-        return (zipData, imageEntryInfos)
-    }
 
     /**
      * 表示対象サイズを設定（point）
@@ -177,6 +200,10 @@ class ImageManager {
             }
             prerenderedLayerCache.clearAll()
             clearInFlightPrerenderState()
+            tinyImageCache.removeAll()
+            tinyImageCacheSizeMap.removeAll()
+            tinyImageCacheOrder.removeAll()
+            cacheStateQueue.sync { pendingTinyRequests.removeAll() }
             setupMemoryPressureMonitoring()
 
             // 初期表示の体感を落とさないため先頭のみ先にデコード
@@ -442,6 +469,99 @@ class ImageManager {
         prerenderedLayerCache.clearAll()
         clearInFlightPrerenderState()
         NSLog("[ImageManager] All image cache cleared")
+    }
+
+    // MARK: - ThumbnailImageProviding（tinyティア共有キャッシュ）
+
+    /// キャッシュ済みの tiny 画像を即時返す（サムネイルストリップ・プレースホルダ双方から参照）
+    func cachedTinyImage(at index: Int) -> NSImage? {
+        guard let image = tinyImageCache[index] else { return nil }
+        touchTinyCacheEntry(index)
+        return image
+    }
+
+    /// tiny 画像を非同期で取得する（実デコードサイズは tinyBaseMaxPixelSize 以上に揃える）
+    func requestTinyImage(
+        at index: Int,
+        maxPixelSize: Int,
+        isStillNeeded: @escaping () -> Bool,
+        completion: @escaping (_ index: Int, _ image: NSImage?) -> Void
+    ) {
+        guard let zipData, index >= 0, index < imageEntryInfos.count else { return }
+
+        let targetMaxPixelSize = max(tinyBaseMaxPixelSize, maxPixelSize)
+        if let cached = tinyImageCache[index], (tinyImageCacheSizeMap[index] ?? 0) >= targetMaxPixelSize {
+            touchTinyCacheEntry(index)
+            completion(index, cached)
+            return
+        }
+
+        // 同一indexのデコードが進行中なら相乗り登録し、完了時にまとめて通知する
+        // （以前はここで黙って破棄しており、白ページがtinyへ昇格できないままになるケースがあった）
+        let subscriber = TinyRequestSubscriber(isStillNeeded: isStillNeeded, completion: completion)
+        let isFirstRequest: Bool = cacheStateQueue.sync {
+            if pendingTinyRequests[index] != nil {
+                pendingTinyRequests[index]?.append(subscriber)
+                return false
+            }
+            pendingTinyRequests[index] = [subscriber]
+            return true
+        }
+        guard isFirstRequest else { return }
+
+        let entry = imageEntryInfos[index]
+        tinyDecodeQueue.async { [weak self] in
+            guard let self else { return }
+            let subscribers = self.cacheStateQueue.sync { self.pendingTinyRequests[index] ?? [] }
+            guard subscribers.contains(where: { $0.isStillNeeded() }) else {
+                self.finishTinyRequest(index: index, image: nil, maxPixelSize: targetMaxPixelSize)
+                return
+            }
+            guard let imageData = CZZip.extractImageData(from: zipData, entryInfo: entry),
+                  let source = CGImageSourceCreateWithData(imageData as CFData, nil),
+                  let cgImage = CGImageSourceCreateThumbnailAtIndex(
+                    source,
+                    0,
+                    CZImageIOOptionsBuilder.buildThumbnailOptions(maxPixels: targetMaxPixelSize, cachePolicy: .noCache)
+                  ) else {
+                self.finishTinyRequest(index: index, image: nil, maxPixelSize: targetMaxPixelSize)
+                return
+            }
+
+            self.finishTinyRequest(index: index, image: NSImage(cgImage: cgImage, size: .zero), maxPixelSize: targetMaxPixelSize)
+        }
+    }
+
+    /// tinyデコードの完了処理。成功時はキャッシュへ登録し、失敗時もnilで購読者全員へ必ず通知する
+    private func finishTinyRequest(index: Int, image: NSImage?, maxPixelSize: Int) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let image {
+                self.cacheTinyImage(image, for: index, maxPixelSize: maxPixelSize)
+            }
+            let subscribers = self.cacheStateQueue.sync { self.pendingTinyRequests.removeValue(forKey: index) } ?? []
+            subscribers.forEach { $0.completion(index, image) }
+        }
+    }
+
+    /// tinyキャッシュへ登録し、LRU上限を超えた古いエントリを破棄する
+    private func cacheTinyImage(_ image: NSImage, for index: Int, maxPixelSize: Int) {
+        tinyImageCache[index] = image
+        tinyImageCacheSizeMap[index] = maxPixelSize
+        tinyImageCacheOrder.removeAll { $0 == index }
+        tinyImageCacheOrder.append(index)
+        while tinyImageCacheOrder.count > maxTinyCacheCount {
+            let oldest = tinyImageCacheOrder.removeFirst()
+            tinyImageCache.removeValue(forKey: oldest)
+            tinyImageCacheSizeMap.removeValue(forKey: oldest)
+        }
+    }
+
+    /// LRU順序を更新する（再アクセス時に最新として扱う）
+    private func touchTinyCacheEntry(_ index: Int) {
+        guard let pos = tinyImageCacheOrder.firstIndex(of: index) else { return }
+        tinyImageCacheOrder.remove(at: pos)
+        tinyImageCacheOrder.append(index)
     }
 
     // MARK: - 非公開
@@ -850,6 +970,8 @@ class ImageManager {
         layer.minificationFilter = .trilinear
         layer.magnificationFilter = .linear
         layer.contentsScale = max(1.0, scale)
+        // 適用側（setPrerenderedLayer）がアスペクト比を参照できるようにピクセルサイズを保持する
+        layer.bounds = CGRect(x: 0, y: 0, width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
         return layer
     }
 
@@ -914,6 +1036,9 @@ class ImageManager {
         }
         prerenderedLayerCache.clearExcept(singleKey: currentSingleKey, spreadKey: nil)
         clearInFlightPrerenderState()
+        tinyImageCache.removeAll()
+        tinyImageCacheSizeMap.removeAll()
+        tinyImageCacheOrder.removeAll()
         NSLog("[ImageManager] Memory pressure handled at index=%d", currentIndexSnapshot)
     }
 

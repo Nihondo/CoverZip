@@ -23,7 +23,8 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
   - メタデータ先行取得と必要時画像ロード
   - 元画像キャッシュ（最大10枚）とリサイズキャッシュ（最大20枚）
   - 隣接ページのバックグラウンドプリロード
-- **ThumbnailStripView.swift** - サムネイルストリップUI（`ThumbnailResizeHandle`, `ThumbnailCollectionView`, `ThumbnailStripView`）
+  - `ThumbnailImageProviding` に準拠し、256px基準の tiny ティアキャッシュ（最大200件、LRU）をサムネイルストリップとメイン表示の白ページプレースホルダで共有（重複デコード排除）
+- **ThumbnailStripView.swift** - サムネイルストリップUI（`ThumbnailResizeHandle`, `ThumbnailCollectionView`, `ThumbnailStripView`）。サムネイル画像は `thumbnailProvider`（`ImageManager`）の tiny ティアキャッシュに委譲し、独自のデコード経路は持たない
 - **ThumbnailCollectionViewItem.swift** - サムネイルコレクションビューアイテム
 - **ReadingHistoryManager.swift** - ZIP別の閲覧履歴管理（最終ページ、表示設定等）
 - **Settings.swift** - 設定管理の軽量ラッパー（`CZSettings`へのアクセスを提供）
@@ -173,6 +174,7 @@ ZipRoutingService.route(invocationContext:.openPanelRouting) →
 - **ページ送りアニメーション**: 設定可能なトランジション効果
 - **スライドショー機能**: 自動ページ送り（新規セッション開始時は自動リセット）
 - **サムネイルストリップ**: `ThumbnailStripView` によるページ一覧表示・リサイズ可能
+- **プレースホルダ表示**: 通常/低解像度画像の準備が整うまでは `ImageManager` の tiny ティアキャッシュ（256px基準）があればそれを拡大表示し、無ければ白ページを表示
 - **操作方法**: マウスクリック、キーボード、スクロールホイール対応
 
 #### 履歴機能
