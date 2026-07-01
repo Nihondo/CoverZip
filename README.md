@@ -143,7 +143,7 @@ When system memory runs low, caches are automatically released to minimize impac
 
 ## Supported File Formats
 
-CoverZip supports standard ZIP files (.zip). It recognizes common image formats inside ZIP files, including JPEG, PNG, GIF, BMP, and TIFF.
+CoverZip supports standard ZIP files (.zip). It recognizes common image formats inside ZIP files, including JPEG, PNG, GIF, BMP, TIFF, and WebP.
 
 Password-protected ZIP files, Zip64 format, and compression methods other than DEFLATE are not supported.
 
