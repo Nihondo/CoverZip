@@ -19,6 +19,7 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
 
 #### 2. QuickLook Preview Extension (`coverZipViewer/`)
 - **PreviewViewController.swift** - メインのプレビューUI制御（NSViewController）
+- **PageProgressBarView.swift** - 画像に重ねて表示するページ進捗バー（`NSControl`）。カーソルが画像下端の帯（`pagerHoverBandHeight`）に入るとフェード表示され、クリック/ドラッグでページシーク可能。旧来のスライダー/ページラベルUIはこのオーバーレイに役割移行済み（値モデルとしては `pageSlider` を保持するが非表示固定）
 - **ImageManager.swift** - 画像管理・ページング制御（遅延ロード実装）
   - メタデータ先行取得と必要時画像ロード
   - 元画像キャッシュ（最大10枚）とリサイズキャッシュ（最大20枚）

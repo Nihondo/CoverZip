@@ -37,9 +37,6 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private let whitePagePlaceholderHeight: CGFloat = 1000
     /// 低解像度（.low）ティアのフォールバック表示を使用するか（体感検証のため一時停止中。trueで復活）
     private static let isLowQualityFallbackEnabled = false
-    // スライダー表示/非表示のための制約管理
-    private var sliderConstraints: [NSLayoutConstraint] = []
-    private var directLabelTopConstraint: NSLayoutConstraint?
     private var sliderVisibilityWidthThreshold: CGFloat = 600 // この幅未満では非表示（Finderカラム想定）
     // 日本のコミック向けにページ方向を反転（左=進む、右=戻る、スライダーは左が大きいページ）
     private var isRightToLeftReading: Bool = true
@@ -72,6 +69,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var isThumbnailStripVisible: Bool = true
     private var lastVisibleThumbnailStripHeight: CGFloat = 88
     private var cursorAreaOverlay: PreviewCursorAreaView?
+    // 画像に重ねる進捗バー（ページスライダー/ページ数ラベルのオーバーレイ版）
+    private var pageProgressBar: PageProgressBarView?
+    private var isPagerVisible: Bool = false
+    private let pagerHoverBandHeight: CGFloat = 80
     private let previewVisibilitySessionID = UUID().uuidString
     private var previewVisibilityHeartbeatTimer: Timer?
 
@@ -707,7 +708,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     didApplyInitialViewMode = false
 
         // 初回デコードのバケットサイズを先に確定し、二重デコードを防ぐ
-        await MainActor.run {
+        _ = await MainActor.run {
             updateImageManagerDisplaySize(useScreenFallback: true)
         }
 
@@ -900,24 +901,94 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 )
             }
 
-            // スライダー経由の制約を作成（サムネイルストリップの下から）
-            sliderConstraints = [
-                slider.topAnchor.constraint(equalTo: strip.bottomAnchor, constant: 8),
-                pageLabel.topAnchor.constraint(equalTo: slider.bottomAnchor, constant: 6),
-                slider.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-                slider.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12)
-            ]
-            // スライダーを使わず直接 label をサムネイルストリップに接続する制約（保持、初期は非アクティブ）
-            directLabelTopConstraint = pageLabel.topAnchor.constraint(equalTo: strip.bottomAnchor, constant: 8)
+            // サムネイルストリップの下端をview下端に固定（非表示時は高さ0のため画像が全高になる）
+            NSLayoutConstraint.activate([
+                strip.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            ])
 
-            // デフォルトはスライダー表示を前提に有効化（後で文脈に応じて切替）
-            NSLayoutConstraint.activate(sliderConstraints)
-            directLabelTopConstraint?.isActive = false
+            // 旧UI（スライダー・ページラベル）は画像に重ねる進捗バーへ役割を移行。
+            // 参照箇所が多いため値モデルとしてはインスタンスを保持しつつ、画面には表示しない。
+            slider.isHidden = true
+            pageLabel.isHidden = true
+            let labelPositionConstraints = view.constraints.filter { c in
+                let f = c.firstItem as AnyObject?
+                let s = c.secondItem as AnyObject?
+                return (f === pageLabel && s === view) || (f === view && s === pageLabel)
+            }
+            NSLayoutConstraint.deactivate(labelPositionConstraints)
+
+            // 画像に重ねる進捗バー（プログレスバー）を設置
+            setupPageProgressBar()
         }
 
         applyThumbnailStripVisibility(isThumbnailStripVisible)
     }
-    
+
+    /// 画像の上に重ねて表示する進捗バーを生成し、カーソル検知・シーク操作と接続する
+    private func setupPageProgressBar() {
+        guard let imageView, let overlay = cursorAreaOverlay else { return }
+
+        let bar = PageProgressBarView()
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        bar.isHidden = true
+        bar.alphaValue = 0
+        bar.isRightToLeftReading = isRightToLeftReading
+        // 見開き時は rightImageView がオーバーレイより上に重なるため、最前面（末尾）に追加して両ページ上に表示されるようにする
+        view.addSubview(bar)
+        NSLayoutConstraint.activate([
+            bar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            bar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            bar.heightAnchor.constraint(equalToConstant: 28),
+            bar.bottomAnchor.constraint(equalTo: imageView.bottomAnchor, constant: -12),
+        ])
+        bar.onSeek = { [weak self] page in
+            self?.moveToPageViaSlider(page)
+        }
+        pageProgressBar = bar
+
+        // カーソルが画像下部の帯に入ったら進捗バーを表示、画像領域を離れたら即座に消す
+        overlay.onMouseMoved = { [weak self] point in
+            self?.handlePagerHoverPoint(point)
+        }
+        overlay.onMouseExited = { [weak self] in
+            self?.hidePagerImmediately()
+        }
+
+        refreshPager()
+    }
+
+    /// カーソル位置（画像領域内のローカル座標）を見て、下部の帯への出入りに応じて進捗バーを表示/非表示にする
+    private func handlePagerHoverPoint(_ point: NSPoint) {
+        if point.y <= pagerHoverBandHeight, imageManager.getImageCount() > 1 {
+            showPager()
+        } else {
+            hidePagerImmediately()
+        }
+    }
+
+    /// 進捗バーをフェード表示する
+    private func showPager() {
+        guard let bar = pageProgressBar, !isPagerVisible else { return }
+        isPagerVisible = true
+        bar.isHidden = false
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.15
+            bar.animator().alphaValue = 1
+        }
+    }
+
+    /// 進捗バーを即座にフェードアウトする（下部の帯から離れた・画像領域からカーソルが離れた時など）
+    private func hidePagerImmediately() {
+        guard let bar = pageProgressBar, isPagerVisible else { return }
+        isPagerVisible = false
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.15
+            bar.animator().alphaValue = 0
+        }, completionHandler: { [weak bar] in
+            bar?.isHidden = true
+        })
+    }
+
     private func setupConstraintPriorities() {
         // ImageViewとPageLabelのAuto Layout制約を最適化
         guard let imageView = imageView, let pageLabel = pageLabel else { return }
@@ -1970,6 +2041,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     pageSlider?.maxValue = 1
     pageSlider?.integerValue = 1
     pageSlider?.isEnabled = false
+    refreshPager()
     }
 
     // MARK: - シンプルなページ押し出しトランジション
@@ -2251,27 +2323,19 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     private func setSliderVisible(_ visible: Bool) {
         guard let slider = pageSlider else { return }
-        slider.isHidden = !visible
+        // 旧UIスライダーは画像に重ねる進捗バーへ役割を移行済み。値モデルとしてのみ保持し、常時非表示にする。
+        slider.isHidden = true
         slider.isEnabled = visible && imageManager.getImageCount() > 1
-        // レイアウト方向も反映
         applySliderLayoutDirection()
-        // 制約の切り替え
-        if visible {
-            if let c = directLabelTopConstraint { c.isActive = false }
-            NSLayoutConstraint.activate(sliderConstraints)
-        } else {
-            NSLayoutConstraint.deactivate(sliderConstraints)
-            if let c = directLabelTopConstraint { c.isActive = true }
-        }
-        view.layoutSubtreeIfNeeded()
     }
 
-    // スライダーのハイライト向きを読書方向に合わせる
+    // スライダー（値モデル）と進捗バーのハイライト向きを読書方向に合わせる
     private func applySliderLayoutDirection() {
         guard let slider = pageSlider else { return }
         if #available(macOS 10.12, *) {
             slider.userInterfaceLayoutDirection = isRightToLeftReading ? .rightToLeft : .leftToRight
         }
+        pageProgressBar?.isRightToLeftReading = isRightToLeftReading
     }
 
     // スライダーの最小/最大と有効状態を更新
@@ -2288,6 +2352,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             pageSlider?.maxValue = 1
             pageSlider?.integerValue = 1
             pageSlider?.isEnabled = false
+            refreshPager()
         }
     }
 
@@ -2373,6 +2438,16 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         if !skipThumbnailSync {
             syncThumbnailSelection()
         }
+        refreshPager()
+    }
+
+    /// 画像に重ねる進捗バーの塗りつぶし・ページ番号を最新の状態へ更新する
+    private func refreshPager() {
+        guard let bar = pageProgressBar else { return }
+        let total = imageManager.getImageCount()
+        let current = imageManager.getCurrentPageNumber()
+        bar.update(currentPage: current, totalPages: max(total, 1))
+        bar.isEnabled = total > 1
     }
 
     // Quick Look ホストに対して、縦方向いっぱいの希望サイズをヒントとして提示
@@ -2593,6 +2668,11 @@ private extension PreviewViewController {
 private final class PreviewCursorAreaView: NSView {
     override var acceptsFirstResponder: Bool { false }
 
+    /// マウス移動時に、自ビューのローカル座標を通知する（進捗バーの下部バンド検知に使用）
+    var onMouseMoved: ((NSPoint) -> Void)?
+    /// カーソルが画像領域から離れた際に通知する（進捗バーの即時消灯に使用）
+    var onMouseExited: (() -> Void)?
+
     // カーソル画像を初回のみ生成（フォールバックあり）
     // ホットスポット: 32×32pt 画像の矢印先端を想定。実際の画像に合わせて調整してください。
     private static let cursorLeft: NSCursor = {
@@ -2635,14 +2715,17 @@ private final class PreviewCursorAreaView: NSView {
 
     override func mouseEntered(with event: NSEvent) {
         updateCursor(for: event)
+        onMouseMoved?(convert(event.locationInWindow, from: nil))
     }
 
     override func mouseMoved(with event: NSEvent) {
         updateCursor(for: event)
+        onMouseMoved?(convert(event.locationInWindow, from: nil))
     }
 
     override func mouseExited(with event: NSEvent) {
         NSCursor.arrow.set()
+        onMouseExited?()
     }
 
     // ウィンドウ内でのカーソル矩形（mouseMoved が届かないケースの補完）
