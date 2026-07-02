@@ -7,7 +7,7 @@ import Foundation
 
 public enum ImageFileFilter {
     private static let imageExtensions: [String] = [
-        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".ico", ".icns"
+        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".ico", ".icns", ".webp"
     ]
 
     /// 対応画像ファイルらしいパスかどうかを判定する。
