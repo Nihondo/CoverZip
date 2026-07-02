@@ -142,7 +142,7 @@ ZIP を開いたときに、まずページの一覧情報だけを素早く取�
 
 ## 対応しているファイル形式
 
-CoverZip が対応しているのは、標準的な ZIP ファイル（.zip）です。ZIP 内の画像として、JPEG、PNG、GIF、BMP、TIFF などの一般的な形式を認識します。
+CoverZip が対応しているのは、標準的な ZIP ファイル（.zip）です。ZIP 内の画像として、JPEG、PNG、GIF、BMP、TIFF、WebP などの一般的な形式を認識します。
 
 パスワードで保護された ZIP ファイルや、Zip64 形式、DEFLATE 以外の圧縮方式には対応していません。
 
