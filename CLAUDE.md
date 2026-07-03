@@ -25,6 +25,8 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
   - 元画像キャッシュ（最大10枚）とリサイズキャッシュ（最大20枚）
   - 隣接ページのバックグラウンドプリロード
   - `ThumbnailImageProviding` に準拠し、256px基準の tiny ティアキャッシュ（最大200件、LRU）をサムネイルストリップとメイン表示の白ページプレースホルダで共有（重複デコード排除）
+  - `ImageEntrySource` プロトコル経由でZIP/フォルダのどちらのデータソースも同一ロジックで扱う（詳細は「フォルダQuickLook対応」参照）
+- **ImageEntrySource.swift** - `ImageManager` が参照する画像データソースの抽象化（`ZipImageEntrySource` / `FolderImageEntrySource`）
 - **ThumbnailStripView.swift** - サムネイルストリップUI（`ThumbnailResizeHandle`, `ThumbnailCollectionView`, `ThumbnailStripView`）。サムネイル画像は `thumbnailProvider`（`ImageManager`）の tiny ティアキャッシュに委譲し、独自のデコード経路は持たない
 - **ThumbnailCollectionViewItem.swift** - サムネイルコレクションビューアイテム
 - **ReadingHistoryManager.swift** - ZIP別の閲覧履歴管理（最終ページ、表示設定等）
@@ -60,6 +62,9 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
 - **ZipCore.swift** - 純Swift ZIP処理コア（Central Directory + DEFLATE展開）
 - **NaturalSort.swift** - ファイル名の自然順ソート
 - **ImageFileFilter.swift** - 画像ファイル判定
+
+**フォルダ処理:**
+- **FolderCore.swift** - フォルダ内画像の再帰列挙（`CZFolder`）。ZIP解凍を伴わないフォルダQuickLook対応で使用（詳細は「フォルダQuickLook対応」参照）
 
 **設定管理:**
 - **UnifiedAppSettings.swift** - 統一設定管理（`CZSettings`クラス、Single Source of Truth）
@@ -120,8 +125,9 @@ pluginkit -m | grep -i coverzip
 
 **ファイルドロップ/ダブルクリック時:**
 ```
-ZIPファイル → AppDelegate.application(_:open:) →
+ZIPファイル/フォルダ → AppDelegate.application(_:open:) →
 processZipFile → ZipRoutingService.route(zipURL:invocationContext:.appLaunch) →
+  （フォルダ・パッケージ以外の場合は常に openInternalViewer）
   RouteDecision.openInternalViewer → InternalViewer.shared.show() (継続実行)
   RouteDecision.openExternalApp   → AppLauncher → NSApplication.terminate
   RouteDecision.openDefaultApp    → AppLauncher → NSApplication.terminate
@@ -166,6 +172,17 @@ ZipRoutingService.route(invocationContext:.openPanelRouting) →
   - `extractImageData(from:entryInfo:)` - 個別の画像データを必要時に抽出
   - `imageEntries(from:)` - 全画像を一括取得（サムネイル生成等で使用）
 - **自然順ソート**: `NaturalSort.lessFilename()` による数値認識ソート（全APIで一貫）
+
+#### フォルダQuickLook対応
+ZIPを解凍せず、フォルダ内の画像をZIPプレビューと同一のUI・ロジックで表示する機能。
+
+- **対象範囲**: QuickLook Preview Extension（`coverZipViewer/`）と内蔵ビューアのみ。QuickLook Thumbnail Extension（`coverZipExtension/`）は非対応のまま（Finderの全フォルダアイコンを乗っ取らないための意図的な制限）
+- **有効化**: `coverZipViewer/Info.plist` の `QLSupportedContentTypes` に `public.folder` を追加（`coverZipExtension/Info.plist` には追加しない）
+- **データソース抽象化**: `ImageManager` は `entrySource: ImageEntrySource?` を介してZIP（`ZipImageEntrySource`）・フォルダ（`FolderImageEntrySource`）のどちらも同一のインデックスベースAPI（`count` / `filename(at:)` / `imageData(at:)`）で扱う。`loadImages(from:)` がURLの `isDirectoryKey` で分岐し、フォルダ時は `CZFolder.imageEntryList(from:)` でメタデータを列挙する
+- **列挙ロジック**: `CZFolder.imageEntryList(from:)` はサブフォルダを再帰的に列挙し（symlinkは辿らない、パッケージ内部は除外）、`ImageFileFilter.isImagePath` で画像のみ抽出。ソートは lastPathComponent 基準の自然順を第1キー、相対パス全体を第2キー（タイブレーク）として同名衝突時も順序を決定的にする
+- **画像0枚のフォルダ**: `PreviewViewController.preparePreviewOfFile` がエラーをthrowし、システム標準のフォルダプレビューに委譲する（ZIPの場合は従来どおり `displayNoImagesMessage()` を表示）
+- **メインアプリ側のルーティング**: `ZipRoutingService.route()` はZIP拡張子判定より前にフォルダ（パッケージを除く）を検出し、常に `.openInternalViewer` を返す（キーワードルーティングはZIP専用のまま）。`CoverZip/Info.plist` の `CFBundleDocumentTypes` に `public.folder`（`LSHandlerRank=None`）を追加し、フォルダのDockドロップ等から内蔵ビューアで開けるようにしている
+- **履歴**: `ReadingHistoryManager` はファイル名basenameをキーにするため、同名の `X.zip` とフォルダ `X` は読書履歴を共有する（意図的な仕様）
 
 ### QuickLook Preview Extension の機能
 
@@ -272,6 +289,11 @@ The EdDSA private key must be stored outside the repository, preferably in macOS
 - **対応圧縮方式**: DEFLATE（方式8）と非圧縮（方式0）のみ
 - **未対応**: Zip64、暗号化ZIP、その他の圧縮方式
 - **メモリ効率**: 8MBバッファによる制御されたメモリ使用
+
+### フォルダ処理の制約
+- **symlink**: 一切辿らない（ディレクトリsymlinkは列挙されず、ファイルsymlinkは `isRegularFile` 判定で除外）
+- **パッケージ**: `.skipsPackageDescendants` によりフォルダ内のパッケージ（`.app` 等）配下は列挙しない
+- **サムネイル非対応**: `coverZipExtension`（Thumbnail Extension）は `public.folder` を宣言していないため、Finder上でフォルダのサムネイルは変化しない
 
 ## システム要件
 

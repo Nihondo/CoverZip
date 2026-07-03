@@ -51,9 +51,9 @@ class ImageManager: ThumbnailImageProviding {
         let scaleToken: Int
     }
 
-    // 遅延ロード用のメタデータとZIPデータ
-    private var imageEntryInfos: [CZImageEntryInfo] = []
-    private var zipData: Data?
+    // 遅延ロード用のメタデータと画像データソース（ZIP or フォルダ）
+    private var entrySource: ImageEntrySource?
+    private var imageEntryCount: Int { entrySource?.count ?? 0 }
     private var currentIndex: Int = 0
     private var memoryPressureSource: DispatchSourceMemoryPressure?
     // 見開きの左右組み合わせを1ページ分ずらすためのオフセット（0 or 1）
@@ -176,46 +176,58 @@ class ImageManager: ThumbnailImageProviding {
     }
 
     /**
-     * ZIPファイルから画像を読み込む（遅延ロード方式）
+     * ZIPファイルまたはフォルダから画像を読み込む（遅延ロード方式）
      *
-     * @param url ZIPファイルのURL
+     * @param url ZIPファイルまたはフォルダのURL
      * @return 読み込み成功時はtrue、失敗時はfalse
      */
     func loadImages(from url: URL) -> Bool {
         decodeCachePolicy = AppSettings.shared.imageDecodeCachePolicy
-        do {
-            let data = try Data(contentsOf: url, options: [.mappedIfSafe])
-            os_signpost(.begin, log: performanceLog, name: "zipParse")
-            let entryInfos = CZZip.imageEntryInfoList(from: data)
-            os_signpost(.end, log: performanceLog, name: "zipParse")
-            guard !entryInfos.isEmpty else { return false }
+        let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
 
-            zipData = data
-            imageEntryInfos = entryInfos
-            currentIndex = 0
-            cacheStateQueue.sync {
-                resizedImageCache.removeAll()
-                resizedImageIndexMap.removeAll()
-                resizedImageMaxPixelMap.removeAll()
+        let newSource: ImageEntrySource
+        if isDirectory {
+            os_signpost(.begin, log: performanceLog, name: "folderEnumerate")
+            let entries = CZFolder.imageEntryList(from: url)
+            os_signpost(.end, log: performanceLog, name: "folderEnumerate")
+            guard !entries.isEmpty else { return false }
+            newSource = FolderImageEntrySource(entries: entries)
+            NSLog("[ImageManager] Loaded %d images from folder (lazy mode)", entries.count)
+        } else {
+            do {
+                let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+                os_signpost(.begin, log: performanceLog, name: "zipParse")
+                let entryInfos = CZZip.imageEntryInfoList(from: data)
+                os_signpost(.end, log: performanceLog, name: "zipParse")
+                guard !entryInfos.isEmpty else { return false }
+                newSource = ZipImageEntrySource(zipData: data, entries: entryInfos)
+                NSLog("[ImageManager] Loaded %d images from ZIP (lazy mode)", entryInfos.count)
+            } catch {
+                NSLog("[ImageManager] Failed to load ZIP: %@", String(describing: error))
+                return false
             }
-            prerenderedLayerCache.clearAll()
-            clearInFlightPrerenderState()
-            tinyImageCache.removeAll()
-            tinyImageCacheSizeMap.removeAll()
-            tinyImageCacheOrder.removeAll()
-            cacheStateQueue.sync { pendingTinyRequests.removeAll() }
-            setupMemoryPressureMonitoring()
-
-            // 初期表示の体感を落とさないため先頭のみ先にデコード
-            _ = getImageAtIndex(0)
-            preloadAdjacentImages()
-
-            NSLog("[ImageManager] Loaded %d images (lazy mode)", entryInfos.count)
-            return true
-        } catch {
-            NSLog("[ImageManager] Failed to load ZIP: %@", String(describing: error))
-            return false
         }
+
+        entrySource = newSource
+        currentIndex = 0
+        cacheStateQueue.sync {
+            resizedImageCache.removeAll()
+            resizedImageIndexMap.removeAll()
+            resizedImageMaxPixelMap.removeAll()
+        }
+        prerenderedLayerCache.clearAll()
+        clearInFlightPrerenderState()
+        tinyImageCache.removeAll()
+        tinyImageCacheSizeMap.removeAll()
+        tinyImageCacheOrder.removeAll()
+        cacheStateQueue.sync { pendingTinyRequests.removeAll() }
+        setupMemoryPressureMonitoring()
+
+        // 初期表示の体感を落とさないため先頭のみ先にデコード
+        _ = getImageAtIndex(0)
+        preloadAdjacentImages()
+
+        return true
     }
 
     /**
@@ -443,7 +455,7 @@ class ImageManager: ThumbnailImageProviding {
             spreadBaseIndices = []
         }
 
-        let valid = orderedUnique(indicesToLoad).filter { $0 >= 0 && $0 < imageEntryInfos.count }
+        let valid = orderedUnique(indicesToLoad).filter { $0 >= 0 && $0 < imageEntryCount }
         if valid.isEmpty && spreadBaseIndices.isEmpty { return }
 
         decodeQueue.async { [weak self] in
@@ -487,7 +499,7 @@ class ImageManager: ThumbnailImageProviding {
         isStillNeeded: @escaping () -> Bool,
         completion: @escaping (_ index: Int, _ image: NSImage?) -> Void
     ) {
-        guard let zipData, index >= 0, index < imageEntryInfos.count else { return }
+        guard let entrySource, index >= 0, index < entrySource.count else { return }
 
         let targetMaxPixelSize = max(tinyBaseMaxPixelSize, maxPixelSize)
         if let cached = tinyImageCache[index], (tinyImageCacheSizeMap[index] ?? 0) >= targetMaxPixelSize {
@@ -509,7 +521,6 @@ class ImageManager: ThumbnailImageProviding {
         }
         guard isFirstRequest else { return }
 
-        let entry = imageEntryInfos[index]
         tinyDecodeQueue.async { [weak self] in
             guard let self else { return }
             let subscribers = self.cacheStateQueue.sync { self.pendingTinyRequests[index] ?? [] }
@@ -517,7 +528,7 @@ class ImageManager: ThumbnailImageProviding {
                 self.finishTinyRequest(index: index, image: nil, maxPixelSize: targetMaxPixelSize)
                 return
             }
-            guard let imageData = CZZip.extractImageData(from: zipData, entryInfo: entry),
+            guard let imageData = entrySource.imageData(at: index),
                   let source = CGImageSourceCreateWithData(imageData as CFData, nil),
                   let cgImage = CGImageSourceCreateThumbnailAtIndex(
                     source,
@@ -572,7 +583,7 @@ class ImageManager: ThumbnailImageProviding {
         quality: DecodeQualityTier = .normal,
         isPreload: Bool = false
     ) -> NSImage? {
-        guard index >= 0, index < imageEntryInfos.count else { return nil }
+        guard index >= 0, index < imageEntryCount else { return nil }
 
         let request = buildDecodeRequest(isSpreadMode: isSpreadMode, quality: quality)
         let cacheKey = buildResizedCacheKey(index: index, request: request, isSpreadMode: isSpreadMode, quality: quality)
@@ -585,8 +596,8 @@ class ImageManager: ThumbnailImageProviding {
             return reused
         }
 
-        guard let zipData else {
-            NSLog("[ImageManager] ZIP data not available for lazy loading")
+        guard let entrySource else {
+            NSLog("[ImageManager] Entry source not available for lazy loading")
             return nil
         }
 
@@ -608,14 +619,13 @@ class ImageManager: ThumbnailImageProviding {
         os_signpost(.begin, log: performanceLog, name: "extractAndDecode", "index=%d maxPixelSize=%d", index, request.maxPixelSize)
         defer { os_signpost(.end, log: performanceLog, name: "extractAndDecode", "index=%d maxPixelSize=%d", index, request.maxPixelSize) }
 
-        let entryInfo = imageEntryInfos[index]
-        guard let imageData = CZZip.extractImageData(from: zipData, entryInfo: entryInfo) else {
-            NSLog("[ImageManager] Failed to extract image at index %d: %@", index, entryInfo.filename)
+        guard let imageData = entrySource.imageData(at: index) else {
+            NSLog("[ImageManager] Failed to extract image at index %d: %@", index, entrySource.filename(at: index))
             return nil
         }
 
         guard let image = decodeImage(data: imageData, maxPixelSize: request.maxPixelSize) else {
-            NSLog("[ImageManager] Failed to decode image at index %d: %@", index, entryInfo.filename)
+            NSLog("[ImageManager] Failed to decode image at index %d: %@", index, entrySource.filename(at: index))
             return nil
         }
 
@@ -692,7 +702,7 @@ class ImageManager: ThumbnailImageProviding {
         isSpreadMode: Bool = false,
         quality: DecodeQualityTier = .normal
     ) -> NSImage? {
-        guard index >= 0, index < imageEntryInfos.count else { return nil }
+        guard index >= 0, index < imageEntryCount else { return nil }
         let request = buildDecodeRequest(isSpreadMode: isSpreadMode, quality: quality)
         let cacheKey = buildResizedCacheKey(index: index, request: request, isSpreadMode: isSpreadMode, quality: quality)
         return cacheStateQueue.sync(execute: { resizedImageCache[cacheKey] })
@@ -871,8 +881,8 @@ class ImageManager: ThumbnailImageProviding {
     }
 
     private func resolveSpreadPairIndices(baseIndex: Int, isRightToLeft: Bool) -> (left: Int?, right: Int?)? {
-        guard !imageEntryInfos.isEmpty else { return nil }
-        guard baseIndex >= 0, baseIndex < imageEntryInfos.count else { return nil }
+        guard imageEntryCount > 0 else { return nil }
+        guard baseIndex >= 0, baseIndex < imageEntryCount else { return nil }
 
         if baseIndex == 0 {
             return (0, nil)
@@ -900,13 +910,13 @@ class ImageManager: ThumbnailImageProviding {
             }
         }
 
-        let left = (leftIndex >= 0 && leftIndex < imageEntryInfos.count) ? leftIndex : nil
-        let right = (rightIndex >= 0 && rightIndex < imageEntryInfos.count) ? rightIndex : nil
+        let left = (leftIndex >= 0 && leftIndex < imageEntryCount) ? leftIndex : nil
+        let right = (rightIndex >= 0 && rightIndex < imageEntryCount) ? rightIndex : nil
         return (left, right)
     }
 
     private func prerenderSingleLayerIfNeeded(pageIndex: Int) {
-        guard pageIndex >= 0, pageIndex < imageEntryInfos.count else { return }
+        guard pageIndex >= 0, pageIndex < imageEntryCount else { return }
         let request = buildDecodeRequest(isSpreadMode: false)
         let key = PrerenderedLayerCache.SingleKey(
             pageIndex: pageIndex,
@@ -1096,29 +1106,29 @@ extension ImageManager {
      * 現在の画像のファイル名を取得する
      */
     func getCurrentImageName() -> String {
-        guard !imageEntryInfos.isEmpty, currentIndex >= 0, currentIndex < imageEntryInfos.count else {
+        guard let entrySource, currentIndex >= 0, currentIndex < entrySource.count else {
             return ""
         }
-        return imageEntryInfos[currentIndex].filename
+        return entrySource.filename(at: currentIndex)
     }
 
     /**
      * 次の画像に移動する
      */
     func nextImage(isSpreadMode: Bool = false) -> Bool {
-        guard !imageEntryInfos.isEmpty else { return false }
+        guard imageEntryCount > 0 else { return false }
 
         if isSpreadMode {
             if currentIndex == 0 {
-                guard currentIndex < imageEntryInfos.count - 1 else { return false }
+                guard currentIndex < imageEntryCount - 1 else { return false }
                 currentIndex = 1
             } else {
                 let nextIndex = currentIndex + 2
-                guard nextIndex < imageEntryInfos.count else { return false }
+                guard nextIndex < imageEntryCount else { return false }
                 currentIndex = nextIndex
             }
         } else {
-            guard currentIndex < imageEntryInfos.count - 1 else { return false }
+            guard currentIndex < imageEntryCount - 1 else { return false }
             currentIndex += 1
         }
 
@@ -1129,7 +1139,7 @@ extension ImageManager {
      * 前の画像に移動する
      */
     func previousImage(isSpreadMode: Bool = false) -> Bool {
-        guard !imageEntryInfos.isEmpty, currentIndex > 0 else { return false }
+        guard imageEntryCount > 0, currentIndex > 0 else { return false }
 
         if isSpreadMode {
             if currentIndex == 1 {
@@ -1148,7 +1158,7 @@ extension ImageManager {
      * 画像の総数を取得する
      */
     func getImageCount() -> Int {
-        imageEntryInfos.count
+        imageEntryCount
     }
 
     /**
@@ -1160,8 +1170,8 @@ extension ImageManager {
 
     /// 指定ページへ移動（1始まり）
     func goToPage(_ page: Int) -> Bool {
-        guard !imageEntryInfos.isEmpty else { return false }
-        let clamped = max(1, min(page, imageEntryInfos.count))
+        guard imageEntryCount > 0 else { return false }
+        let clamped = max(1, min(page, imageEntryCount))
         currentIndex = clamped - 1
         return true
     }
@@ -1170,7 +1180,7 @@ extension ImageManager {
      * 画像があるかどうかを確認する
      */
     func hasImages() -> Bool {
-        !imageEntryInfos.isEmpty
+        imageEntryCount > 0
     }
 
     /**

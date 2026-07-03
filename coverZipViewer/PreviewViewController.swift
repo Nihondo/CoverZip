@@ -688,6 +688,8 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         os_signpost(.begin, log: performanceLog, name: "preparePreviewOfFile")
         defer { os_signpost(.end, log: performanceLog, name: "preparePreviewOfFile") }
 
+        let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+
         // ファイル切り替え時にマウスモニターをクリーンアップ
         cleanupMouseMonitors()
         
@@ -740,8 +742,15 @@ class PreviewViewController: NSViewController, QLPreviewingController {
                 NSLog("[DEBUG] Scheduling delayed mouse monitor setup")
                 setupMouseMonitorsWithDelay()
             }
+        } else if isDirectory {
+            // 画像を1枚も含まないフォルダはシステム標準のフォルダプレビューに委譲する
+            throw NSError(
+                domain: "com.dmng.CoverZip.coverZipViewer",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "No images found in folder: \(url.lastPathComponent)"]
+            )
         } else {
-            // 画像が見つからない場合の処理
+            // 画像が見つからない場合の処理（ZIP）
             await MainActor.run {
                 displayNoImagesMessage()
                 // 画像なしの場合でもマウスモニターは遅延設定

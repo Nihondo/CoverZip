@@ -11,6 +11,7 @@
 			<key>QLSupportedContentTypes</key>
 			<array>
 				<string>public.zip-archive</string>
+				<string>public.folder</string>
 			</array>
 			<key>QLSupportsSearchableItems</key>
 			<false/>

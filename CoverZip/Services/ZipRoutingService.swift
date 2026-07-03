@@ -33,8 +33,14 @@ enum ZipRoutingService {
         case .openPanelRouting:
             contextLabel = "openPanelRouting"
         }
+        let resourceValues = try? zipURL.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+        if resourceValues?.isDirectory == true, resourceValues?.isPackage != true {
+            NSLog("フォルダを内蔵ビューアで表示 [%@]: %@", contextLabel, zipURL.lastPathComponent)
+            return .openInternalViewer(zipURL: zipURL)
+        }
+
         guard zipURL.pathExtension.lowercased() == "zip" else {
-            NSLog("ZIPファイルではありません: %@", zipURL.lastPathComponent)
+            NSLog("対応対象ではありません: %@", zipURL.lastPathComponent)
             return .ignore
         }
 

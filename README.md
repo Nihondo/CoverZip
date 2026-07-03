@@ -33,6 +33,12 @@ If the page pairing looks off in spread mode, select "**Adjust Spread Alignment*
 
 Settings can be changed by right-clicking within the viewer or from the View menu.
 
+### Preview a Folder of Images
+
+You don't need to zip your images first — select any folder containing images in Finder and press the spacebar to browse it in the same viewer described above, with the same controls, view modes, and reading history. Subfolders are included automatically, and images are sorted in natural order (so `2.jpg` comes before `10.jpg`) just like inside a ZIP file. If a folder contains no images, QuickLook falls back to the standard Finder folder preview.
+
+Dropping a folder onto the CoverZip Dock icon opens it in the built-in viewer as well.
+
 ### Double-Click to Open in Built-in Viewer or Another App (Routing)
 
 If you associate CoverZip with ZIP files, double-clicking a ZIP will automatically route it to the appropriate app based on the filename.
@@ -143,9 +149,9 @@ When system memory runs low, caches are automatically released to minimize impac
 
 ## Supported File Formats
 
-CoverZip supports standard ZIP files (.zip). It recognizes common image formats inside ZIP files, including JPEG, PNG, GIF, BMP, TIFF, and WebP.
+CoverZip supports standard ZIP files (.zip), as well as plain folders of images (see [Preview a Folder of Images](#preview-a-folder-of-images)). It recognizes common image formats, including JPEG, PNG, GIF, BMP, TIFF, and WebP.
 
-Password-protected ZIP files, Zip64 format, and compression methods other than DEFLATE are not supported.
+Password-protected ZIP files, Zip64 format, and compression methods other than DEFLATE are not supported. Folder thumbnails in Finder are not generated (only ZIP files get a cover thumbnail); folder support is limited to the spacebar viewer and the built-in viewer.
 
 ---
 
