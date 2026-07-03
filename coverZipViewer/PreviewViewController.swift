@@ -2025,7 +2025,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     
     private func displayNoImagesMessage() {
         // 画像が見つからない場合のメッセージ表示
-        let noImageText = "ZIPファイル内に画像が見つかりませんでした"
+        let noImageText = "アーカイブ内に画像が見つかりませんでした"
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 16),
             .foregroundColor: NSColor.secondaryLabelColor

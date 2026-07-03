@@ -14,6 +14,18 @@
 		4251D87F2E69CF4D00A21728 /* ImageIOOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4251D87D2E69CF4D00A21728 /* ImageIOOptions.swift */; };
 		4251D8802E69CF4D00A21728 /* ImageIOOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4251D87D2E69CF4D00A21728 /* ImageIOOptions.swift */; };
 		4251D8812FAD100100000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 4251D8822FAD100100000001 /* Sparkle */; };
+		42A100042FAE000100000001 /* ArchiveKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A100012FAE000100000001 /* ArchiveKind.swift */; };
+		42A100052FAE000100000001 /* CoverSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A100022FAE000100000001 /* CoverSelection.swift */; };
+		42A100062FAE000100000001 /* RarCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A100032FAE000100000001 /* RarCore.swift */; };
+		42A100072FAE000100000001 /* ArchiveKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A100012FAE000100000001 /* ArchiveKind.swift */; };
+		42A100082FAE000100000001 /* CoverSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A100022FAE000100000001 /* CoverSelection.swift */; };
+		42A100092FAE000100000001 /* RarCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A100032FAE000100000001 /* RarCore.swift */; };
+		42A1000A2FAE000100000001 /* ArchiveKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A100012FAE000100000001 /* ArchiveKind.swift */; };
+		42A1000B2FAE000100000001 /* CoverSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A100022FAE000100000001 /* CoverSelection.swift */; };
+		42A1000C2FAE000100000001 /* RarCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A100032FAE000100000001 /* RarCore.swift */; };
+		42A100142FAE000100000001 /* Unrar in Frameworks */ = {isa = PBXBuildFile; productRef = 42A100112FAE000100000001 /* Unrar */; };
+		42A100152FAE000100000001 /* Unrar in Frameworks */ = {isa = PBXBuildFile; productRef = 42A100122FAE000100000001 /* Unrar */; };
+		42A100162FAE000100000001 /* Unrar in Frameworks */ = {isa = PBXBuildFile; productRef = 42A100132FAE000100000001 /* Unrar */; };
 		426EFEF12E2670FC00AD23E5 /* QuickLookThumbnailing.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 426EFEF02E2670FC00AD23E5 /* QuickLookThumbnailing.framework */; };
 		426EFEF32E2670FC00AD23E5 /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 426EFEF22E2670FC00AD23E5 /* Quartz.framework */; };
 		426EFEFB2E2670FC00AD23E5 /* coverZipExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 426EFEEE2E2670FC00AD23E5 /* coverZipExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -117,6 +129,9 @@
 		42BCD0BA2E5E18A5007F2065 /* NaturalSort.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaturalSort.swift; sourceTree = "<group>"; };
 		42BCD0BB2E5E18A5007F2065 /* SettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsKeys.swift; sourceTree = "<group>"; };
 		42BCD0BC2E5E18A5007F2065 /* ZipCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipCore.swift; sourceTree = "<group>"; };
+		42A100012FAE000100000001 /* ArchiveKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveKind.swift; sourceTree = "<group>"; };
+		42A100022FAE000100000001 /* CoverSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverSelection.swift; sourceTree = "<group>"; };
+		42A100032FAE000100000001 /* RarCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RarCore.swift; sourceTree = "<group>"; };
 		42CD41A52E5AEA6400BA89CA /* coverZipViewer.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = coverZipViewer.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		42D710082FAD000100000001 /* CoverZipKeyHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CoverZipKeyHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CZLogging.swift; sourceTree = "<group>"; };
@@ -194,6 +209,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4251D8812FAD100100000001 /* Sparkle in Frameworks */,
+				42A100142FAE000100000001 /* Unrar in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -203,6 +219,7 @@
 			files = (
 				426EFEF12E2670FC00AD23E5 /* QuickLookThumbnailing.framework in Frameworks */,
 				426EFEF32E2670FC00AD23E5 /* Quartz.framework in Frameworks */,
+				42A100152FAE000100000001 /* Unrar in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -211,6 +228,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				42CD41A62E5AEA6400BA89CA /* Quartz.framework in Frameworks */,
+				42A100162FAE000100000001 /* Unrar in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -277,7 +295,10 @@
 				42BCD0B92E5E18A5007F2065 /* ImageFileFilter.swift */,
 				42BCD0BA2E5E18A5007F2065 /* NaturalSort.swift */,
 				42BCD0BB2E5E18A5007F2065 /* SettingsKeys.swift */,
+				42A100012FAE000100000001 /* ArchiveKind.swift */,
+				42A100022FAE000100000001 /* CoverSelection.swift */,
 				42BCD0BC2E5E18A5007F2065 /* ZipCore.swift */,
+				42A100032FAE000100000001 /* RarCore.swift */,
 				3192760FEC195B5305B08E3C /* FolderCore.swift */,
 				C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */,
 			);
@@ -310,6 +331,7 @@
 			name = CoverZip;
 			packageProductDependencies = (
 				4251D8822FAD100100000001 /* Sparkle */,
+				42A100112FAE000100000001 /* Unrar */,
 			);
 			productName = CoverZip;
 			productReference = 426EFEAA2E26708A00AD23E5 /* CoverZip.app */;
@@ -332,6 +354,7 @@
 			);
 			name = coverZipExtension;
 			packageProductDependencies = (
+				42A100122FAE000100000001 /* Unrar */,
 			);
 			productName = coverZipExtension;
 			productReference = 426EFEEE2E2670FC00AD23E5 /* coverZipExtension.appex */;
@@ -354,6 +377,7 @@
 			);
 			name = coverZipViewer;
 			packageProductDependencies = (
+				42A100132FAE000100000001 /* Unrar */,
 			);
 			productName = coverZipViewer;
 			productReference = 42CD41A52E5AEA6400BA89CA /* coverZipViewer.appex */;
@@ -417,6 +441,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				4251D8832FAD100100000001 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				42A100102FAE000100000001 /* XCRemoteSwiftPackageReference "Unrar.swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 426EFEAB2E26708A00AD23E5 /* Products */;
@@ -468,10 +493,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				42BCD0BE2E5E18A5007F2065 /* SettingsKeys.swift in Sources */,
+				42A100042FAE000100000001 /* ArchiveKind.swift in Sources */,
 				42BCD0BF2E5E18A5007F2065 /* ImageFileFilter.swift in Sources */,
 				4251D8802E69CF4D00A21728 /* ImageIOOptions.swift in Sources */,
 				42BCD0C02E5E18A5007F2065 /* NaturalSort.swift in Sources */,
+				42A100052FAE000100000001 /* CoverSelection.swift in Sources */,
 				42BCD0C12E5E18A5007F2065 /* ZipCore.swift in Sources */,
+				42A100062FAE000100000001 /* RarCore.swift in Sources */,
 				6DD4E3DB1CED9862A9D9F815 /* FolderCore.swift in Sources */,
 				429EE9F72EBC1D2D003D0E96 /* UserDefaultsHelper.swift in Sources */,
 				429EE9F82EBC1D2D003D0E96 /* ImageUtilities.swift in Sources */,
@@ -486,6 +514,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				42BCD0C62E5E18A5007F2065 /* SettingsKeys.swift in Sources */,
+				42A100072FAE000100000001 /* ArchiveKind.swift in Sources */,
 				4251D87F2E69CF4D00A21728 /* ImageIOOptions.swift in Sources */,
 				42BCD0C72E5E18A5007F2065 /* ImageFileFilter.swift in Sources */,
 				429EE9F32EBC1D2D003D0E96 /* UserDefaultsHelper.swift in Sources */,
@@ -493,7 +522,9 @@
 				429EE9F52EBC1D2D003D0E96 /* ViewModePreference.swift in Sources */,
 				429EE9F62EBC1D2D003D0E96 /* UnifiedAppSettings.swift in Sources */,
 				42BCD0C82E5E18A5007F2065 /* NaturalSort.swift in Sources */,
+				42A100082FAE000100000001 /* CoverSelection.swift in Sources */,
 				42BCD0C92E5E18A5007F2065 /* ZipCore.swift in Sources */,
+				42A100092FAE000100000001 /* RarCore.swift in Sources */,
 				EDD9570C113939815F81DCA2 /* FolderCore.swift in Sources */,
 				423CD94F50A7F92213B17E79 /* CZLogging.swift in Sources */,
 			);
@@ -505,9 +536,12 @@
 			files = (
 				4251D87E2E69CF4D00A21728 /* ImageIOOptions.swift in Sources */,
 				42BCD0C22E5E18A5007F2065 /* SettingsKeys.swift in Sources */,
+				42A1000A2FAE000100000001 /* ArchiveKind.swift in Sources */,
 				42BCD0C32E5E18A5007F2065 /* ImageFileFilter.swift in Sources */,
 				42BCD0C42E5E18A5007F2065 /* NaturalSort.swift in Sources */,
+				42A1000B2FAE000100000001 /* CoverSelection.swift in Sources */,
 				42BCD0C52E5E18A5007F2065 /* ZipCore.swift in Sources */,
+				42A1000C2FAE000100000001 /* RarCore.swift in Sources */,
 				3DB5C8EE5991B12354FB9A4F /* FolderCore.swift in Sources */,
 				429EE9EF2EBC1D2D003D0E96 /* UserDefaultsHelper.swift in Sources */,
 				429EE9F02EBC1D2D003D0E96 /* ImageUtilities.swift in Sources */,
@@ -1032,6 +1066,14 @@
 				minimumVersion = 2.9.1;
 			};
 		};
+		42A100102FAE000100000001 /* XCRemoteSwiftPackageReference "Unrar.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mtgto/Unrar.swift";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 0.5.4;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1039,6 +1081,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4251D8832FAD100100000001 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		42A100112FAE000100000001 /* Unrar */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 42A100102FAE000100000001 /* XCRemoteSwiftPackageReference "Unrar.swift" */;
+			productName = Unrar;
+		};
+		42A100122FAE000100000001 /* Unrar */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 42A100102FAE000100000001 /* XCRemoteSwiftPackageReference "Unrar.swift" */;
+			productName = Unrar;
+		};
+		42A100132FAE000100000001 /* Unrar */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 42A100102FAE000100000001 /* XCRemoteSwiftPackageReference "Unrar.swift" */;
+			productName = Unrar;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

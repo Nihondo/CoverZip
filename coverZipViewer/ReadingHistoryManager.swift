@@ -8,7 +8,7 @@
 import Foundation
 
 struct FileReadingHistory: Codable {
-    let filename: String           // ZIPファイル名（拡張子除く、パス除く）
+    let filename: String           // アーカイブ/フォルダ名（拡張子除く、パス除く）
     let lastPageNumber: Int        // 最後に読んでいたページ番号
     let lastAccessDate: Date       // 最終アクセス日時
     let viewMode: String           // 表示モード（"single"/"spread"/"auto"）
@@ -44,7 +44,7 @@ final class ReadingHistoryManager {
         set { defaults.set(newValue, forKey: CZSettingsKeys.readingHistoryEnabled) }
     }
     
-    /// ZIPファイルの読書位置を保存（実際の永続化は0.5秒デバウンス後に行う）
+    /// アーカイブ/フォルダの読書位置を保存（実際の永続化は0.5秒デバウンス後に行う）
     func saveReadingPosition(filename: String, page: Int, viewMode: String, spreadPairOffset: Int, isRightToLeftReading: Bool) {
         guard isEnabled else { return }
 
@@ -90,7 +90,7 @@ final class ReadingHistoryManager {
         NSLog("[ReadingHistory] Saved: %@ page %d viewMode %@ offset %d rtl %d", pending.filename, pending.lastPageNumber, pending.viewMode, pending.spreadPairOffset, pending.isRightToLeftReading ?? false)
     }
 
-    /// ZIPファイルの前回読書位置を取得
+    /// アーカイブ/フォルダの前回読書位置を取得
     func loadReadingPosition(filename: String) -> (page: Int, viewMode: String, spreadPairOffset: Int, isRightToLeftReading: Bool?)? {
         guard isEnabled else { return nil }
 

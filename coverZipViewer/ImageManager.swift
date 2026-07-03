@@ -27,7 +27,7 @@ protocol ThumbnailImageProviding: AnyObject {
 
 /**
  * プレビュー用の画像管理クラス
- * ZIPファイル内の画像リストを管理し、ページング機能を提供する
+ * アーカイブ内の画像リストを管理し、ページング機能を提供する
  */
 class ImageManager: ThumbnailImageProviding {
 
@@ -176,9 +176,9 @@ class ImageManager: ThumbnailImageProviding {
     }
 
     /**
-     * ZIPファイルまたはフォルダから画像を読み込む（遅延ロード方式）
+     * アーカイブファイルまたはフォルダから画像を読み込む（遅延ロード方式）
      *
-     * @param url ZIPファイルまたはフォルダのURL
+     * @param url アーカイブファイルまたはフォルダのURL
      * @return 読み込み成功時はtrue、失敗時はfalse
      */
     func loadImages(from url: URL) -> Bool {
@@ -193,6 +193,13 @@ class ImageManager: ThumbnailImageProviding {
             guard !entries.isEmpty else { return false }
             newSource = FolderImageEntrySource(entries: entries)
             NSLog("[ImageManager] Loaded %d images from folder (lazy mode)", entries.count)
+        } else if CZArchiveKind.detect(at: url) == .rar {
+            os_signpost(.begin, log: performanceLog, name: "rarParse")
+            let entryInfos = CZRar.imageEntryInfoList(from: url)
+            os_signpost(.end, log: performanceLog, name: "rarParse")
+            guard !entryInfos.isEmpty else { return false }
+            newSource = RarImageEntrySource(fileURL: url, entries: entryInfos)
+            NSLog("[ImageManager] Loaded %d images from RAR (lazy mode)", entryInfos.count)
         } else {
             do {
                 let data = try Data(contentsOf: url, options: [.mappedIfSafe])
@@ -203,7 +210,7 @@ class ImageManager: ThumbnailImageProviding {
                 newSource = ZipImageEntrySource(zipData: data, entries: entryInfos)
                 NSLog("[ImageManager] Loaded %d images from ZIP (lazy mode)", entryInfos.count)
             } catch {
-                NSLog("[ImageManager] Failed to load ZIP: %@", String(describing: error))
+                NSLog("[ImageManager] Failed to load archive as ZIP: %@", String(describing: error))
                 return false
             }
         }

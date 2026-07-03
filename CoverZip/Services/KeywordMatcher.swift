@@ -29,9 +29,9 @@ struct KeywordMatchResult {
  */
 class KeywordMatcher {
     /**
-     * ZIPファイルURLに対してキーワードマッチングを実行
+     * アーカイブファイルURLに対してキーワードマッチングを実行
      *
-     * @param zipFileURL チェック対象のZIPファイルURL
+     * @param zipFileURL チェック対象のアーカイブファイルURL
      * @param settings ルーティング設定
      * @return マッチング結果
      */
@@ -53,7 +53,7 @@ class KeywordMatcher {
     static func checkKeyword(for fileName: String, folderComponents: [String], fileExtension: String, using settings: KeywordSettings) -> KeywordMatchResult {
         #if DEBUG
         let folderDesc = folderComponents.joined(separator: "/")
-        NSLog("ZIPファイルマッチング開始: ファイル名='\(fileName)', フォルダ='\(folderDesc)', 拡張子='\(fileExtension)'")
+        NSLog("アーカイブファイルマッチング開始: ファイル名='\(fileName)', フォルダ='\(folderDesc)', 拡張子='\(fileExtension)'")
         #endif
 
         for rule in settings.rules {

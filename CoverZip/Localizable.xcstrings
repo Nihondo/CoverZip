@@ -14,13 +14,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Select an application to open ZIP files"
+            "value" : "Select an application to open archive files"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ZIPファイルを開くアプリケーションを選択してください"
+            "value" : "アーカイブファイルを開くアプリケーションを選択してください"
           }
         }
       }
@@ -609,13 +609,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Failed to change ZIP file association: %@ [%@:%d] (%@)"
+            "value" : "Failed to change archive file association: %@ [%@:%d] (%@)"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ZIP関連付けの変更に失敗しました: %@ [%@:%d] (%@)"
+            "value" : "アーカイブ関連付けの変更に失敗しました: %@ [%@:%d] (%@)"
           }
         }
       }
@@ -626,13 +626,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Failed to change ZIP file association (%@)"
+            "value" : "Failed to change archive file association (%@)"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ZIP関連付けの変更に失敗しました (%@)"
+            "value" : "アーカイブ関連付けの変更に失敗しました (%@)"
           }
         }
       }
@@ -756,19 +756,53 @@
         }
       }
     },
+    "routing.association.family.rar" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RAR/CBR"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RAR/CBR"
+          }
+        }
+      }
+    },
+    "routing.association.family.zip" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ZIP/CBZ"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ZIP/CBZ"
+          }
+        }
+      }
+    },
     "routing.association.section" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ZIP File Association"
+            "value" : "Archive File Association"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ZIPファイルの関連付け"
+            "value" : "アーカイブファイルの関連付け"
           }
         }
       }
@@ -790,6 +824,23 @@
         }
       }
     },
+    "routing.association.status.is_default_format" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CoverZip is the default app for %@ files"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CoverZipが%@ファイルのデフォルトアプリです"
+          }
+        }
+      }
+    },
     "routing.association.status.is_not_default" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -803,6 +854,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "CoverZipはZIPファイルのデフォルトアプリではありません"
+          }
+        }
+      }
+    },
+    "routing.association.status.is_not_default_format" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CoverZip is not the default app for %@ files"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CoverZipは%@ファイルのデフォルトアプリではありません"
           }
         }
       }

@@ -17,7 +17,7 @@ protocol ImageEntrySource {
     func imageData(at index: Int) -> Data?
 }
 
-/// ZIPアーカイブを画像データソースとして扱う
+/// ZIPアーカイブを画像データソースとして扱う。
 struct ZipImageEntrySource: ImageEntrySource {
     let zipData: Data
     let entries: [CZImageEntryInfo]
@@ -31,7 +31,21 @@ struct ZipImageEntrySource: ImageEntrySource {
     }
 }
 
-/// フォルダ（サブフォルダ再帰含む）を画像データソースとして扱う
+/// RARアーカイブを画像データソースとして扱う。
+struct RarImageEntrySource: ImageEntrySource {
+    let fileURL: URL
+    let entries: [CZRarImageEntryInfo]
+
+    var count: Int { entries.count }
+
+    func filename(at index: Int) -> String { entries[index].filename }
+
+    func imageData(at index: Int) -> Data? {
+        CZRar.extractImageData(from: fileURL, entryInfo: entries[index])
+    }
+}
+
+/// フォルダ（サブフォルダ再帰含む）を画像データソースとして扱う。
 struct FolderImageEntrySource: ImageEntrySource {
     let entries: [CZFolderImageEntry]
 

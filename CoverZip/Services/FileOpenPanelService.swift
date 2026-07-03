@@ -2,7 +2,7 @@
 //  FileOpenPanelService.swift
 //  CoverZip
 //
-//  NSOpenPanel から ZIP を選んで起動ルーティングを行う
+//  NSOpenPanel からアーカイブを選んで起動ルーティングを行う
 //
 
 import AppKit
@@ -38,9 +38,9 @@ enum FileOpenPanelService {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         if #available(macOS 12.0, *) {
-            panel.allowedContentTypes = [UTType.zip]
+            panel.allowedContentTypes = CZArchiveKind.supportedFileExtensions.compactMap { UTType(filenameExtension: $0) }
         } else {
-            panel.allowedFileTypes = ["zip"]
+            panel.allowedFileTypes = CZArchiveKind.supportedFileExtensions
         }
         panel.level = .modalPanel
         return panel
@@ -48,7 +48,7 @@ enum FileOpenPanelService {
 
     /// 内蔵ビューアで開く
     private static func openZipInInternalViewer(at url: URL) {
-        guard url.pathExtension.lowercased() == "zip" else { return }
+        guard CZArchiveKind.kind(forExtensionOf: url) != nil else { return }
         InternalViewer.shared.show(url: url)
     }
 

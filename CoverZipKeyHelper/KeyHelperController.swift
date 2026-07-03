@@ -622,7 +622,10 @@ final class KeyHelperController: NSObject {
 
         let normalizedTitle = windowName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalizedTitle.isEmpty else { return false }
-        return normalizedTitle.hasSuffix(".zip") || normalizedTitle.contains(".zip ")
+        let archiveExtensions = [".zip", ".cbz", ".rar", ".cbr"]
+        return archiveExtensions.contains { ext in
+            normalizedTitle.hasSuffix(ext) || normalizedTitle.contains("\(ext) ")
+        }
     }
 
     private func handleKeyEvent(_ event: CGEvent) -> Unmanaged<CGEvent>? {

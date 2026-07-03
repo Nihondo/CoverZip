@@ -2,7 +2,7 @@
 //  ZipRoutingService.swift
 //  CoverZip
 //
-//  ZIPルーティング判定と実行を統合するサービス
+//  アーカイブルーティング判定と実行を統合するサービス
 //
 
 import AppKit
@@ -14,18 +14,18 @@ enum RouteInvocationContext {
 }
 
 enum RouteDecision {
-    case openInternalViewer(zipURL: URL)
-    case openExternalApp(zipURL: URL, applicationName: String)
-    case openDefaultApp(zipURL: URL)
+    case openInternalViewer(archiveURL: URL)
+    case openExternalApp(archiveURL: URL, applicationName: String)
+    case openDefaultApp(archiveURL: URL)
     case ignore
 }
 
 enum ZipRoutingService {
 
-    /// ZIP 1件に対する「判定フェーズ」。
+    /// アーカイブ 1件に対する「判定フェーズ」。
     /// - Note: ここでは起動は行わず、あくまで `RouteDecision` を返すだけにして
     ///   判定と実行を分離することで、呼び出し元（App起動/ファイルパネル）ごとの差分を最小化している。
-    static func route(zipURL: URL, invocationContext: RouteInvocationContext) -> RouteDecision {
+    static func route(zipURL archiveURL: URL, invocationContext: RouteInvocationContext) -> RouteDecision {
         let contextLabel: String
         switch invocationContext {
         case .appLaunch:
@@ -33,35 +33,35 @@ enum ZipRoutingService {
         case .openPanelRouting:
             contextLabel = "openPanelRouting"
         }
-        let resourceValues = try? zipURL.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+        let resourceValues = try? archiveURL.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
         if resourceValues?.isDirectory == true, resourceValues?.isPackage != true {
-            NSLog("フォルダを内蔵ビューアで表示 [%@]: %@", contextLabel, zipURL.lastPathComponent)
-            return .openInternalViewer(zipURL: zipURL)
+            NSLog("フォルダを内蔵ビューアで表示 [%@]: %@", contextLabel, archiveURL.lastPathComponent)
+            return .openInternalViewer(archiveURL: archiveURL)
         }
 
-        guard zipURL.pathExtension.lowercased() == "zip" else {
-            NSLog("対応対象ではありません: %@", zipURL.lastPathComponent)
+        guard CZArchiveKind.kind(forExtensionOf: archiveURL) != nil else {
+            NSLog("対応対象ではありません: %@", archiveURL.lastPathComponent)
             return .ignore
         }
 
-        NSLog("ZIPファイルを処理開始 [%@]: %@", contextLabel, zipURL.lastPathComponent)
+        NSLog("アーカイブファイルを処理開始 [%@]: %@", contextLabel, archiveURL.lastPathComponent)
 
         let settings = KeywordSettings.load()
         // 先勝ちマッチング: 上から評価し、最初に一致したルールの application を採用する。
-        let matchResult = KeywordMatcher.checkKeyword(for: zipURL, using: settings)
+        let matchResult = KeywordMatcher.checkKeyword(for: archiveURL, using: settings)
 
         guard let applicationName = matchResult.matchedApplication, !applicationName.isEmpty else {
             NSLog("デフォルトアプリケーション起動")
-            return .openDefaultApp(zipURL: zipURL)
+            return .openDefaultApp(archiveURL: archiveURL)
         }
 
         if applicationName.lowercased() == "internal" {
             NSLog("内蔵ビューアで表示: internal")
-            return .openInternalViewer(zipURL: zipURL)
+            return .openInternalViewer(archiveURL: archiveURL)
         }
 
         NSLog("外部アプリケーション起動: %@", applicationName)
-        return .openExternalApp(zipURL: zipURL, applicationName: applicationName)
+        return .openExternalApp(archiveURL: archiveURL, applicationName: applicationName)
     }
 
     /// `RouteDecision` を実行するフェーズ。
@@ -69,14 +69,14 @@ enum ZipRoutingService {
     @discardableResult
     static func handle(_ decision: RouteDecision) -> Bool {
         switch decision {
-        case .openInternalViewer(let zipURL):
-            InternalViewer.shared.show(url: zipURL)
+        case .openInternalViewer(let archiveURL):
+            InternalViewer.shared.show(url: archiveURL)
             return true
-        case .openExternalApp(let zipURL, let applicationName):
-            _ = AppLauncher.launchApplication(with: zipURL, applicationName: applicationName)
+        case .openExternalApp(let archiveURL, let applicationName):
+            _ = AppLauncher.launchApplication(with: archiveURL, applicationName: applicationName)
             return true
-        case .openDefaultApp(let zipURL):
-            _ = AppLauncher.launchWithDefaultApplication(zipFileURL: zipURL)
+        case .openDefaultApp(let archiveURL):
+            _ = AppLauncher.launchWithDefaultApplication(zipFileURL: archiveURL)
             return true
         case .ignore:
             return false

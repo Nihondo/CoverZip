@@ -28,17 +28,9 @@ public struct CZImageEntryInfo {
     public let entry: CZZipEntry
 }
 
-/// ZIP から先頭画像を選ぶ際の方針オプション。
-public struct CZFirstImageOptions: OptionSet {
-    public let rawValue: Int
-    public init(rawValue: Int) { self.rawValue = rawValue }
-    /// ゼロ埋めの「1」トークン（例: 01, 001, image001）を含む名前を優先し、見つけた時点で早期確定する。
-    public static let preferZeroPaddedOne = CZFirstImageOptions(rawValue: 1 << 0)
-    /// 表紙らしい名前（例: "cover" / "front" / "表紙" / 先頭 00・000・0000）を優先する。
-    public static let preferCoverLike = CZFirstImageOptions(rawValue: 1 << 1)
-}
-
 public enum CZZip {
+    public typealias FirstImageThumbnailResult = CZFirstImageThumbnailResult
+
     /// ファイル名（lastPathComponent）の自然順でエントリをソートする。
     /// 比較のたびに再トークン化しないよう、ソートキーを事前計算するSchwartzian transform。
     private static func sortedByNaturalFilename(_ entries: [CZZipEntry]) -> [CZZipEntry] {
@@ -118,24 +110,8 @@ public enum CZZip {
         guard let cdOffset = findCentralDirectoryOffset(in: data) else { return nil }
         let entries = parseCentralDirectory(data: data, offset: cdOffset)
         let imageEntries = entries.filter { ImageFileFilter.isImagePath($0.filename) }
-
-        // 1) まず表紙らしい名前を優先（例: "cover" / "front" / "表紙" / 先頭 00・000・0000）
-        if options.contains(.preferCoverLike) {
-            if let best = bestCoverLikeEntry(from: imageEntries) {
-                return extractFileData(data: data, entry: best)
-            }
-        }
-
-        // 2) 次にゼロ埋め "1" を優先（例: 01, 001, image001）
-        if options.contains(.preferZeroPaddedOne), let cand = imageEntries.first(where: { isZeroPaddedOneFilename($0.filename) }) {
-            return extractFileData(data: data, entry: cand)
-        }
-
-        // 3) フォールバック: NaturalSort による 1 パス最小値探索（全体ソートなし）
-        if let entry = firstImageEntryByNaturalOrderLinear(entries: imageEntries) {
-            return extractFileData(data: data, entry: entry)
-        }
-        return nil
+        guard let index = CZCoverSelector.selectIndex(filenames: imageEntries.map(\.filename), options: options) else { return nil }
+        return extractFileData(data: data, entry: imageEntries[index])
     }
 
     /// オプションフラグで先頭画像エントリ（ファイル名 + データ）を読み込む。
@@ -150,31 +126,13 @@ public enum CZZip {
         let entries = parseCentralDirectory(data: data, offset: cdOffset)
         let images = entries.filter { ImageFileFilter.isImagePath($0.filename) }
 
-        // オプションに応じて候補エントリを選択（表紙らしさ > ゼロ埋め "1" の順）
-        var candidate: CZZipEntry?
-        if options.contains(.preferCoverLike) {
-            candidate = bestCoverLikeEntry(from: images)
-        }
-        if candidate == nil, options.contains(.preferZeroPaddedOne) {
-            candidate = images.first(where: { isZeroPaddedOneFilename($0.filename) })
-        }
-        if candidate == nil {
-            candidate = firstImageEntryByNaturalOrderLinear(entries: images)
-        }
-        guard let entry = candidate, let dataOut = extractFileData(data: data, entry: entry) else { return nil }
+        guard let index = CZCoverSelector.selectIndex(filenames: images.map(\.filename), options: options),
+              let dataOut = extractFileData(data: data, entry: images[index]) else { return nil }
+        let entry = images[index]
         return CZImageEntry(filename: entry.filename, imageData: dataOut)
     }
 
     // MARK: - ストリーミングサムネイル生成（部分展開 + ImageIO インクリメンタル）
-
-    /// `firstImageThumbnail` の結果。サムネイル生成に失敗した場合でも、
-    /// 既に抽出済みの画像データ（`.rawData`）を返すことで、呼び出し側が
-    /// ZIPの再読込・CD再パース・表紙再選定を行わずにフォールバックできるようにする。
-    public enum FirstImageThumbnailResult {
-        case thumbnail(CGImage)
-        case rawData(Data)
-        case none
-    }
 
     /// 圧縮時はストリーミング展開を使って先頭画像のサムネイル CGImage を生成する。
     /// 大きな画像でも全展開を避けるため、段階的デコードを試み、サムネイル取得時点で処理を打ち切る。
@@ -189,14 +147,8 @@ public enum CZZip {
         let images = entries.filter { ImageFileFilter.isImagePath($0.filename) }
         guard !images.isEmpty else { return .none }
 
-        // 候補エントリを選択（表紙らしさ優先）
-        var candidate: CZZipEntry? = nil
-        if options.contains(.preferCoverLike) { candidate = bestCoverLikeEntry(from: images) }
-        if candidate == nil, options.contains(.preferZeroPaddedOne) {
-            candidate = images.first(where: { isZeroPaddedOneFilename($0.filename) })
-        }
-        if candidate == nil { candidate = firstImageEntryByNaturalOrderLinear(entries: images) }
-        guard let entry = candidate else { return .none }
+        guard let index = CZCoverSelector.selectIndex(filenames: images.map(\.filename), options: options) else { return .none }
+        let entry = images[index]
 
         if let cgImage = createThumbnail(for: entry, in: data, maxPixel: maxPixel) {
             return .thumbnail(cgImage)
@@ -215,13 +167,13 @@ public enum CZZip {
             let payload = UnsafeRawBufferPointer(rebasing: buf[info.fileDataOffset..<(info.fileDataOffset + info.compressedSize)])
             if info.method == 0 {
                 let compData = Data(bytes: payload.baseAddress!, count: payload.count)
-                return thumbnailFromImageData(compData as CFData, maxPixel: maxPixel, isFinal: true)
+                return CZCoverSelector.thumbnail(fromImageData: compData, maxPixel: maxPixel)
             }
             if info.method == 8 {
                 let decompressed = inflateDataOneShot(payload, expectedSize: entry.uncompressedSize)
                     ?? inflateData(Data(bytes: payload.baseAddress!, count: payload.count))
                 guard let decompressed else { return nil }
-                return thumbnailFromImageData(decompressed as CFData, maxPixel: maxPixel, isFinal: true)
+                return CZCoverSelector.thumbnail(fromImageData: decompressed, maxPixel: maxPixel)
             }
             return nil
         }
@@ -245,36 +197,15 @@ public enum CZZip {
         }
     }
 
-    private static func thumbnailFromImageData(_ imgData: CFData, maxPixel: Int, isFinal: Bool) -> CGImage? {
-        guard let src = CGImageSourceCreateWithData(imgData, nil) else { return nil }
-        let opts: CFDictionary = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixel),
-            kCGImageSourceShouldCache: false
-        ] as CFDictionary
-        if let th = CGImageSourceCreateThumbnailAtIndex(src, 0, opts) { return th }
-        // 部分データ利用のためインクリメンタルソースも試す
-        let inc1 = CGImageSourceCreateIncremental(nil)
-        CGImageSourceUpdateData(inc1, imgData, isFinal)
-        return CGImageSourceCreateThumbnailAtIndex(inc1, 0, opts)
-    }
-
     /// 生 ZIP データから早期選択ルール付きで先頭画像データを読み込む。
     public static func firstImageData(from data: Data, isZeroPaddedFirstPreferred: Bool) -> Data? {
         guard let cdOffset = findCentralDirectoryOffset(in: data) else { return nil }
         let entries = parseCentralDirectory(data: data, offset: cdOffset)
         let imageEntries = entries.filter { ImageFileFilter.isImagePath($0.filename) }
 
-        if isZeroPaddedFirstPreferred, let candidate = imageEntries.first(where: { isZeroPaddedOneFilename($0.filename) }) {
-            return extractFileData(data: data, entry: candidate)
-        }
-
-        // フォールバック: ファイル名だけ自然順で先頭を決め、その1件だけ展開する。
-        if let entry = firstImageEntryByNaturalOrderLinear(entries: imageEntries) {
-            return extractFileData(data: data, entry: entry)
-        }
-        return nil
+        let options: CZFirstImageOptions = isZeroPaddedFirstPreferred ? [.preferZeroPaddedOne] : []
+        guard let index = CZCoverSelector.selectIndex(filenames: imageEntries.map(\.filename), options: options) else { return nil }
+        return extractFileData(data: data, entry: imageEntries[index])
     }
 
     // MARK: - 低レベル ZIP ヘルパー
@@ -466,91 +397,4 @@ public enum CZZip {
         }
     }
 
-    /// lastPathComponent を NaturalSort で比較し、ソート配列を作らずに先頭エントリを返す。
-    private static func firstImageEntryByNaturalOrderLinear(entries: [CZZipEntry]) -> CZZipEntry? {
-        guard var best = entries.first else { return nil }
-        var bestKey = NaturalSort.NaturalSortKey((best.filename as NSString).lastPathComponent)
-        for e in entries.dropFirst() {
-            let key = NaturalSort.NaturalSortKey((e.filename as NSString).lastPathComponent)
-            if key < bestKey {
-                best = e
-                bestKey = key
-            }
-        }
-        return best
-    }
-
-    /// "01" の前に 0 が1つ以上あるかを判定する正規表現（呼び出しごとの再コンパイルを避けるため静的に保持）。
-    private static let zeroPaddedOneRegex = try? NSRegularExpression(pattern: "(?:^|\\D)0+1(?:\\D|$)")
-    /// 先頭ゼロ群（00/000/0000 など）を検出する正規表現（呼び出しごとの再コンパイルを避けるため静的に保持）。
-    private static let leadingZerosRegex = try? NSRegularExpression(pattern: "(?:^|\\D)0{2,}(?:\\D|$)")
-
-    /// "01.jpg" / "001.png" / "0001.tif" や "image001.jpg" のような
-    /// 「先頭候補」ファイル名を検出する。
-    /// 拡張子を除いたベース名に対し、
-    /// 「1つ以上の 0 の後ろに単独の 1」があり、前後が非数字または文字列境界で区切られる場合に true。
-    /// 例: "01" / "001" / "001-cover" / "image001" は true、"1" / "011" / "0012" は false。
-    private static func isZeroPaddedOneFilename(_ path: String) -> Bool {
-        let last = (path as NSString).lastPathComponent
-        let base = (last as NSString).deletingPathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
-        // 正規表現: (?:^|\D)0+1(?:\D|$)
-        // "1" の前に 0 が1つ以上あり、かつ "1" の後ろが非数字または末尾であること。
-        // さらに、0 群の前も非数字または先頭に限定し、長い数字列の途中一致を避ける。
-        guard let re = zeroPaddedOneRegex else {
-            // フォールバック: 正規表現が使えない場合の簡易判定
-            return base.contains("001") || base.contains("01")
-        }
-        let range = NSRange(location: 0, length: (base as NSString).length)
-        return re.firstMatch(in: base, options: [], range: range) != nil
-    }
-
-    // MARK: - 表紙らしさスコア
-    /// 単純なスコアリングで最も表紙らしいエントリを選ぶ。
-    /// 同点の場合は自然順で最小のものを採用する。
-    private static func bestCoverLikeEntry(from entries: [CZZipEntry]) -> CZZipEntry? {
-        var best: CZZipEntry? = nil
-        var bestScore = 0
-        for e in entries {
-            let s = coverLikeScore(for: e.filename)
-            if s > 0 {
-                if best == nil || s > bestScore || (s == bestScore && NaturalSort.lessFilename((e.filename as NSString).lastPathComponent,
-                                                                                               (best!.filename as NSString).lastPathComponent)) {
-                    best = e
-                    bestScore = s
-                }
-            }
-        }
-        return best
-    }
-
-    /// 表紙らしいファイル名にスコアを付ける。
-    /// 例: "cover" / "front" / "表紙" を含む、
-    /// またはベース名が複数ゼロ（例: "00", "000", "0000", "000-cover"）を持つ場合に加点。
-    /// 手掛かりが強いほど高得点になる。
-    private static func coverLikeScore(for path: String) -> Int {
-        let last = (path as NSString).lastPathComponent
-        let base = (last as NSString).deletingPathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
-        let lower = base.lowercased()
-        var score = 0
-
-        // 強いキーワード
-        if lower.contains("cover") { score += 100 }
-        if lower.contains("front") { score += 80 }
-        if base.contains("表紙") { score += 100 }
-
-        // 先頭ゼロ群（00/000/0000 など）を検出（0012 のようなページ番号は除外）
-        // (?:^|\D)0{2,}(?:\D|$) : トークン境界で 2 個以上の 0、後続は非数字または末尾
-        // "000" / "image_000" / "p-000" は一致、"0001" / "page0001" は不一致
-        if let re = leadingZerosRegex {
-            let range = NSRange(location: 0, length: (base as NSString).length)
-            if re.firstMatch(in: base, options: [], range: range) != nil { score += 60 }
-        } else if lower.hasPrefix("00") || lower.contains("_00") || lower.contains("-00") {
-            score += 60
-        }
-
-        // ゼロ埋め "1" の手掛かりも弱い表紙シグナルとして再利用（001 を表紙にするアーカイブが多いため）
-        if isZeroPaddedOneFilename(path) { score += 50 }
-
-        return score
-    }
 }

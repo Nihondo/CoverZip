@@ -8,6 +8,7 @@
 import SwiftUI
 import AppKit
 import CoreServices
+import UniformTypeIdentifiers
 
 private enum ColumnWidth {
     static let dragHandle: CGFloat = 20
@@ -37,15 +38,70 @@ private struct RoutingTableRow: Identifiable, Hashable {
     }
 }
 
+private struct ArchiveAssociationFamily: Identifiable {
+    let id: String
+    let titleKey: String
+    let titleDefaultValue: String
+    let extensions: [String]
+    let legacyContentTypeIdentifiers: [String]
+
+    var title: String {
+        CZLocalized.string(titleKey, defaultValue: titleDefaultValue)
+    }
+
+    @available(macOS 12.0, *)
+    var contentTypes: [UTType] {
+        extensions.compactMap { UTType(filenameExtension: $0) }
+    }
+
+    var contentTypeIdentifiers: [String] {
+        var seen = Set<String>()
+        var identifiers: [String] = []
+        for identifier in legacyContentTypeIdentifiers where !seen.contains(identifier) {
+            seen.insert(identifier)
+            identifiers.append(identifier)
+        }
+        for ext in extensions {
+            guard let identifier = UTType(filenameExtension: ext)?.identifier, !seen.contains(identifier) else { continue }
+            seen.insert(identifier)
+            identifiers.append(identifier)
+        }
+        return identifiers
+    }
+
+    static let all: [ArchiveAssociationFamily] = [
+        ArchiveAssociationFamily(
+            id: "zip",
+            titleKey: "routing.association.family.zip",
+            titleDefaultValue: "ZIP/CBZ",
+            extensions: ["zip", "cbz"],
+            legacyContentTypeIdentifiers: [
+                "public.zip-archive",
+                "com.pkware.zip-archive",
+                "com.dmng.coverzip.cbz-archive"
+            ]
+        ),
+        ArchiveAssociationFamily(
+            id: "rar",
+            titleKey: "routing.association.family.rar",
+            titleDefaultValue: "RAR/CBR",
+            extensions: ["rar", "cbr"],
+            legacyContentTypeIdentifiers: [
+                "com.rarlab.rar-archive",
+                "com.dmng.coverzip.cbr-archive"
+            ]
+        )
+    ]
+}
+
 struct RoutingSettingsView: View {
-    private let zipContentTypeIdentifiers = ["public.zip-archive", "com.pkware.zip-archive"]
     private let archiveUtilityBundleIdentifier = "com.apple.archiveutility"
 
     @State private var settings: KeywordSettings = KeywordSettings.load()
     @State private var showingAlert = false
     @State private var alertMessage = ""
-    @State private var isDefaultHandler = false
-    @State private var currentDefaultAppName = ""
+    @State private var isDefaultHandlerByFamily: [String: Bool] = [:]
+    @State private var currentDefaultAppNameByFamily: [String: String] = [:]
 
     private var usedApplications: [String] {
         var seen = Set<String>()
@@ -84,37 +140,49 @@ struct RoutingSettingsView: View {
 
     private var fileAssociationSection: some View {
         Section {
-            LabeledContent {
-                Button(
-                    isDefaultHandler
-                    ? CZLocalized.string("routing.association.action.unset_default", defaultValue: "Unset Default")
-                    : CZLocalized.string("routing.association.action.set_default", defaultValue: "Set as Default")
-                ) {
-                    toggleDefaultHandler()
-                }
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(
+            ForEach(ArchiveAssociationFamily.all) { family in
+                let isDefaultHandler = isDefaultHandlerByFamily[family.id] ?? false
+                let currentDefaultAppName = currentDefaultAppNameByFamily[family.id] ?? ""
+                LabeledContent {
+                    Button(
                         isDefaultHandler
-                        ? CZLocalized.string("routing.association.status.is_default", defaultValue: "CoverZip is the default app for ZIP files")
-                        : CZLocalized.string("routing.association.status.is_not_default", defaultValue: "CoverZip is not the default app for ZIP files")
-                    )
-
-                    if !currentDefaultAppName.isEmpty && !isDefaultHandler {
+                        ? CZLocalized.string("routing.association.action.unset_default", defaultValue: "Unset Default")
+                        : CZLocalized.string("routing.association.action.set_default", defaultValue: "Set as Default")
+                    ) {
+                        toggleDefaultHandler(for: family)
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(
-                            CZLocalized.formatted(
-                                "routing.association.current_default_format",
-                                defaultValue: "Current default: %@",
-                                currentDefaultAppName
+                            isDefaultHandler
+                            ? CZLocalized.formatted(
+                                "routing.association.status.is_default_format",
+                                defaultValue: "CoverZip is the default app for %@ files",
+                                family.title
+                            )
+                            : CZLocalized.formatted(
+                                "routing.association.status.is_not_default_format",
+                                defaultValue: "CoverZip is not the default app for %@ files",
+                                family.title
                             )
                         )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+
+                        if !currentDefaultAppName.isEmpty && !isDefaultHandler {
+                            Text(
+                                CZLocalized.formatted(
+                                    "routing.association.current_default_format",
+                                    defaultValue: "Current default: %@",
+                                    currentDefaultAppName
+                                )
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
         } header: {
-            Label(CZLocalized.string("routing.association.section", defaultValue: "ZIP File Association"), systemImage: "link")
+            Label(CZLocalized.string("routing.association.section", defaultValue: "Archive File Association"), systemImage: "link")
         }
     }
 
@@ -334,25 +402,34 @@ struct RoutingSettingsView: View {
 
     private func refreshDefaultHandlerStatus() {
         guard let bundleID = Bundle.main.bundleIdentifier else { return }
-        if #available(macOS 12.0, *), let appURL = NSWorkspace.shared.urlForApplication(toOpen: .zip),
-           let handlerID = Bundle(url: appURL)?.bundleIdentifier {
-            updateDefaultHandlerState(handlerID: handlerID, bundleID: bundleID)
-            return
+        for family in ArchiveAssociationFamily.all {
+            refreshDefaultHandlerStatus(for: family, bundleID: bundleID)
         }
-
-        for contentTypeIdentifier in zipContentTypeIdentifiers {
-            guard let result = LSCopyDefaultRoleHandlerForContentType(contentTypeIdentifier as CFString, .viewer) else { continue }
-            let handlerID = result.takeRetainedValue() as String
-            updateDefaultHandlerState(handlerID: handlerID, bundleID: bundleID)
-            return
-        }
-
-        isDefaultHandler = false
-        currentDefaultAppName = ""
     }
 
-    private func toggleDefaultHandler() {
-        if isDefaultHandler {
+    private func refreshDefaultHandlerStatus(for family: ArchiveAssociationFamily, bundleID: String) {
+        if #available(macOS 12.0, *) {
+            for contentType in family.contentTypes {
+                guard let appURL = NSWorkspace.shared.urlForApplication(toOpen: contentType),
+                      let handlerID = Bundle(url: appURL)?.bundleIdentifier else { continue }
+                updateDefaultHandlerState(for: family, handlerID: handlerID, bundleID: bundleID)
+                return
+            }
+        }
+
+        for contentTypeIdentifier in family.contentTypeIdentifiers {
+            guard let result = LSCopyDefaultRoleHandlerForContentType(contentTypeIdentifier as CFString, .viewer) else { continue }
+            let handlerID = result.takeRetainedValue() as String
+            updateDefaultHandlerState(for: family, handlerID: handlerID, bundleID: bundleID)
+            return
+        }
+
+        isDefaultHandlerByFamily[family.id] = false
+        currentDefaultAppNameByFamily[family.id] = ""
+    }
+
+    private func toggleDefaultHandler(for family: ArchiveAssociationFamily) {
+        if isDefaultHandlerByFamily[family.id] ?? false {
             guard let archiveUtilityURL = resolveArchiveUtilityURL() else {
                 alertMessage = CZLocalized.string(
                     "routing.alert.archive_utility_not_found",
@@ -361,13 +438,13 @@ struct RoutingSettingsView: View {
                 showingAlert = true
                 return
             }
-            setDefaultHandler(to: archiveUtilityURL)
+            setDefaultHandler(to: archiveUtilityURL, for: family)
         } else {
-            setDefaultHandler(to: Bundle.main.bundleURL)
+            setDefaultHandler(to: Bundle.main.bundleURL, for: family)
         }
     }
 
-    private func setDefaultHandler(to appURL: URL) {
+    private func setDefaultHandler(to appURL: URL, for family: ArchiveAssociationFamily) {
         guard let bundleID = Bundle(url: appURL)?.bundleIdentifier else {
             alertMessage = CZLocalized.string(
                 "routing.alert.bundle_id_failed",
@@ -379,30 +456,16 @@ struct RoutingSettingsView: View {
 
         LSRegisterURL(appURL as CFURL, true)
 
-        if #available(macOS 12.0, *) {
-            NSWorkspace.shared.setDefaultApplication(at: appURL, toOpen: .zip) { error in
-                DispatchQueue.main.async {
-                    if let error {
-                        let fallbackResult = self.applyLaunchServicesDefaultHandler(bundleID: bundleID)
-                        if !fallbackResult.isSuccess {
-                            self.alertMessage = self.makeDefaultHandlerErrorMessage(
-                                error: error as NSError,
-                                statusDetails: fallbackResult.statusDetails
-                            )
-                            self.showingAlert = true
-                        }
-                    }
-                    self.refreshDefaultHandlerStatus()
-                }
-            }
+        if #available(macOS 12.0, *), !family.contentTypes.isEmpty {
+            setDefaultHandlerWithWorkspace(to: appURL, bundleID: bundleID, for: family)
             return
         }
 
-        let fallbackResult = applyLaunchServicesDefaultHandler(bundleID: bundleID)
+        let fallbackResult = applyLaunchServicesDefaultHandler(bundleID: bundleID, for: family)
         if !fallbackResult.isSuccess {
             alertMessage = CZLocalized.formatted(
                 "routing.alert.ls_change_failed_status_format",
-                defaultValue: "Failed to change ZIP file association (%@)",
+                defaultValue: "Failed to change archive file association (%@)",
                 fallbackResult.statusDetails.joined(separator: ", ")
             )
             showingAlert = true
@@ -412,10 +475,40 @@ struct RoutingSettingsView: View {
         }
     }
 
-    private func applyLaunchServicesDefaultHandler(bundleID: String) -> (isSuccess: Bool, statusDetails: [String]) {
+    @available(macOS 12.0, *)
+    private func setDefaultHandlerWithWorkspace(to appURL: URL, bundleID: String, for family: ArchiveAssociationFamily) {
+        var remaining = family.contentTypes.count
+        var firstError: NSError?
+
+        for contentType in family.contentTypes {
+            NSWorkspace.shared.setDefaultApplication(at: appURL, toOpen: contentType) { error in
+                DispatchQueue.main.async {
+                    if let error, firstError == nil {
+                        firstError = error as NSError
+                    }
+                    remaining -= 1
+                    guard remaining == 0 else { return }
+
+                    if let firstError {
+                        let fallbackResult = self.applyLaunchServicesDefaultHandler(bundleID: bundleID, for: family)
+                        if !fallbackResult.isSuccess {
+                            self.alertMessage = self.makeDefaultHandlerErrorMessage(
+                                error: firstError,
+                                statusDetails: fallbackResult.statusDetails
+                            )
+                            self.showingAlert = true
+                        }
+                    }
+                    self.refreshDefaultHandlerStatus()
+                }
+            }
+        }
+    }
+
+    private func applyLaunchServicesDefaultHandler(bundleID: String, for family: ArchiveAssociationFamily) -> (isSuccess: Bool, statusDetails: [String]) {
         var hasSuccess = false
         var statusDetails: [String] = []
-        for contentTypeIdentifier in zipContentTypeIdentifiers {
+        for contentTypeIdentifier in family.contentTypeIdentifiers {
             let viewerStatus = LSSetDefaultRoleHandlerForContentType(contentTypeIdentifier as CFString, .viewer, bundleID as CFString)
             let allRolesStatus = LSSetDefaultRoleHandlerForContentType(contentTypeIdentifier as CFString, .all, bundleID as CFString)
             statusDetails.append("\(contentTypeIdentifier)(viewer=\(viewerStatus),all=\(allRolesStatus))")
@@ -430,7 +523,7 @@ struct RoutingSettingsView: View {
         let statusText = statusDetails.joined(separator: ", ")
         return CZLocalized.formatted(
             "routing.alert.ls_change_failed_detail_format",
-            defaultValue: "Failed to change ZIP file association: %@ [%@:%d] (%@)",
+            defaultValue: "Failed to change archive file association: %@ [%@:%d] (%@)",
             error.localizedDescription,
             error.domain,
             error.code,
@@ -438,17 +531,18 @@ struct RoutingSettingsView: View {
         )
     }
 
-    private func updateDefaultHandlerState(handlerID: String, bundleID: String) {
-        isDefaultHandler = (handlerID == bundleID)
+    private func updateDefaultHandlerState(for family: ArchiveAssociationFamily, handlerID: String, bundleID: String) {
+        let isDefaultHandler = (handlerID == bundleID)
+        isDefaultHandlerByFamily[family.id] = isDefaultHandler
         if isDefaultHandler {
-            currentDefaultAppName = ""
+            currentDefaultAppNameByFamily[family.id] = ""
             return
         }
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: handlerID) {
-            currentDefaultAppName = ApplicationPicker.displayName(for: url)
+            currentDefaultAppNameByFamily[family.id] = ApplicationPicker.displayName(for: url)
             return
         }
-        currentDefaultAppName = handlerID
+        currentDefaultAppNameByFamily[family.id] = handlerID
     }
 
     private func resolveArchiveUtilityURL() -> URL? {

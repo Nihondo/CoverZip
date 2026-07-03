@@ -5,17 +5,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## プロジェクト概要
 
 CoverZipは、四つの独立した機能を持つmacOSアプリケーションです：
-1. **QuickLook Thumbnail Extension** - ZIPファイル内の先頭画像を使用したサムネイル生成
-2. **QuickLook Preview Extension** - ZIPファイル内画像のフルスクリーンプレビューとページング機能
-3. **ZIPファイルルーティングアプリケーション** - ファイル名キーワードマッチングによる外部アプリケーション自動起動
-4. **内蔵ビューア** - QLPreviewViewを使用したメインアプリ内でのZIP画像表示機能
+1. **QuickLook Thumbnail Extension** - ZIP/RAR系アーカイブ内の表紙画像を使用したサムネイル生成
+2. **QuickLook Preview Extension** - ZIP/RAR系アーカイブ内画像のフルスクリーンプレビューとページング機能
+3. **アーカイブルーティングアプリケーション** - ファイル名キーワードマッチングによる外部アプリケーション自動起動
+4. **内蔵ビューア** - QLPreviewViewを使用したメインアプリ内でのアーカイブ画像表示機能
 
 ## アーキテクチャ
 
 ### 四つの独立したコンポーネント
 
 #### 1. QuickLook Thumbnail Extension (`coverZipExtension/`)
-- **ThumbnailProvider.swift** - `CZZip` でZIPから画像を抽出し、`CZImageUtilities` でアスペクト比計算・中央配置
+- **ThumbnailProvider.swift** - `CZArchiveKind` でZIP/RARを判定し、`CZZip` / `CZRar` で表紙画像を抽出、`CZImageUtilities` でアスペクト比計算・中央配置
 
 #### 2. QuickLook Preview Extension (`coverZipViewer/`)
 - **PreviewViewController.swift** - メインのプレビューUI制御（NSViewController）
@@ -25,14 +25,14 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
   - 元画像キャッシュ（最大10枚）とリサイズキャッシュ（最大20枚）
   - 隣接ページのバックグラウンドプリロード
   - `ThumbnailImageProviding` に準拠し、256px基準の tiny ティアキャッシュ（最大200件、LRU）をサムネイルストリップとメイン表示の白ページプレースホルダで共有（重複デコード排除）
-  - `ImageEntrySource` プロトコル経由でZIP/フォルダのどちらのデータソースも同一ロジックで扱う（詳細は「フォルダQuickLook対応」参照）
-- **ImageEntrySource.swift** - `ImageManager` が参照する画像データソースの抽象化（`ZipImageEntrySource` / `FolderImageEntrySource`）
+  - `ImageEntrySource` プロトコル経由でZIP/RAR/フォルダの各データソースを同一ロジックで扱う（詳細は「アーカイブ処理アーキテクチャ」「フォルダQuickLook対応」参照）
+- **ImageEntrySource.swift** - `ImageManager` が参照する画像データソースの抽象化（`ZipImageEntrySource` / `RarImageEntrySource` / `FolderImageEntrySource`）
 - **ThumbnailStripView.swift** - サムネイルストリップUI（`ThumbnailResizeHandle`, `ThumbnailCollectionView`, `ThumbnailStripView`）。サムネイル画像は `thumbnailProvider`（`ImageManager`）の tiny ティアキャッシュに委譲し、独自のデコード経路は持たない
 - **ThumbnailCollectionViewItem.swift** - サムネイルコレクションビューアイテム
-- **ReadingHistoryManager.swift** - ZIP別の閲覧履歴管理（最終ページ、表示設定等）
+- **ReadingHistoryManager.swift** - アーカイブ/フォルダ別の閲覧履歴管理（最終ページ、表示設定等）
 - **Settings.swift** - 設定管理の軽量ラッパー（`CZSettings`へのアクセスを提供）
 
-#### 3. ZIPファイルルーティングアプリケーション (`CoverZip/`)
+#### 3. アーカイブルーティングアプリケーション (`CoverZip/`)
 - **CoverZipApp.swift** - SwiftUIアプリケーションエントリーポイント
 - **AppDelegate.swift** - ファイルオープン処理（`processZipFile` → `ZipRoutingService.route()` → `handle()`）
 - **Services/**
@@ -58,8 +58,11 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
 
 #### 4. 共有ユーティリティ (`Shared/`)
 
-**ZIP処理:**
+**アーカイブ処理:**
+- **ArchiveKind.swift** - 拡張子とマジックナンバーによるZIP/RAR判定（`.cbr` は実体ZIPの場合があるためデコード直前はマジックナンバー優先）
+- **CoverSelection.swift** - ZIP/RARで共有する表紙候補選定（cover/front/表紙/00/001）とImageIOサムネイル生成
 - **ZipCore.swift** - 純Swift ZIP処理コア（Central Directory + DEFLATE展開）
+- **RarCore.swift** - Unrar.swift を利用したRAR画像エントリ列挙・抽出。`Archive` はスレッド非安全のため抽出ごとに開き直す
 - **NaturalSort.swift** - ファイル名の自然順ソート
 - **ImageFileFilter.swift** - 画像ファイル判定
 
@@ -106,11 +109,13 @@ xcodebuild -project CoverZip.xcodeproj -scheme coverZipViewer build CODE_SIGNING
 # QuickLook Extensionをリロード
 qlmanage -r
 
-# 特定のZIPファイルでサムネイル生成テスト
+# 特定のアーカイブファイルでサムネイル生成テスト
 qlmanage -t path/to/test.zip
+qlmanage -t path/to/test.rar
 
-# ZIPファイルをプレビューで開く（Preview Extension）
+# アーカイブファイルをプレビューで開く（Preview Extension）
 qlmanage -p path/to/test.zip
+qlmanage -p path/to/test.cbr
 
 # Extensionの登録状況確認
 qlmanage -m | grep -i coverzip
@@ -125,7 +130,7 @@ pluginkit -m | grep -i coverzip
 
 **ファイルドロップ/ダブルクリック時:**
 ```
-ZIPファイル/フォルダ → AppDelegate.application(_:open:) →
+ZIP/RAR系アーカイブ/フォルダ → AppDelegate.application(_:open:) →
 processZipFile → ZipRoutingService.route(zipURL:invocationContext:.appLaunch) →
   （フォルダ・パッケージ以外の場合は常に openInternalViewer）
   RouteDecision.openInternalViewer → InternalViewer.shared.show() (継続実行)
@@ -163,10 +168,13 @@ ZipRoutingService.route(invocationContext:.openPanelRouting) →
   - **UserDefaults統一アクセス**: `CZUserDefaults.shared` (`Shared/UserDefaultsHelper.swift`)
 - **セッション状態**: `PreviewSessionStateStore.loadState(resetSlideshowState:)` で一括読み出し
 
-#### ZIP処理アーキテクチャ
-- **コアエンジン**: `Shared/ZipCore.swift` - 純Swift実装、Foundation/Compressionのみ使用
+#### アーカイブ処理アーキテクチャ
+- **種別判定**: `Shared/ArchiveKind.swift` - 拡張子でルーティング入口を判定し、デコード直前はマジックナンバーでZIP/RAR実体を判定
+- **ZIPコアエンジン**: `Shared/ZipCore.swift` - 純Swift実装、Foundation/Compressionのみ使用
+- **RARコアエンジン**: `Shared/RarCore.swift` - SwiftPM依存 `mtgto/Unrar.swift` を使用。Unrar公式C++ソース由来のためRAR5対応だが、マルチボリュームRARは非対応
+- **表紙選定**: `Shared/CoverSelection.swift` - ZIP/RAR共通の表紙候補選定とサムネイル生成
 - **対応圧縮方式**: DEFLATE（方式8）と非圧縮（方式0）
-- **メモリ効率**: 8MBバッファによる制御されたメモリ使用
+- **メモリ効率**: ZIPは8MBバッファによる制御されたメモリ使用。RARはQuickLook拡張内での過大展開を避けるため、1画像の展開後サイズ上限を `CZRar.maxExtractedImageBytes` で制御
 - **遅延ロードAPI**:
   - `imageEntryInfoList(from:)` - メタデータのみを高速取得
   - `extractImageData(from:entryInfo:)` - 個別の画像データを必要時に抽出
@@ -178,10 +186,10 @@ ZIPを解凍せず、フォルダ内の画像をZIPプレビューと同一のUI
 
 - **対象範囲**: QuickLook Preview Extension（`coverZipViewer/`）と内蔵ビューアのみ。QuickLook Thumbnail Extension（`coverZipExtension/`）は非対応のまま（Finderの全フォルダアイコンを乗っ取らないための意図的な制限）
 - **有効化**: `coverZipViewer/Info.plist` の `QLSupportedContentTypes` に `public.folder` を追加（`coverZipExtension/Info.plist` には追加しない）
-- **データソース抽象化**: `ImageManager` は `entrySource: ImageEntrySource?` を介してZIP（`ZipImageEntrySource`）・フォルダ（`FolderImageEntrySource`）のどちらも同一のインデックスベースAPI（`count` / `filename(at:)` / `imageData(at:)`）で扱う。`loadImages(from:)` がURLの `isDirectoryKey` で分岐し、フォルダ時は `CZFolder.imageEntryList(from:)` でメタデータを列挙する
+- **データソース抽象化**: `ImageManager` は `entrySource: ImageEntrySource?` を介してZIP（`ZipImageEntrySource`）・RAR（`RarImageEntrySource`）・フォルダ（`FolderImageEntrySource`）を同一のインデックスベースAPI（`count` / `filename(at:)` / `imageData(at:)`）で扱う。`loadImages(from:)` がURLの `isDirectoryKey` と `CZArchiveKind.detect(at:)` で分岐する
 - **列挙ロジック**: `CZFolder.imageEntryList(from:)` はサブフォルダを再帰的に列挙し（symlinkは辿らない、パッケージ内部は除外）、`ImageFileFilter.isImagePath` で画像のみ抽出。ソートは lastPathComponent 基準の自然順を第1キー、相対パス全体を第2キー（タイブレーク）として同名衝突時も順序を決定的にする
 - **画像0枚のフォルダ**: `PreviewViewController.preparePreviewOfFile` がエラーをthrowし、システム標準のフォルダプレビューに委譲する（ZIPの場合は従来どおり `displayNoImagesMessage()` を表示）
-- **メインアプリ側のルーティング**: `ZipRoutingService.route()` はZIP拡張子判定より前にフォルダ（パッケージを除く）を検出し、常に `.openInternalViewer` を返す（キーワードルーティングはZIP専用のまま）。`CoverZip/Info.plist` の `CFBundleDocumentTypes` に `public.folder`（`LSHandlerRank=None`）を追加し、フォルダのDockドロップ等から内蔵ビューアで開けるようにしている
+- **メインアプリ側のルーティング**: `ZipRoutingService.route()` はアーカイブ拡張子判定より前にフォルダ（パッケージを除く）を検出し、常に `.openInternalViewer` を返す。ZIP/CBZ/RAR/CBRはキーワードルーティング対象になる。`CoverZip/Info.plist` の `CFBundleDocumentTypes` に `public.folder`（`LSHandlerRank=None`）を追加し、フォルダのDockドロップ等から内蔵ビューアで開けるようにしている
 - **履歴**: `ReadingHistoryManager` はファイル名basenameをキーにするため、同名の `X.zip` とフォルダ `X` は読書履歴を共有する（意図的な仕様）
 
 ### QuickLook Preview Extension の機能
@@ -196,7 +204,7 @@ ZIPを解凍せず、フォルダ内の画像をZIPプレビューと同一のUI
 - **操作方法**: マウスクリック、キーボード、スクロールホイール対応
 
 #### 履歴機能
-- **ZIP別履歴**: `ReadingHistoryManager.swift`による個別管理
+- **アーカイブ別履歴**: `ReadingHistoryManager.swift`による個別管理
 - **保存データ**: 最終ページ、表示モード、見開き設定、読み方向
 - **App Group共有**: 内蔵ビューアとの履歴同期
 
@@ -229,9 +237,9 @@ App Group UserDefaults の `CZSettingsKeys.routingSettingsData` キーに JSON �
 ```
 
 ### マッチング対象（`type` フィールド）
-- **filename**: ZIPファイル名（拡張子除去済み）
-- **pathname**: ZIPファイルの全祖先フォルダ名（ルートまで）- いずれか1つにマッチすれば成功。近い側（親）から先に検索する
-- **fileExtension**: ZIPファイルの拡張子
+- **filename**: アーカイブファイル名（拡張子除去済み）
+- **pathname**: アーカイブファイルの全祖先フォルダ名（ルートまで）- いずれか1つにマッチすれば成功。近い側（親）から先に検索する
+- **fileExtension**: アーカイブファイルの拡張子
 
 ### マッチング方式（`MatchMode`）
 - **contains** / **startsWith** / **endsWith**: 文字列検索（大文字小文字無視）
@@ -285,10 +293,11 @@ The EdDSA private key must be stored outside the repository, preferably in macOS
 - `CZPreviewSessionCommand` に対応コマンドを追加
 - App側（`InternalViewer`）とExtension側（`PreviewViewController`）双方に `selector(for:)` / `menuState(for:)` を実装
 
-### ZIP処理の制約
+### アーカイブ処理の制約
 - **対応圧縮方式**: DEFLATE（方式8）と非圧縮（方式0）のみ
-- **未対応**: Zip64、暗号化ZIP、その他の圧縮方式
-- **メモリ効率**: 8MBバッファによる制御されたメモリ使用
+- **ZIP未対応**: Zip64、暗号化ZIP、その他の圧縮方式
+- **RAR未対応**: 暗号化RAR、マルチボリュームRAR。ソリッドRARは閲覧可能でもページ抽出が遅くなる場合がある
+- **メモリ効率**: ZIPは8MBバッファで制御。RARは `CZRar.maxExtractedImageBytes` を超える単一エントリをスキップする
 
 ### フォルダ処理の制約
 - **symlink**: 一切辿らない（ディレクトリsymlinkは列挙されず、ファイルsymlinkは `isRegularFile` 判定で除外）

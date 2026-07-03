@@ -2,7 +2,8 @@
 
 **Under Development**
 
-CoverZip is a macOS app designed for comfortably browsing comics and image collections stored in ZIP files. Once installed, comic covers appear as icons in Finder, and you can open them instantly with the spacebar.
+CoverZip is a macOS app designed for comfortably browsing comics and image collections stored in ZIP/RAR-based archives. Once installed, comic covers appear as icons in Finder, and you can open them instantly with the spacebar.
+Also folders can be opened with the spacebar to view the images inside them.
 
 ![](./images/coverzip_lead.png)
 
@@ -10,15 +11,15 @@ CoverZip is a macOS app designed for comfortably browsing comics and image colle
 
 ## Features
 
-### ZIP File Thumbnails (QuickLook Thumbnail)
+### Archive File Thumbnails (QuickLook Thumbnail)
 
-Once CoverZip is installed, the first image inside a ZIP file is displayed as its thumbnail in Finder. You can tell which comic it is at a glance without opening the file.
+Once CoverZip is installed, the first image inside a supported archive is displayed as its thumbnail in Finder. You can tell which comic it is at a glance without opening the file.
 
-If the ZIP contains a file with a cover-like name (such as `cover`, `front`, or a name starting with `00`), that image is shown preferentially.
+If the archive contains a file with a cover-like name (such as `cover`, `front`, or a name starting with `00`), that image is shown preferentially.
 
 ### Read Comics with the Spacebar (QuickLook Viewer)
 
-Select a ZIP file in Finder and press the spacebar to open CoverZip's comic viewer in QuickLook. There's no need to open the file in an app — you can flip through pages and check the contents right there.
+Select a supported archive in Finder and press the spacebar to open CoverZip's comic viewer in QuickLook. There's no need to open the file in an app — you can flip through pages and check the contents right there.
 
 Here's what you can do in the viewer. You can also change settings like view mode and reading direction from the right-click context menu.
 
@@ -29,31 +30,31 @@ If the page pairing looks off in spread mode, select "**Adjust Spread Alignment*
 - **Page progress bar** — move the cursor to the bottom edge of the image to reveal a fill-style progress bar; click or drag on it to jump to any page.
 - **Thumbnail strip** — displays a list of page thumbnails at the bottom; click one to jump directly to that page.
 - **Slideshow** — automatically advances pages at a set interval.
-- **Resume reading** — your last viewed page and display settings are remembered for each ZIP file (up to 100 recent entries).
+- **Resume reading** — your last viewed page and display settings are remembered for each archive (up to 100 recent entries).
 
 Settings can be changed by right-clicking within the viewer or from the View menu.
 
 ### Preview a Folder of Images
 
-You don't need to zip your images first — select any folder containing images in Finder and press the spacebar to browse it in the same viewer described above, with the same controls, view modes, and reading history. Subfolders are included automatically, and images are sorted in natural order (so `2.jpg` comes before `10.jpg`) just like inside a ZIP file. If a folder contains no images, QuickLook falls back to the standard Finder folder preview.
+You don't need to zip your images first — select any folder containing images in Finder and press the spacebar to browse it in the same viewer described above, with the same controls, view modes, and reading history. Subfolders are included automatically, and images are sorted in natural order (so `2.jpg` comes before `10.jpg`) just like inside an archive. If a folder contains no images, QuickLook falls back to the standard Finder folder preview.
 
 Dropping a folder onto the CoverZip Dock icon opens it in the built-in viewer as well.
 
 ### Double-Click to Open in Built-in Viewer or Another App (Routing)
 
-If you associate CoverZip with ZIP files, double-clicking a ZIP will automatically route it to the appropriate app based on the filename.
+If you associate CoverZip with archive files, double-clicking a ZIP, CBZ, RAR, or CBR archive will automatically route it to the appropriate app based on the filename.
 
 For example, you can set it up like this:
 
 - If a parent folder name contains "Comics", open in CoverZip's built-in viewer
 - If the filename contains "vol", open in CoverZip's built-in viewer
-- Otherwise, open the ZIP with an archive extraction app
+- Otherwise, open the archive with an archive extraction app
 
 ![](./images/coverzip_sample.png)
 
 When the routing target is the "Built-in Viewer", CoverZip continues running. When an external app is specified, CoverZip automatically quits after launching that app.
 
-You can also use Option+Cmd+O (menu: `Open in Built-in Viewer...`) to open a ZIP file directly in the built-in viewer, regardless of routing settings.
+You can also use Option+Cmd+O (menu: `Open in Built-in Viewer...`) to open an archive directly in the built-in viewer, regardless of routing settings.
 
 ### Keyboard Controls
 
@@ -80,7 +81,7 @@ You can also switch view modes and change reading direction from the `View` menu
 2. Launch CoverZip once.
 3. Open **System Settings → Privacy & Security → Extensions → QuickLook** and enable both "CoverZip Thumbnail Extension" and "CoverZip Preview Extension".
 
-After enabling, selecting a ZIP file in Finder will show its thumbnail, and pressing the spacebar will launch the comic viewer.
+After enabling, selecting a supported archive in Finder will show its thumbnail, and pressing the spacebar will launch the comic viewer.
 
 To use arrow keys in the Finder QuickLook viewer, open CoverZip Settings → Viewer and enable **Use arrow keys for pages in Finder Quick Look**. macOS will require the bundled helper app to be registered as a login item and allowed in **System Settings → Privacy & Security → Accessibility**.
 
@@ -99,7 +100,7 @@ The Settings window uses a macOS sidebar layout with these tabs:
 - `Slideshow`: Page auto-advance interval
 - `Window`: Restore preview window size/position and reset saved frame
 - `Update`: Current version, manual update check, automatic update checks, and the releases page
-- `File Routing`: Rule-based routing and ZIP default-app association
+- `File Routing`: Rule-based routing and archive default-app association
 
 Rules are evaluated from top to bottom, and the first match is used.
 
@@ -131,7 +132,7 @@ The following formats can be used to specify an app:
 Here are the techniques CoverZip's viewer uses to deliver a fast reading experience.
 
 **Instant Display, Instant Page Turns**
-When opening a ZIP, the viewer first quickly retrieves the page list metadata. It then prioritizes decoding the first page ahead of all others, while the remaining pages are processed as read-ahead. The first page appears immediately after opening the file, and subsequent pages can be turned without waiting.
+When opening an archive, the viewer first quickly retrieves the page list metadata. It then prioritizes decoding the first page ahead of all others, while the remaining pages are processed as read-ahead. The first page appears immediately after opening the file, and subsequent pages can be turned without waiting.
 
 **Read-Ahead and Caching**
 Pages adjacent to the current one are read ahead in the background, minimizing delays when turning pages. In single-page mode, 5 pages ahead and 1 page behind are prefetched; in spread mode, 3 spreads ahead and 1 behind. Up to 32 previously displayed images are kept in memory, making it fast to revisit pages.
@@ -149,9 +150,9 @@ When system memory runs low, caches are automatically released to minimize impac
 
 ## Supported File Formats
 
-CoverZip supports standard ZIP files (.zip), as well as plain folders of images (see [Preview a Folder of Images](#preview-a-folder-of-images)). It recognizes common image formats, including JPEG, PNG, GIF, BMP, TIFF, and WebP.
+CoverZip supports ZIP-based archives (`.zip`, `.cbz`), RAR-based archives (`.rar`, `.cbr`), and plain folders of images (see [Preview a Folder of Images](#preview-a-folder-of-images)). It recognizes common image formats, including JPEG, PNG, GIF, BMP, TIFF, and WebP.
 
-Password-protected ZIP files, Zip64 format, and compression methods other than DEFLATE are not supported. Folder thumbnails in Finder are not generated (only ZIP files get a cover thumbnail); folder support is limited to the spacebar viewer and the built-in viewer.
+Password-protected ZIP/RAR files, multi-volume RAR archives, Zip64 format, and ZIP compression methods other than DEFLATE are not supported. Very large RAR entries may be skipped to keep Quick Look memory usage bounded, and solid RAR archives can be slower to browse. Folder thumbnails in Finder are not generated (only archive files get a cover thumbnail); folder support is limited to the spacebar viewer and the built-in viewer.
 
 ---
 
@@ -175,4 +176,4 @@ CoverZip uses [Sparkle](https://sparkle-project.org/) for automatic updates.
 
 ## Known Issues
 - Arrow keys in the QuickLook viewer require the optional key helper and Accessibility permission. If the helper is disabled or permission is not granted, the host app (e.g. Finder) captures key input instead. The key helper works regardless of which app triggered the QuickLook preview.
-- If you select a different ZIP file in Finder while the QuickLook viewer is still open, mouse click page navigation will likely stop working. Pressing the spacebar to reopen the window will restore click navigation. Mouse wheel scrolling continues to work normally.
+- If you select a different archive in Finder while the QuickLook viewer is still open, mouse click page navigation will likely stop working. Pressing the spacebar to reopen the window will restore click navigation. Mouse wheel scrolling continues to work normally.

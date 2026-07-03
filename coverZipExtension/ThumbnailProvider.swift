@@ -14,7 +14,7 @@ class ThumbnailProvider: QLThumbnailProvider {
     
     /**
      * QuickLook拡張機能のメインエントリーポイント
-     * ZIPファイルから最初の画像を抽出してサムネイルを生成する
+     * アーカイブファイルから最初の画像を抽出してサムネイルを生成する
      * 
      * @param request サムネイル生成リクエスト（ファイルURLと最大サイズを含む）
      * @param handler 生成結果を返すコールバック関数
@@ -27,7 +27,12 @@ class ThumbnailProvider: QLThumbnailProvider {
         // 1) ストリーミング展開 + 増分デコードで早期サムネイル生成を試みる
         let opts: CZFirstImageOptions = [.preferCoverLike, .preferZeroPaddedOne]
         let imageData: Data
-        switch CZZip.firstImageThumbnail(from: request.fileURL, options: opts, maxPixel: targetMaxPixels) {
+        let archiveKind = CZArchiveKind.detect(at: request.fileURL)
+        let result: CZFirstImageThumbnailResult = (archiveKind == .rar)
+            ? CZRar.firstImageThumbnail(from: request.fileURL, options: opts, maxPixel: targetMaxPixels)
+            : CZZip.firstImageThumbnail(from: request.fileURL, options: opts, maxPixel: targetMaxPixels)
+
+        switch result {
         case .thumbnail(let cgImage):
             let cgSize = CGSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
             let thumbSize = CZImageUtilities.calculateFitSize(for: cgSize, within: request.maximumSize)
@@ -41,10 +46,10 @@ class ThumbnailProvider: QLThumbnailProvider {
             handler(reply, nil)
             return
         case .rawData(let data):
-            // ストリーミング生成に失敗した画像データをそのまま再利用し、ZIPの再読込・再選定を避ける
+            // ストリーミング生成に失敗した画像データをそのまま再利用し、アーカイブの再読込・再選定を避ける
             imageData = data
         case .none:
-            handler(nil, NSError(domain: "CoverZipError", code: 1, userInfo: [NSLocalizedDescriptionKey: "No image found in ZIP file"]))
+            handler(nil, NSError(domain: "CoverZipError", code: 1, userInfo: [NSLocalizedDescriptionKey: "No image found in archive file"]))
             return
         }
 

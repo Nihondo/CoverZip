@@ -1,5 +1,5 @@
 {
-  "originHash" : "e721da7f9826abdffcb6185e886155efa2514bd6234475f1afa893e29eb258d6",
+  "originHash" : "7ae7f863887a81c0aca5a2e063b7cdad0de3b4aa2f04798d7bf17b28233d312d",
   "pins" : [
     {
       "identity" : "sparkle",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "066e75a8b3e99962685d6a90cdd5293ebffd9261",
         "version" : "2.9.1"
+      }
+    },
+    {
+      "identity" : "unrar.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mtgto/Unrar.swift",
+      "state" : {
+        "revision" : "7216007a38ac122dbdeae26cfdaf7f10775c868f",
+        "version" : "0.5.4"
       }
     }
   ],

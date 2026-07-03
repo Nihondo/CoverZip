@@ -19,7 +19,7 @@ class ApplicationPicker {
     static func pickApplication(completion: @escaping (URL?) -> Void) {
         let panel = NSOpenPanel()
         panel.title = CZLocalized.string("app_picker.panel.title", defaultValue: "Select Application")
-        panel.message = CZLocalized.string("app_picker.panel.message", defaultValue: "Select an application to open ZIP files")
+        panel.message = CZLocalized.string("app_picker.panel.message", defaultValue: "Select an application to open archive files")
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
