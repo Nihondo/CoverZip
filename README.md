@@ -23,7 +23,7 @@ Select a supported archive in Finder and press the spacebar to open CoverZip's c
 
 Here's what you can do in the viewer. You can also change settings like view mode and reading direction from the right-click context menu.
 
-- **Page navigation** is done by clicking the left or right side of the screen, by scrolling the mouse wheel up and down, or by using keyboard controls when the optional Finder QuickLook key helper is enabled. Without the helper, Finder captures arrow keys and changes the selected file.
+- **Page navigation** is done by clicking the left or right side of the viewer, including the background outside the displayed page, by scrolling the mouse wheel up and down, or by using keyboard controls when the optional Finder QuickLook key helper is enabled. The cursor changes according to the side of the viewer under it. Without the helper, Finder captures arrow keys and changes the selected file.
 - **View mode** can be set to "Single Page" (one page at a time) or "Spread" (two pages side by side). The "Auto" option automatically determines the layout based on image dimensions.
 If the page pairing looks off in spread mode, select "**Adjust Spread Alignment**" from the menu to shift the pairing by one page.
 - **Reading direction** can be switched between right-to-left (for Japanese manga) and left-to-right (for Western books).
@@ -93,7 +93,7 @@ You can open the online manual from **Help → CoverZip Manual**.
 
 ## Configuring Routing Rules
 
-Open Settings with Cmd+, or from the menu **CoverZip → Settings...**.
+CoverZip doesn't open Settings automatically when it launches. Open Settings with Cmd+, or from the menu **CoverZip → Settings...**.
 
 The Settings window uses a macOS sidebar layout with these tabs:
 - `Viewer`: Reading direction, view mode, thumbnail visibility, page transition, Finder QuickLook arrow-key helper, and decode cache policy

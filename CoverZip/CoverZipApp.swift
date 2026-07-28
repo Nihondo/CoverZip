@@ -7,10 +7,6 @@
 
 import SwiftUI
 
-enum AppWindowIdentifier {
-    static let settings = "settings-window"
-}
-
 private enum SettingsTab: Hashable, CaseIterable {
     case viewer
     case slideshow
@@ -92,14 +88,11 @@ struct CoverZipApp: App {
     }
     
     var body: some Scene {
-        Window(
-            CZLocalized.string("window.settings.title", defaultValue: "CoverZip Settings"),
-            id: AppWindowIdentifier.settings
-        ) {
+        Settings {
             SettingsRootView()
         }
         .defaultSize(width: 1000, height: 560)
-        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
         .windowResizability(.contentSize)
         .commands {
             FileMenuCommands()

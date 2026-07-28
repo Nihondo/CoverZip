@@ -128,6 +128,8 @@ pluginkit -m | grep -i coverzip
 
 #### アプリケーション起動フロー
 
+Define the settings UI with a SwiftUI `Settings` scene, disable its state restoration, and present it only through `openSettings()` from Cmd+, or the application menu. Do not use a general-purpose `Window` scene for settings because document-launch activation can present it automatically.
+
 **ファイルドロップ/ダブルクリック時:**
 ```
 ZIP/RAR系アーカイブ/フォルダ → AppDelegate.application(_:open:) →
@@ -155,6 +157,7 @@ ZipRoutingService.route(invocationContext:.openPanelRouting) →
 #### 内蔵ビューアアーキテクチャ（`QLPreviewInputDriver`）
 
 - **キーボード入力**: `KeyForwardingView`（NSView サブクラス）をファーストレスポンダーとして配置し、左右キーを受信（ローカルイベントモニタは廃止）
+- **Mouse input**: Across the viewer background except the thumbnail strip, use the window's horizontal midpoint to switch the cursor and click-based page navigation direction.
 - **ページ移動経路**: 矢印キー/Space は `PreviewSessionCommandDispatcher` から `CZPreviewSessionCommand.goForwardPage/goBackwardPage` を送信し、`PreviewViewController.performPageNavigation(forward:)` で処理
 - **フォールバック**: QLPreviewView生成失敗時は `SimplePanelDataSource` 経由で共有パネル表示
 - **ウィンドウ管理**: `retainedWindows` で強参照保持、OS標準のウィンドウクローズに委ねる

@@ -810,7 +810,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         imageView?.imageFrameStyle = .none
         rightImageView?.imageFrameStyle = .none
 
-        // カーソルオーバーレイを画像表示エリア全体（左右ページ）に配置
+        // カーソルオーバーレイをサムネイル領域を除く背景全体に配置
         if let imageView {
             let overlay = PreviewCursorAreaView()
             overlay.translatesAutoresizingMaskIntoConstraints = false
@@ -818,7 +818,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             NSLayoutConstraint.activate([
                 overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
                 overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-                overlay.topAnchor.constraint(equalTo: imageView.topAnchor),
+                overlay.topAnchor.constraint(equalTo: view.topAnchor),
                 overlay.bottomAnchor.constraint(equalTo: imageView.bottomAnchor),
             ])
             cursorAreaOverlay = overlay

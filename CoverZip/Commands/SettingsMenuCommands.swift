@@ -9,7 +9,7 @@ import AppKit
 import SwiftUI
 
 struct SettingsMenuCommands: Commands {
-    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
     @ObservedObject private var updateController = AppUpdateController.shared
 
     var body: some Commands {
@@ -44,7 +44,7 @@ struct SettingsMenuCommands: Commands {
             Button {
                 NSApp.activate(ignoringOtherApps: true)
                 SettingsDiagnosticsState.shared.isVisible = NSEvent.modifierFlags.contains(.shift)
-                openWindow(id: AppWindowIdentifier.settings)
+                openSettings()
             }
             label: {
                 Label(
