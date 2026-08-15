@@ -7,12 +7,19 @@
 
 import SwiftUI
 
+enum AppWindowIdentifier {
+    static let settings = "settings-window"
+}
+
 private enum SettingsTab: Hashable, CaseIterable {
     case viewer
     case slideshow
     case window
     case update
     case routing
+
+    static let viewerTabs: [SettingsTab] = [.viewer, .slideshow, .window]
+    static let applicationTabs: [SettingsTab] = [.update, .routing]
 
     var title: String {
         switch self {
@@ -50,14 +57,27 @@ private struct SettingsRootView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(SettingsTab.allCases, id: \.self, selection: $selectedSettingsTab) { tab in
-                Label(tab.title, systemImage: tab.systemImage)
+            List(selection: $selectedSettingsTab) {
+                Section(CZLocalized.string("app.sidebar.section.viewer", defaultValue: "Viewer")) {
+                    ForEach(SettingsTab.viewerTabs, id: \.self) { tab in
+                        Label(tab.title, systemImage: tab.systemImage)
+                            .tag(tab)
+                    }
+                }
+
+                Section(CZLocalized.string("app.sidebar.section.application", defaultValue: "App Settings")) {
+                    ForEach(SettingsTab.applicationTabs, id: \.self) { tab in
+                        Label(tab.title, systemImage: tab.systemImage)
+                            .tag(tab)
+                    }
+                }
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 260)
         } detail: {
             detailView
         }
         .frame(minWidth: 1000, minHeight: 560)
+        .navigationTitle(CZLocalized.string("window.settings.title", defaultValue: "CoverZip Settings"))
     }
 
     @ViewBuilder
@@ -88,10 +108,15 @@ struct CoverZipApp: App {
     }
     
     var body: some Scene {
-        Settings {
+        Window(
+            CZLocalized.string("window.settings.title", defaultValue: "CoverZip Settings"),
+            id: AppWindowIdentifier.settings
+        ) {
             SettingsRootView()
         }
         .defaultSize(width: 1000, height: 560)
+        .handlesExternalEvents(matching: [])
+        .defaultLaunchBehavior(.suppressed)
         .restorationBehavior(.disabled)
         .windowResizability(.contentSize)
         .commands {

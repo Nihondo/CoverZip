@@ -642,9 +642,20 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
     override func viewDidLayout() {
         super.viewDidLayout()
+        NSLog("[DEBUGRECT] BEFORE view.bounds=%@ view.window.frame=%@ preferredContentSize=%@",
+              NSStringFromRect(view.bounds),
+              view.window.map { NSStringFromRect($0.frame) } ?? "nil",
+              NSStringFromSize(preferredContentSize))
         // 自動リサイズ機能を使用するため、手動でのリサイズ処理は不要
         // レイアウト変化に応じてスライダーの可視性を見直す
         updateSliderVisibilityForContext()
+        // ホストが実際に与えている領域を preferredContentSize に反映し、余白（背景）が
+        // ホスト側に残らないようにする（ページ送りを待たず、レイアウト変化のたびに追従）
+        updatePreferredContentSizeIfNeeded()
+        NSLog("[DEBUGRECT] AFTER  view.bounds=%@ view.window.frame=%@ preferredContentSize=%@",
+              NSStringFromRect(view.bounds),
+              view.window.map { NSStringFromRect($0.frame) } ?? "nil",
+              NSStringFromSize(preferredContentSize))
         if let overlay = cursorAreaOverlay {
             view.window?.invalidateCursorRects(for: overlay)
         }
@@ -2460,17 +2471,38 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     }
 
     // Quick Look ホストに対して、縦方向いっぱいの希望サイズをヒントとして提示
+    //
+    // preferredContentSize がホストの実際の割り当てサイズより小さいと、ホスト（自前の
+    // QLPreviewView / システムのQuick Lookパネルいずれも）はリモートコンテンツをそのヒント
+    // サイズで中央配置し、余白を自前で描画する。この余白はホスト側の領域であり拡張からは
+    // 一切操作できない（マウスカーソル変更・クリックページ送りが背景で反応しない原因）。
+    // ホストがすでにより大きな領域を与えている場合はそれを下回らないよう、常に
+    // 「理想サイズ」と「実際に与えられているサイズ」の大きい方を報告し、ホストが余白を
+    // 保持し続けないようにする。
     private func updatePreferredContentSizeIfNeeded() {
+        let idealSize = idealPreferredContentSize()
+        let actualSize = NSSize(
+            width: max(view.bounds.width, view.window?.frame.width ?? 0),
+            height: max(view.bounds.height, view.window?.frame.height ?? 0)
+        )
+        let size = NSSize(
+            width: max(idealSize.width, actualSize.width),
+            height: max(idealSize.height, actualSize.height)
+        )
+        guard size.width > 0, size.height > 0 else { return }
+        if preferredContentSize != size { preferredContentSize = size }
+    }
+
+    /// 初回表示時などにホストへ提示する理想サイズ（保存フレーム優先、なければ画像アスペクト基準の縦いっぱい）
+    private func idealPreferredContentSize() -> NSSize {
         // 1) 復元が有効で保存サイズがある場合は、それを優先して返す
         if loadRestoreWindowFrameEnabled(), let saved = loadSavedWindowFrame() {
-            let sz = saved.size
-            if preferredContentSize != sz { preferredContentSize = sz }
-            return
+            return saved.size
         }
         // 2) 未保存/復元無効のときは、従来通り縦方向いっぱい
-        guard let screen = view.window?.screen ?? NSScreen.main else { return }
+        guard let screen = view.window?.screen ?? NSScreen.main else { return preferredContentSize }
         let visible = screen.visibleFrame.size
-        guard visible.height > 0 else { return }
+        guard visible.height > 0 else { return preferredContentSize }
         let aspect = currentImageAspect ?? (view.bounds.height > 0 ? max(view.bounds.width, 1) / view.bounds.height : 1.0)
         // まず高さを画面の可視領域いっぱいに
         var targetHeight = visible.height
@@ -2480,8 +2512,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             targetWidth = visible.width
             targetHeight = max(1, targetWidth / max(aspect, 0.0001))
         }
-        let size = NSSize(width: targetWidth, height: targetHeight)
-        if preferredContentSize != size { preferredContentSize = size }
+        return NSSize(width: targetWidth, height: targetHeight)
     }
 
 

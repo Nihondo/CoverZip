@@ -42,6 +42,40 @@
         }
       }
     },
+    "app.sidebar.section.application" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App Settings"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アプリ設定"
+          }
+        }
+      }
+    },
+    "app.sidebar.section.viewer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viewer"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ビューア"
+          }
+        }
+      }
+    },
     "app.tab.routing" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2009,7 +2043,7 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CoverZip設定"
+            "value" : "CoverZip 設定"
           }
         }
       }

@@ -128,7 +128,7 @@ pluginkit -m | grep -i coverzip
 
 #### アプリケーション起動フロー
 
-Define the settings UI with a SwiftUI `Settings` scene, disable its state restoration, and present it only through `openSettings()` from Cmd+, or the application menu. Do not use a general-purpose `Window` scene for settings because document-launch activation can present it automatically.
+Define the settings UI as a dedicated SwiftUI `Window` scene. Exclude it from external-event routing with `handlesExternalEvents(matching: [])`, apply both `defaultLaunchBehavior(.suppressed)` and `restorationBehavior(.disabled)`, and present it only through `openWindow(id:)` from Cmd+, or the application menu, so document-launch activation never presents Settings automatically.
 
 **ファイルドロップ/ダブルクリック時:**
 ```

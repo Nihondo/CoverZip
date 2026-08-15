@@ -27,7 +27,6 @@ struct UpdateSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle(CZLocalized.string("app.tab.update", defaultValue: "Update"))
     }
 
     // MARK: - Rows
