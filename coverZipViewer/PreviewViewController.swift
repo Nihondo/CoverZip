@@ -68,6 +68,10 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private var thumbnailStripHeightConstraint: NSLayoutConstraint?
     private var isThumbnailStripVisible: Bool = true
     private var lastVisibleThumbnailStripHeight: CGFloat = 88
+    /// 「表示」とみなす最小のストリップ高さ。ドラッグでこれを下回ったら下端へ吸着する
+    private static let minimumVisibleThumbnailStripHeight: CGFloat = 44
+    /// 「非表示」時に維持する高さ。ThumbnailResizeHandle の固定高さ(6pt)と同値（詳細はapplyThumbnailStripVisibility参照）
+    private static let collapsedThumbnailStripHeight: CGFloat = 6
     private var cursorAreaOverlay: PreviewCursorAreaView?
     // 画像に重ねる進捗バー（ページスライダー/ページ数ラベルのオーバーレイ版）
     private var pageProgressBar: PageProgressBarView?
@@ -907,13 +911,24 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             strip.onResizeDragged = { [weak self] delta in
                 guard let self, let constraint = self.thumbnailStripHeightConstraint else { return }
                 let maxHeight = min(200, self.view.bounds.height * 0.5)
-                constraint.constant = max(44, min(maxHeight, constraint.constant + delta))
+                // 下端(collapsed)まで連続的に下げられるようにし、最小表示サイズでの床止めはしない。
+                // 最小表示サイズを下回ったまま指を離した場合の扱いは onResizeDragEnded の吸着で決める。
+                constraint.constant = max(Self.collapsedThumbnailStripHeight, min(maxHeight, constraint.constant + delta))
+                self.view.needsLayout = true
+                self.view.layoutSubtreeIfNeeded()
             }
             strip.onResizeDragEnded = { [weak self] in
                 guard let self, let constraint = self.thumbnailStripHeightConstraint else { return }
-                self.saveThumbnailStripHeight(constraint.constant)
-                self.lastVisibleThumbnailStripHeight = constraint.constant
-                self.thumbnailStripView?.reloadThumbnails()
+                if constraint.constant < Self.minimumVisibleThumbnailStripHeight {
+                    // 最小表示サイズ未満まで下げたら下端へ吸着し、非表示扱いにする
+                    self.applyThumbnailStripVisibility(false)
+                } else {
+                    self.saveThumbnailStripHeight(constraint.constant)
+                    self.lastVisibleThumbnailStripHeight = constraint.constant
+                    self.isThumbnailStripVisible = true
+                    self.updateContextMenuStates()
+                    self.thumbnailStripView?.reloadThumbnails()
+                }
                 // 内蔵ビューア側の KeyForwardingView へフォーカスを戻す
                 DistributedNotificationCenter.default().post(
                     name: CZDistributedNotifications.sliderOperationCompleted,
@@ -1359,15 +1374,24 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         }
 
         if isVisible {
-            let resolvedHeight = max(44, lastVisibleThumbnailStripHeight)
+            let resolvedHeight = max(Self.minimumVisibleThumbnailStripHeight, lastVisibleThumbnailStripHeight)
             heightConstraint.constant = resolvedHeight
             strip.isHidden = false
+            strip.alphaValue = 1
         } else {
-            if heightConstraint.constant > 0 {
+            // ドラッグ中の中途半端な高さ（吸着直前の値）で上書きしないよう、最小表示サイズ以上のときだけ記憶する
+            if heightConstraint.constant >= Self.minimumVisibleThumbnailStripHeight {
                 lastVisibleThumbnailStripHeight = heightConstraint.constant
             }
-            heightConstraint.constant = 0
-            strip.isHidden = true
+            // 高さ0・isHidden=trueまで潰さず、可視ビューとして残す（QLPreviewViewホストが拡張へ
+            // ウィンドウ全域を割り当てる条件のため。詳細はCLAUDE.md「内蔵ビューアアーキテクチャ」参照）。
+            // collapsedThumbnailStripHeight(6pt) = ThumbnailResizeHandle の固定高さ(228行)と同値。
+            // これ未満にするとハンドル分の高さがストリップ全体の高さを超え、Auto Layoutが満たせない
+            // 制約（scrollViewの負の高さ）を要求してしまうため、ハンドルの高さちょうどに合わせて
+            // scrollView側の高さを0にする。
+            heightConstraint.constant = Self.collapsedThumbnailStripHeight
+            strip.isHidden = false
+            strip.alphaValue = 1
         }
 
         view.needsLayout = true

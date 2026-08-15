@@ -28,7 +28,7 @@ Here's what you can do in the viewer. You can also change settings like view mod
 If the page pairing looks off in spread mode, select "**Adjust Spread Alignment**" from the menu to shift the pairing by one page.
 - **Reading direction** can be switched between right-to-left (for Japanese manga) and left-to-right (for Western books).
 - **Page progress bar** — move the cursor to the bottom edge of the image to reveal a fill-style progress bar; click or drag on it to jump to any page.
-- **Thumbnail strip** — displays a list of page thumbnails at the bottom; click one to jump directly to that page.
+- **Thumbnail strip** — displays a list of page thumbnails at the bottom; click one to jump directly to that page. Drag its top edge to resize it, or drag it all the way down to hide it (same as pressing `L`).
 - **Slideshow** — automatically advances pages at a set interval.
 - **Resume reading** — your last viewed page and display settings are remembered for each archive (up to 100 recent entries).
 

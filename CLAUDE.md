@@ -158,6 +158,9 @@ ZipRoutingService.route(invocationContext:.openPanelRouting) →
 
 - **キーボード入力**: `KeyForwardingView`（NSView サブクラス）をファーストレスポンダーとして配置し、左右キーを受信（ローカルイベントモニタは廃止）
 - **Mouse input**: Across the viewer background except the thumbnail strip, use the window's horizontal midpoint to switch the cursor and click-based page navigation direction.
+  - この挙動は QLPreviewView ホストが `coverZipViewer`（Preview Extension）へどれだけの領域を割り当てるかに依存する。ホストは、拡張の view 階層内に**実際にレンダリングされている**（`isHidden=false` かつ `alphaValue>0`）ボトムアンカーのビューが存在する場合にのみ、拡張へウィンドウ全域を割り当てる。`isHidden=false` でも `alphaValue=0`（不可視）のビューでは全域割り当てが発生しない
+  - `PreviewViewController.applyThumbnailStripVisibility(_:)`（`coverZipViewer/PreviewViewController.swift`）は、サムネイルストリップ非表示時も高さ0/`isHidden=true`まで潰さず、高さ6pt・`isHidden=false`・`alphaValue=1`の可視ビューとして常時維持する。6ptは`ThumbnailResizeHandle`固定高さと同値（これ未満にするとscrollView側に負の高さを要求するAuto Layout制約矛盾が生じる）。ストリップの背景色は `NSColor.windowBackgroundColor` のため、この帯は視覚的にはほぼ目立たない。この高さではNSCollectionViewの可視ビューポートが実質0のため、サムネイルのデコード（`loadThumbnail`）も発生しない
+  - `preferredContentSize` をホストへ通知する方式や、ホスト側 `KeyForwardingView` で直接クリック/カーソルを処理する方式は、いずれも根本原因（ホストの領域割り当て条件）を解決できず不採用
 - **ページ移動経路**: 矢印キー/Space は `PreviewSessionCommandDispatcher` から `CZPreviewSessionCommand.goForwardPage/goBackwardPage` を送信し、`PreviewViewController.performPageNavigation(forward:)` で処理
 - **フォールバック**: QLPreviewView生成失敗時は `SimplePanelDataSource` 経由で共有パネル表示
 - **ウィンドウ管理**: `retainedWindows` で強参照保持、OS標準のウィンドウクローズに委ねる
