@@ -40,6 +40,8 @@ You don't need to zip your images first — select any folder containing images 
 
 Dropping a folder onto the CoverZip Dock icon opens it in the built-in viewer as well.
 
+Folder preview in Quick Look is provided by its own extension, separate from the one used for ZIP/RAR archives. If you'd rather use a different app's folder preview (or none), open **System Settings > General > Login Items & Extensions > Quick Look** and turn off "coverZipFolderViewer" — this only affects the spacebar preview for folders; ZIP/RAR previews and the built-in viewer keep working either way.
+
 ### Double-Click to Open in Built-in Viewer or Another App (Routing)
 
 If you associate CoverZip with archive files, double-clicking a ZIP, CBZ, RAR, or CBR archive will automatically route it to the appropriate app based on the filename.

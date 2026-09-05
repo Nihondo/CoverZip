@@ -18,6 +18,16 @@ CoverZipは、四つの独立した機能を持つmacOSアプリケーション�
 - **ThumbnailProvider.swift** - `CZArchiveKind` でZIP/RARを判定し、`CZZip` / `CZRar` で表紙画像を抽出、`CZImageUtilities` でアスペクト比計算・中央配置
 
 #### 2. QuickLook Preview Extension (`coverZipViewer/`)
+
+Xcode 16 の同期フォルダ方式（`PBXFileSystemSynchronizedRootGroup`）を利用し、`coverZipViewer/` フォルダは **`coverZipViewer` ターゲットと `coverZipFolderViewer` ターゲットの2つに共有**されている（ソース重複なし）。両ターゲットは同一の `PreviewViewController` 等をコンパイルするが、`QLSupportedContentTypes` の宣言だけが異なる。
+
+- **`coverZipViewer`** - ZIP/RAR系アーカイブ（`public.zip-archive` / `com.rarlab.rar-archive` / 各CBZ・CBR系UTI）を担当
+- **`coverZipFolderViewer`** (`coverZipFolderViewer/`) - `public.folder` のみを担当。Info.plist・entitlementsのみを持つ最小限のターゲットで、ソースは `coverZipViewer/` を参照する
+
+この分離により、ユーザーはシステム設定 > 一般 > ログイン項目と機能拡張 > クイックルック で **フォルダのQuickLookプレビューだけ**を個別に無効化でき、他社のフォルダプレビュー拡張に委ねることができる（ZIP/RARのプレビューには影響しない）。アプリ内トグルは設けていない — QuickLookは content type ごとに拡張を1つしか選ばない仕様のため、アプリ内でオフにしても他社拡張へ確実に処理が渡る保証がなく、OSの拡張オン/オフに一本化する方が正しいため。
+
+新規設定・新規ソースファイルを `coverZipViewer/` に追加する場合、`coverZipFolderViewer` にも自動的に含まれる（同期グループ共有のため）。逆に `coverZipViewer` ターゲット固有にしたいコードは追加できない点に注意（分離したい場合はビルド設定や `#if` での分岐が必要）。
+
 - **PreviewViewController.swift** - メインのプレビューUI制御（NSViewController）
 - **PageProgressBarView.swift** - 画像に重ねて表示するページ進捗バー（`NSControl`）。カーソルが画像下端の帯（`pagerHoverBandHeight`）に入るとフェード表示され、クリック/ドラッグでページシーク可能。旧来のスライダー/ページラベルUIはこのオーバーレイに役割移行済み（値モデルとしては `pageSlider` を保持するが非表示固定）
 - **ImageManager.swift** - 画像管理・ページング制御（遅延ロード実装）
@@ -102,7 +112,10 @@ xcodebuild -project CoverZip.xcodeproj -scheme CoverZip build CODE_SIGNING_REQUI
 # Extension単体のビルド
 xcodebuild -project CoverZip.xcodeproj -scheme coverZipExtension build CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 xcodebuild -project CoverZip.xcodeproj -scheme coverZipViewer build CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+xcodebuild -project CoverZip.xcodeproj -scheme coverZipFolderViewer build CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 ```
+
+> **注意**: `CODE_SIGNING_ALLOWED=NO` のビルド成果物は ad-hoc 署名のみとなり、App Group entitlements 付きのQuickLook拡張（`coverZipViewer` / `coverZipFolderViewer` / `coverZipExtension`）は `pluginkit` に登録されない（サンドボックス外のプロセスからのビルド確認用途に限定し、`/Applications` の実運用アプリを直接上書きしないこと）。実機でQuickLookの動作を検証する場合は、Xcodeで通常どおり（`CODE_SIGN_STYLE = Automatic`、実際のDevelopment Teamで）Run/Buildすること。
 
 ### Extensionのテストと開発
 ```bash
@@ -190,8 +203,9 @@ ZipRoutingService.route(invocationContext:.openPanelRouting) →
 #### フォルダQuickLook対応
 ZIPを解凍せず、フォルダ内の画像をZIPプレビューと同一のUI・ロジックで表示する機能。
 
-- **対象範囲**: QuickLook Preview Extension（`coverZipViewer/`）と内蔵ビューアのみ。QuickLook Thumbnail Extension（`coverZipExtension/`）は非対応のまま（Finderの全フォルダアイコンを乗っ取らないための意図的な制限）
-- **有効化**: `coverZipViewer/Info.plist` の `QLSupportedContentTypes` に `public.folder` を追加（`coverZipExtension/Info.plist` には追加しない）
+- **対象範囲**: QuickLook Preview Extension と内蔵ビューアのみ。QuickLook Thumbnail Extension（`coverZipExtension/`）は非対応のまま（Finderの全フォルダアイコンを乗っ取らないための意図的な制限）
+- **有効化**: `public.folder` の宣言は `coverZipViewer/Info.plist` ではなく専用ターゲット `coverZipFolderViewer/Info.plist` の `QLSupportedContentTypes` に単独で持たせている（`coverZipExtension/Info.plist` には追加しない）。ZIP/RAR系UTIは `coverZipViewer/Info.plist` 側に残る。ターゲット分離の理由・構成は「四つの独立したコンポーネント」の項を参照
+- **フォルダプレビューの無効化**: ユーザーはシステム設定 > 一般 > ログイン項目と機能拡張 > クイックルック で `coverZipFolderViewer` のみを無効化できる。この場合 `ImageManager.loadImages(from:)` のフォルダ分岐やアプリ内トグルは一切関与しない（OSレベルの拡張オン/オフのみで完結する設計）
 - **データソース抽象化**: `ImageManager` は `entrySource: ImageEntrySource?` を介してZIP（`ZipImageEntrySource`）・RAR（`RarImageEntrySource`）・フォルダ（`FolderImageEntrySource`）を同一のインデックスベースAPI（`count` / `filename(at:)` / `imageData(at:)`）で扱う。`loadImages(from:)` がURLの `isDirectoryKey` と `CZArchiveKind.detect(at:)` で分岐する
 - **列挙ロジック**: `CZFolder.imageEntryList(from:)` はサブフォルダを再帰的に列挙し（symlinkは辿らない、パッケージ内部は除外）、`ImageFileFilter.isImagePath` で画像のみ抽出。ソートは lastPathComponent 基準の自然順を第1キー、相対パス全体を第2キー（タイブレーク）として同名衝突時も順序を決定的にする
 - **画像0枚のフォルダ**: `PreviewViewController.preparePreviewOfFile` がエラーをthrowし、システム標準のフォルダプレビューに委譲する（ZIPの場合は従来どおり `displayNoImagesMessage()` を表示）
@@ -282,6 +296,8 @@ The EdDSA private key must be stored outside the repository, preferably in macOS
 2. Archive with Developer ID Application signing, notarize, then create `CoverZip.zip`.
 3. Create a GitHub Release with tag `v{MARKETING_VERSION}` and attach `CoverZip.zip`.
 4. Generate and publish the Sparkle appcast for `coverzip` in the product site/appcast pipeline.
+
+> **One-time setup for `coverZipFolderViewer`**: before the first Developer ID archive/notarize of this target, register the App ID `com.dmng.CoverZip.coverZipFolderViewer` in the Apple Developer portal and associate it with the `group.com.dmng.CoverZip` App Group, the same way `coverZipViewer` and `coverZipExtension` are already configured. Without this, Automatic Signing will fail for the new target during archive.
 
 ## 開発時の注意点
 

@@ -58,6 +58,23 @@
 		42D710012FAD000100000001 /* CoverZipKeyHelper.app in Embed Login Items */ = {isa = PBXBuildFile; fileRef = 42D710082FAD000100000001 /* CoverZipKeyHelper.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		42D710022FAD000100000001 /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BB2E5E18A5007F2065 /* SettingsKeys.swift */; };
 		42D710032FAD000100000001 /* UserDefaultsHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9ED2EBC1D2D003D0E96 /* UserDefaultsHelper.swift */; };
+		42FA00010000000000000000 /* ImageIOOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4251D87D2E69CF4D00A21728 /* ImageIOOptions.swift */; };
+		42FA00020000000000000000 /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BB2E5E18A5007F2065 /* SettingsKeys.swift */; };
+		42FA00030000000000000000 /* ArchiveKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A100012FAE000100000001 /* ArchiveKind.swift */; };
+		42FA00040000000000000000 /* ImageFileFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0B92E5E18A5007F2065 /* ImageFileFilter.swift */; };
+		42FA00050000000000000000 /* NaturalSort.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BA2E5E18A5007F2065 /* NaturalSort.swift */; };
+		42FA00060000000000000000 /* CoverSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A100022FAE000100000001 /* CoverSelection.swift */; };
+		42FA00070000000000000000 /* ZipCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BCD0BC2E5E18A5007F2065 /* ZipCore.swift */; };
+		42FA00080000000000000000 /* RarCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A100032FAE000100000001 /* RarCore.swift */; };
+		42FA00090000000000000000 /* FolderCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3192760FEC195B5305B08E3C /* FolderCore.swift */; };
+		42FA00100000000000000000 /* UserDefaultsHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9ED2EBC1D2D003D0E96 /* UserDefaultsHelper.swift */; };
+		42FA00110000000000000000 /* ImageUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9EB2EBC1D2D003D0E96 /* ImageUtilities.swift */; };
+		42FA00120000000000000000 /* ViewModePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9EE2EBC1D2D003D0E96 /* ViewModePreference.swift */; };
+		42FA00130000000000000000 /* UnifiedAppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429EE9EC2EBC1D2D003D0E96 /* UnifiedAppSettings.swift */; };
+		42FA00140000000000000000 /* CZLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */; };
+		42FA00150000000000000000 /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 426EFEF22E2670FC00AD23E5 /* Quartz.framework */; };
+		42FA00160000000000000000 /* Unrar in Frameworks */ = {isa = PBXBuildFile; productRef = 42FA00310000000000000000 /* Unrar */; };
+		42FA00170000000000000000 /* coverZipFolderViewer.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 42FA00190000000000000000 /* coverZipFolderViewer.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		6DD4E3DB1CED9862A9D9F815 /* FolderCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3192760FEC195B5305B08E3C /* FolderCore.swift */; };
 		C0D542EBF0174D78648F52A8 /* CZLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */; };
 		EDD9570C113939815F81DCA2 /* FolderCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3192760FEC195B5305B08E3C /* FolderCore.swift */; };
@@ -85,6 +102,13 @@
 			remoteGlobalIDString = 42D710092FAD000100000001;
 			remoteInfo = CoverZipKeyHelper;
 		};
+		42FA00180000000000000000 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 426EFEA22E26708A00AD23E5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 42FA00240000000000000000;
+			remoteInfo = coverZipFolderViewer;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -96,6 +120,7 @@
 			files = (
 				42CD41B32E5AEA6400BA89CA /* coverZipViewer.appex in Embed Foundation Extensions */,
 				426EFEFB2E2670FC00AD23E5 /* coverZipExtension.appex in Embed Foundation Extensions */,
+				42FA00170000000000000000 /* coverZipFolderViewer.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -134,6 +159,7 @@
 		42BCD0BC2E5E18A5007F2065 /* ZipCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipCore.swift; sourceTree = "<group>"; };
 		42CD41A52E5AEA6400BA89CA /* coverZipViewer.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = coverZipViewer.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		42D710082FAD000100000001 /* CoverZipKeyHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CoverZipKeyHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		42FA00190000000000000000 /* coverZipFolderViewer.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = coverZipFolderViewer.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4569B78EA0E2BA951B4DB20 /* CZLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CZLogging.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -166,6 +192,20 @@
 			);
 			target = 42D710092FAD000100000001 /* CoverZipKeyHelper */;
 		};
+		42FA00200000000000000000 /* Exceptions for "coverZipFolderViewer" folder in "coverZipFolderViewer" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 42FA00240000000000000000 /* coverZipFolderViewer */;
+		};
+		42FA00210000000000000000 /* Exceptions for "coverZipViewer" folder in "coverZipFolderViewer" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 42FA00240000000000000000 /* coverZipFolderViewer */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -189,6 +229,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				42CD41B72E5AEA6400BA89CA /* Exceptions for "coverZipViewer" folder in "coverZipViewer" target */,
+				42FA00210000000000000000 /* Exceptions for "coverZipViewer" folder in "coverZipFolderViewer" target */,
 			);
 			path = coverZipViewer;
 			sourceTree = "<group>";
@@ -199,6 +240,14 @@
 				42D710062FAD000100000001 /* Exceptions for "CoverZipKeyHelper" folder in "CoverZipKeyHelper" target */,
 			);
 			path = CoverZipKeyHelper;
+			sourceTree = "<group>";
+		};
+		42FA00220000000000000000 /* coverZipFolderViewer */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				42FA00200000000000000000 /* Exceptions for "coverZipFolderViewer" folder in "coverZipFolderViewer" target */,
+			);
+			path = coverZipFolderViewer;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -239,6 +288,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		42FA00230000000000000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				42FA00150000000000000000 /* Quartz.framework in Frameworks */,
+				42FA00160000000000000000 /* Unrar in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -250,6 +308,7 @@
 				426EFEAC2E26708A00AD23E5 /* CoverZip */,
 				426EFEF42E2670FC00AD23E5 /* coverZipExtension */,
 				42CD41A72E5AEA6400BA89CA /* coverZipViewer */,
+				42FA00220000000000000000 /* coverZipFolderViewer */,
 				42D710072FAD000100000001 /* CoverZipKeyHelper */,
 				426EFEEF2E2670FC00AD23E5 /* Frameworks */,
 				426EFEAB2E26708A00AD23E5 /* Products */,
@@ -262,6 +321,7 @@
 				426EFEAA2E26708A00AD23E5 /* CoverZip.app */,
 				426EFEEE2E2670FC00AD23E5 /* coverZipExtension.appex */,
 				42CD41A52E5AEA6400BA89CA /* coverZipViewer.appex */,
+				42FA00190000000000000000 /* coverZipFolderViewer.appex */,
 				42D710082FAD000100000001 /* CoverZipKeyHelper.app */,
 			);
 			name = Products;
@@ -323,6 +383,7 @@
 			dependencies = (
 				426EFEFA2E2670FC00AD23E5 /* PBXTargetDependency */,
 				42CD41B22E5AEA6400BA89CA /* PBXTargetDependency */,
+				42FA00270000000000000000 /* PBXTargetDependency */,
 				42D7100F2FAD000100000001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
@@ -405,6 +466,30 @@
 			productReference = 42D710082FAD000100000001 /* CoverZipKeyHelper.app */;
 			productType = "com.apple.product-type.application";
 		};
+		42FA00240000000000000000 /* coverZipFolderViewer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 42FA00300000000000000000 /* Build configuration list for PBXNativeTarget "coverZipFolderViewer" */;
+			buildPhases = (
+				42FA00260000000000000000 /* Sources */,
+				42FA00230000000000000000 /* Frameworks */,
+				42FA00250000000000000000 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				42CD41A72E5AEA6400BA89CA /* coverZipViewer */,
+				42FA00220000000000000000 /* coverZipFolderViewer */,
+			);
+			name = coverZipFolderViewer;
+			packageProductDependencies = (
+				42FA00310000000000000000 /* Unrar */,
+			);
+			productName = coverZipFolderViewer;
+			productReference = 42FA00190000000000000000 /* coverZipFolderViewer.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -425,6 +510,9 @@
 						CreatedOnToolsVersion = 16.4;
 					};
 					42D710092FAD000100000001 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					42FA00240000000000000000 = {
 						CreatedOnToolsVersion = 16.4;
 					};
 				};
@@ -451,6 +539,7 @@
 				426EFEA92E26708A00AD23E5 /* CoverZip */,
 				426EFEED2E2670FC00AD23E5 /* coverZipExtension */,
 				42CD41A42E5AEA6400BA89CA /* coverZipViewer */,
+				42FA00240000000000000000 /* coverZipFolderViewer */,
 				42D710092FAD000100000001 /* CoverZipKeyHelper */,
 			);
 		};
@@ -479,6 +568,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		42D7100C2FAD000100000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		42FA00250000000000000000 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -560,6 +656,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		42FA00260000000000000000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				42FA00010000000000000000 /* ImageIOOptions.swift in Sources */,
+				42FA00020000000000000000 /* SettingsKeys.swift in Sources */,
+				42FA00030000000000000000 /* ArchiveKind.swift in Sources */,
+				42FA00040000000000000000 /* ImageFileFilter.swift in Sources */,
+				42FA00050000000000000000 /* NaturalSort.swift in Sources */,
+				42FA00060000000000000000 /* CoverSelection.swift in Sources */,
+				42FA00070000000000000000 /* ZipCore.swift in Sources */,
+				42FA00080000000000000000 /* RarCore.swift in Sources */,
+				42FA00090000000000000000 /* FolderCore.swift in Sources */,
+				42FA00100000000000000000 /* UserDefaultsHelper.swift in Sources */,
+				42FA00110000000000000000 /* ImageUtilities.swift in Sources */,
+				42FA00120000000000000000 /* ViewModePreference.swift in Sources */,
+				42FA00130000000000000000 /* UnifiedAppSettings.swift in Sources */,
+				42FA00140000000000000000 /* CZLogging.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -578,6 +695,11 @@
 			target = 42D710092FAD000100000001 /* CoverZipKeyHelper */;
 			targetProxy = 42D710042FAD000100000001 /* PBXContainerItemProxy */;
 		};
+		42FA00270000000000000000 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 42FA00240000000000000000 /* coverZipFolderViewer */;
+			targetProxy = 42FA00180000000000000000 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -591,7 +713,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -608,7 +730,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.3.2;
 				NEW_SETTING = "";
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip;
@@ -632,7 +754,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -649,7 +771,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.3.2;
 				NEW_SETTING = "";
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip;
@@ -802,7 +924,7 @@
 				CODE_SIGN_ENTITLEMENTS = coverZipExtension/coverZipExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -817,7 +939,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.3.2;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -838,7 +960,7 @@
 				CODE_SIGN_ENTITLEMENTS = coverZipExtension/coverZipExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -853,7 +975,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.3.2;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -874,7 +996,7 @@
 				CODE_SIGN_ENTITLEMENTS = coverZipViewer/coverZipViewer.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -889,7 +1011,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -908,7 +1030,7 @@
 				CODE_SIGN_ENTITLEMENTS = coverZipViewer/coverZipViewer.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -923,7 +1045,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -943,7 +1065,7 @@
 				CODE_SIGN_ENTITLEMENTS = CoverZipKeyHelper/CoverZipKeyHelper.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -957,7 +1079,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.3.2;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.KeyHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -979,7 +1101,7 @@
 				CODE_SIGN_ENTITLEMENTS = CoverZipKeyHelper/CoverZipKeyHelper.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -993,7 +1115,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.3.2;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.KeyHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1003,6 +1125,74 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				VALID_ARCHS = "arm64 x86_64";
+				VERSIONING_SYSTEM = "";
+			};
+			name = Release;
+		};
+		42FA00280000000000000000 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 427734762F5C5F7E008CAEBA /* DevelopmentTeam.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = coverZipFolderViewer/coverZipFolderViewer.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 29;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = coverZipFolderViewer/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = coverZipFolderViewer;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.3.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipFolderViewer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				VERSIONING_SYSTEM = "";
+			};
+			name = Debug;
+		};
+		42FA00290000000000000000 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 427734762F5C5F7E008CAEBA /* DevelopmentTeam.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = coverZipFolderViewer/coverZipFolderViewer.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 29;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = coverZipFolderViewer/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = coverZipFolderViewer;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.3.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dmng.CoverZip.coverZipFolderViewer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "";
 			};
 			name = Release;
@@ -1055,6 +1245,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		42FA00300000000000000000 /* Build configuration list for PBXNativeTarget "coverZipFolderViewer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				42FA00280000000000000000 /* Debug */,
+				42FA00290000000000000000 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1093,6 +1292,11 @@
 			productName = Unrar;
 		};
 		42A100132FAE000100000001 /* Unrar */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 42A100102FAE000100000001 /* XCRemoteSwiftPackageReference "Unrar" */;
+			productName = Unrar;
+		};
+		42FA00310000000000000000 /* Unrar */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 42A100102FAE000100000001 /* XCRemoteSwiftPackageReference "Unrar" */;
 			productName = Unrar;

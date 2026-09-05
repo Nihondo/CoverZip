@@ -10,16 +10,7 @@
 			<false/>
 			<key>QLSupportedContentTypes</key>
 			<array>
-				<string>public.zip-archive</string>
-				<string>com.rarlab.rar-archive</string>
-				<string>com.dmng.coverzip.cbr-archive</string>
-				<string>com.dmng.coverzip.cbz-archive</string>
-				<string>com.milke.cbr-archive</string>
-				<string>com.milke.cbz-archive</string>
-				<string>com.macitbetter.cbr-archive</string>
-				<string>com.macitbetter.cbz-archive</string>
-				<string>cx.c3.cbr-archive</string>
-				<string>cx.c3.cbz-archive</string>
+				<string>public.folder</string>
 			</array>
 			<key>QLSupportsSearchableItems</key>
 			<false/>
